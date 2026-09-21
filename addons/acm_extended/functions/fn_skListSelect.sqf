@@ -12,42 +12,98 @@ if (_kind == "medication") then {
     };
 };
 if (!_available) exitWith {_back setVariable ["ACME_SK_FlashAt", diag_tickTime];};
+
 private _stage = uiNamespace getVariable ["ACME_SK_WasteStage", ""];
-if (_kind == "medication" && {(_stage in ["compound","draw"] && {uiNamespace getVariable ["ACME_SK_WasteMoving", false]}) || {!(_stage in ["compound","draw"]) && {!(ctrlEnabled _list)}}}) exitWith {};
+private _nativeMoving = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Moving", false];
+private _infusionMode = !((_d getVariable ["ACME_SK_Return", []]) isEqualTo []);
+private _currentSessionMed = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Medication", ""];
+private _sameMedInfusionClick = _infusionMode && {_kind == "medication"} && {_data == _currentSessionMed};
+
+// Native ACM disables its backing medication list as soon as solution is in the syringe.
+// The visible ACME row may still be clicked for the SAME medication to deliberately bind the
+// next vial after the current one reaches 0.00 mL. Different medications remain blocked below.
+if (_kind == "medication" && {
+    (_stage in ["compound","draw"] && {uiNamespace getVariable ["ACME_SK_WasteMoving", false]})
+    || {!(_stage in ["compound","draw"]) && {_nativeMoving}}
+    || {!(_stage in ["compound","draw"]) && {!(ctrlEnabled _list)} && {!_sameMedInfusionClick}}
+}) exitWith {};
+
+// An infusion syringe may never be relabeled while it contains solution. In compound mode use
+// WasteFill; in the native Prep Infusion path use the actual ACM DrawnAmount.
+if (_kind == "medication" && {_infusionMode}) then {
+    private _fill = if (_stage in ["compound","draw"]) then {
+        uiNamespace getVariable ["ACME_SK_WasteFill", 0]
+    } else {
+        missionNamespace getVariable ["ACM_circulation_SyringeDraw_DrawnAmount", 0]
+    };
+    private _currentMed = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Medication", ""];
+    if (_fill > 0.0005 && {_currentMed != ""} && {_data != _currentMed}) exitWith {
+        _back setVariable ["ACME_SK_FlashAt", diag_tickTime];
+    };
+};
+
 private _index = -1;
 if (_kind == "medication") then {
-    for "_i" from 0 to ((lbSize _list) - 1) do {if ((_list lbData _i) == _data) exitWith {_index = _i;};};
+    for "_i" from 0 to ((lbSize _list) - 1) do {
+        if ((_list lbData _i) == _data) exitWith {_index = _i;};
+    };
     if (_index < 0) then {
-        // B50: repopulate the hidden backing selector from the same deterministic source as the visible row.
         [_d] call ACME_fnc_skMedicationSync;
-        for "_i" from 0 to ((lbSize _list) - 1) do {if ((_list lbData _i) == _data) exitWith {_index = _i;};};
+        for "_i" from 0 to ((lbSize _list) - 1) do {
+            if ((_list lbData _i) == _data) exitWith {_index = _i;};
+        };
     };
 } else {
     for "_i" from 0 to ((lbSize _list) - 1) do {
-        if ((_kind == "flush" && {(_list lbData _i) == _data}) || {_kind != "flush" && {(_list lbValue _i) == _value} && {(_list lbText _i) == _label}}) exitWith {_index = _i;};
+        if (
+            (_kind == "flush" && {(_list lbData _i) == _data})
+            || {_kind != "flush" && {(_list lbValue _i) == _value} && {(_list lbText _i) == _label}}
+        ) exitWith {_index = _i;};
     };
 };
-if (_index < 0 && {_kind == "medication"} && {_data == "EpinephrineCardiac"}) then {[_d] call ACME_fnc_skEpinephrineStock; for "_i" from 0 to ((lbSize _list) - 1) do {if ((_list lbData _i) == _data) exitWith {_index = _i;};};};
+
+if (_index < 0 && {_kind == "medication"} && {_data == "EpinephrineCardiac"}) then {
+    [_d] call ACME_fnc_skEpinephrineStock;
+    for "_i" from 0 to ((lbSize _list) - 1) do {
+        if ((_list lbData _i) == _data) exitWith {_index = _i;};
+    };
+};
 if (_index < 0) exitWith {_back setVariable ["ACME_SK_FlashAt", diag_tickTime];};
-if (_kind == "size" && {_value == (uiNamespace getVariable ["ACME_SK_CurSize", 10])} && {(uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "compound"}) exitWith {};
+
+if (_kind == "size"
+    && {_value == (uiNamespace getVariable ["ACME_SK_CurSize", 10])}
+    && {(uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "compound"}) exitWith {};
+
 private _same = (lbCurSel _list) == _index;
 _list lbSetCurSel _index;
-// B25 physical-vial binding. A medication click unlocks ONE vial for the current syringe. Clicking the same
-// medication again only advances to another vial after the currently bound vial has reached 0.00 mL.
-if (_kind == "medication") then {
+
+// A changed medication selection fires LBSelChanged and skMedicationSelect owns the vial binding.
+// Only an intentional click on the ALREADY-selected medication needs a manual select call, because
+// LBSelChanged does not fire for the same row. This guarantees one click can unlock at most one vial.
+if (_kind == "medication" && {_same}) then {
     private _reserved = 0;
     private _stageNow = uiNamespace getVariable ["ACME_SK_WasteStage", ""];
     if (_stageNow in ["compound","draw"]) then {
-        {if ((_x param [0,""]) == _data) then {_reserved = _reserved + (_x param [1,0]);};} forEach (uiNamespace getVariable ["ACME_SK_CompoundComponents", []]);
+        {
+            if ((_x param [0,""]) == _data) then {
+                _reserved = _reserved + (_x param [1,0]);
+            };
+        } forEach (uiNamespace getVariable ["ACME_SK_CompoundComponents", []]);
+
         if ((missionNamespace getVariable ["ACM_circulation_SyringeDraw_Medication", ""]) == _data) then {
-            _reserved = _reserved + (((uiNamespace getVariable ["ACME_SK_WasteFill", 0]) - (uiNamespace getVariable ["ACME_SK_WasteFloorMl", 0])) max 0);
+            _reserved = _reserved + (((uiNamespace getVariable ["ACME_SK_WasteFill", 0])
+                - (uiNamespace getVariable ["ACME_SK_WasteFloorMl", 0])) max 0);
         };
     } else {
         if ((missionNamespace getVariable ["ACM_circulation_SyringeDraw_Medication", ""]) == _data) then {
             _reserved = missionNamespace getVariable ["ACM_circulation_SyringeDraw_DrawnAmount", 0];
         };
     };
-    ["select", _data, _reserved, _d] call ACME_fnc_vialSession;
+
+    private _selectedLimit = ["select", _data, _reserved, _d] call ACME_fnc_vialSession;
+    private _size = (missionNamespace getVariable ["ACM_circulation_SyringeDraw_Size", 10]) max 0.1;
+    missionNamespace setVariable ["ACM_circulation_SyringeDraw_MaxDose", (_selectedLimit max 0) min _size];
+    [_d] call ACME_fnc_skMedicationStockRefresh;
 };
 
 // LBSelChanged does not fire when selecting the same flush/drawn row twice.

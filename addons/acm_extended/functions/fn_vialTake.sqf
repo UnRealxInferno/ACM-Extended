@@ -3,6 +3,13 @@
    Multiple opened vials of the same medication may be pooled invisibly; total volume is conserved exactly. */
 params [["_holder", objNull, [objNull]], ["_med", "", [""]], ["_ml", 0, [0]]];
 if (isNull _holder || {_med == ""} || {_ml <= 0} || {!finite _ml}) exitWith {false};
+if (hasInterface && {!isNull ACE_player} && {_holder isNotEqualTo ACE_player}) then {
+    private _lease = missionNamespace getVariable ["ACME_vialLeaseAccepted", []];
+    if !(_lease isEqualType [] && {count _lease >= 3}
+        && {(_lease param [0,objNull]) isEqualTo _holder}
+        && {(_lease param [1,""]) != ""}
+        && {(_lease param [2,0]) > serverTime}) exitWith {false};
+};
 private _cap = [_med] call ACME_fnc_vialCapacity;
 if (_cap <= 0) exitWith {false};
 private _vial = [_med] call ACME_fnc_vialClass;

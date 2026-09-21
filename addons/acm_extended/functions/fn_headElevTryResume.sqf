@@ -9,6 +9,9 @@ if (!local _patient) exitWith {[_patient, "headElevTryResume", [_patient, _token
 if (_token == "") then {_token = _patient getVariable ["ACME_headElev_poseToken", ""];};
 if ((_patient getVariable ["ACME_headElev_poseToken", ""]) != _token) exitWith {};
 if !(_patient getVariable ["ACME_headElev_ResumePending", false]) exitWith {};
+if (_patient getVariable ["ACME_CS_ProcedureActive", false]) exitWith {
+    [{_this call ACME_fnc_headElevTryResume;}, [_patient, _token], 0.5] call CBA_fnc_waitAndExecute;
+};
 private _readyAt = _patient getVariable ["ACME_headElev_suspendReadyAt", -1];
 if (_readyAt > CBA_missionTime) exitWith {
     [{_this call ACME_fnc_headElevTryResume;}, [_patient, _token], ((_readyAt - CBA_missionTime) max 0.05) + 0.05] call CBA_fnc_waitAndExecute;

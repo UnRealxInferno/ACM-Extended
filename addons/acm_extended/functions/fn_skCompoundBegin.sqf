@@ -164,11 +164,12 @@ private _h = [{
     private _bottomMouse = _maxY + _mouseOffset;
     private _floorYMouse = _floorY + _mouseOffset;
     getMousePosition params ["_mouseX", "_mouseY"];
-    private _canvasNow = call ACME_fnc_uiCanvas;
-    _canvasNow params ["_uiXNow", "", "_uiWNow", ""];
-    setMousePosition [(_uiXNow + (_uiWNow / 2)), (_bottomMouse min _mouseY max _floorYMouse)];
-
-    private _rawY = (_mouseY - _mouseOffset) min _maxY max _floorY;
+    // Preserve ACM's sticky-plunger behavior, but anchor the hardware cursor to the ACTUAL grab-control center.
+    // The old canvas-center anchor became wrong after the in-place Narc Box/page geometry changes and could pin the
+    // cursor far above the syringe. X follows the plunger center; Y is constrained to the valid draw travel.
+    private _mouseYClamped = _bottomMouse min _mouseY max _floorYMouse;
+    setMousePosition [_plungerX + (_plungerW / 2), _mouseYClamped];
+    private _rawY = (_mouseYClamped - _mouseOffset) min _maxY max _floorY;
     private _rawFill = linearConversion [_limitTop, _limitBottom, _rawY, 0, _size, true];
 
     // B25: use ACM-like direct plunger motion. Returning medication toward the vial follows the hand normally;

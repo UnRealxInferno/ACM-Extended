@@ -30,6 +30,7 @@ if (_phase == "begin") exitWith {
     _patient setVariable ["ACME_alt_ptxSample", nil, false];
     _patient setVariable ["ACME_nativeVomitActive", false, true];
     _patient setVariable ["ACME_JuncBleedActive", false, false];
+    _patient setVariable ["ACME_junctionalBleedLPS", 0, false];
     _patient setVariable ["ACME_nativeRequestedRhythm", nil, false];
     _patient setVariable ["ACME_nrb_drawPending", [], true];
     _patient setVariable ["ACME_nrb_session", "", true];
@@ -77,6 +78,18 @@ if (_preserveJunctional && {!alive _patient}) then {
         "ACME_roc_paralyzed", "ACME_ca_caCl2Given"
     ])} && {!isNil {_patient getVariable _name}}) then {_patient setVariable [_name, nil, true];};
 } forEach (call ACME_fnc_clinicalFields);
+
+// B106: never leave the derived XStat impairment/surgery flags or forceWalk state detached from the device state.
+private _preservedAnyXStat = _preserveJunctional && {!alive _patient} && {(["leftarm", "rightarm", "leftleg", "rightleg"] findIf {
+    toLowerANSI (_patient getVariable [format ["ACME_Junc_%1", _x], ""]) isEqualTo "xstat"
+}) >= 0};
+private _preservedLegXStat = _preserveJunctional && {!alive _patient} && {(["leftleg", "rightleg"] findIf {
+    toLowerANSI (_patient getVariable [format ["ACME_Junc_%1", _x], ""]) isEqualTo "xstat"
+}) >= 0};
+_patient setVariable ["ACME_XStat_needsSurgery", _preservedAnyXStat, true];
+_patient setVariable ["ACME_XStat_impaired", _preservedLegXStat, true];
+_patient forceWalk _preservedLegXStat;
+
 // Phase 67: the reset half of persistence uses the same owners as live mutation and restore.
 [_patient, "", true, false] call ACME_fnc_hpmkStateCommit;
 [_patient, false, false, "", -1, true] call ACME_fnc_obtundedStateCommit;

@@ -5,22 +5,13 @@
 // a tourniquet.
 params ["_medic", "_patient", "_bodyPart"];
 private _p = toLower _bodyPart;
-_patient setVariable [format ["ACME_Junc_%1", _p], "wrapped", true];
-// secured: cancel the fall-off clock, so it cannot trip after the wrap.
-_patient setVariable [format ["ACME_Junc_PackedAt_%1", _p], -1, true];
 
 // stop the wrap-sfx loop and always play the tie-off when the timer completes.
 [_medic] call ACME_fnc_junctionalWrapSfxStop;
 if (!isNull _medic) then { [_medic, "ACME_JunctionalTie"] remoteExec ["ACME_fnc_remoteSay3D", 0]; };
 
-// secure hemostasis on the underlying wound: clot up to 5 wounds, at severity 4 or below, stable.
-if (!isNil "ACM_damage_fnc_clotWoundsOnBodyPart") then {
-    [_patient, _p, 5, 4, false] call ACM_damage_fnc_clotWoundsOnBodyPart;
-};
-
-if (_patient call ace_common_fnc_isAwake) then {
-    [_patient, (missionNamespace getVariable ["ACME_junctionalWrapPain", 0.2])] call ace_medical_fnc_adjustPainLevel;
-};
+// Junctional state, hemostasis and pain mutate durable casualty state and therefore commit on its owner.
+[_patient, "junctionalWrapDone", [_medic, _p]] call ACME_fnc_ownerDispatch;
 
 ["Pressure bandage secured. junctional hemorrhage controlled.", 3] call ace_common_fnc_displayTextStructured;
 

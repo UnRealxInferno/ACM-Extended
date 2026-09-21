@@ -22,6 +22,7 @@
  */
 
 params ["_medic", "_patient", "_bodyPart", "_type", "_state", ["_iv", true], ["_accessSite", -1]];
+private _acmeReconcile = "B106:setIVReconciled";
 
 private _hintState = LELSTRING(core,Common_Inserted);
 private _hintType = LLSTRING(IV_16g);
@@ -77,21 +78,16 @@ private _severeDamage = false;
 private _partIndex = GET_BODYPART_INDEX(_bodyPart);
 
 if (_iv && _state && !_exit) then {
-    switch (true) do {
-        case !(alive _patient): {
-            _successChance = linearConversion [0, 90, (CBA_missionTime - (_patient getVariable [QEGVAR(core,TimeOfDeath), 0])), 0.75, 0, true];
-        };
-        case (IN_CRDC_ARRST(_patient)): {
+    if !(alive _patient) then {
+        _successChance = linearConversion [0, 90, (CBA_missionTime - (_patient getVariable [QEGVAR(core,TimeOfDeath), 0])), 0.5, 0, true];
+    } else {
+        if (IN_CRDC_ARRST(_patient)) then {
             if ([_patient] call EFUNC(core,cprActive)) then {
-                _successChance = linearConversion [6, 3, GET_BLOOD_VOLUME(_patient), 0.8, 0, true];
+                _successChance = linearConversion [6, 3, GET_BLOOD_VOLUME(_patient), 0.7, 0, true];
             } else {
-                _successChance = linearConversion [0, 120, (CBA_missionTime - (_patient getVariable [QGVAR(CardiacArrest_Time), 0])), 0.8, 0, true];
+                _successChance = linearConversion [0, 120, (CBA_missionTime - (_patient getVariable [QGVAR(CardiacArrest_Time), 0])), 0.6, 0, true];
             };
-        };
-        case (HAS_TOURNIQUET_APPLIED_ON(_patient,_partIndex)): {
-            _successChance = linearConversion [0, 90, (CBA_missionTime - ((_patient getVariable [QEGVAR(disability,Tourniquet_ApplyTime), [-1,-1,-1,-1,-1,-1]]) select _partIndex)), 0.9, 0, true];
-        };
-        default {
+        } else {
             GET_BLOOD_PRESSURE(_patient) params ["_diastolic", "_systolic"];
 
             if (_bodyPart in ["leftarm","rightarm"]) then {
@@ -102,9 +98,13 @@ if (_iv && _state && !_exit) then {
         };
     };
 
+    if (HAS_TOURNIQUET_APPLIED_ON(_patient,_partIndex)) then {
+        _successChance = 0 max (_successChance - (linearConversion [0, 90, (CBA_missionTime - ((_patient getVariable [QEGVAR(disability,Tourniquet_ApplyTime), [-1,-1,-1,-1,-1,-1]]) select _partIndex)), 0.2, 0.9, true]));
+    };
+
     if (_successChance > 0.1) then {
         private _bodyPartDamage = GET_BODYPART_DAMAGE(_patient) select _partIndex;
-        
+
         private _modifier = 0;
 
         if (_type == ACM_IV_14G_M) then {
@@ -139,7 +139,7 @@ if (_iv && _state && !_exit) then {
 
 if (!_exit && !(random 1 < _successChance)) then {
     _exit = true;
-    
+
     if (_severeDamage) then {
         [(format ["%1, %2", LLSTRING(IV_FailedToLocateVein), (toLower (LLSTRING(IV_BodyPartTooDamaged)))]), 2, _medic] call ACEFUNC(common,displayTextStructured);
     } else {

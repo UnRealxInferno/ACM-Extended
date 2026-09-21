@@ -97,13 +97,13 @@ def scan_text(text:str,path:str,config:bool=False)->tuple[list[dict],list[dict],
                     (dynamic if kind=='format' else writes).append(row)
             if t.kind=='ident' and t.value.lower().startswith('acme_') and i+1<len(ts) and ts[i+1].value=='=':
                 writes.append({'name':t.value,'scope':'missionnamespace','kind':'assignment','file':path,'line':t.line})
-            if t.kind=='ident' and v=='call' and i+1<len(ts) and ts[i+1].value.lower()=='acme_fnc_setvarnet':
+            if t.kind=='ident' and v=='call' and i+1<len(ts) and ts[i+1].value.lower() in {'acme_fnc_setvarnet','acme_fnc_setvarnetapprox'}:
                 if i==0 or ts[i-1].value!=']' or i-1 not in pairs:continue
                 lo=pairs[i-1];parts=split_args(ts,lo+1,i-1,pairs)
                 if len(parts)<3:continue
                 key=key_pattern(parts[1])
                 if key and key[1].lower().startswith('acme_'):
-                    kind,name=key;row={'name':name,'scope':receiver(parts[0]),'kind':kind+'-setVarNet','file':path,'line':t.line}
+                    kind,name=key;helper=ts[i+1].value.split('_')[-1];row={'name':name,'scope':receiver(parts[0]),'kind':kind+'-'+helper,'file':path,'line':t.line}
                     if render(parts[2]).lower()=='nil':row['kind']='clear-only'
                     (dynamic if kind=='format' else writes).append(row)
             if t.value=='[' and i in pairs:

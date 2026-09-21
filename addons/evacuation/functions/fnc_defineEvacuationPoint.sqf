@@ -50,7 +50,7 @@ LLSTRING(EvacuatePatient),
 
     private _casualty = _unit getVariable [QACEGVAR(dragging,carriedObject), objNull];
     private _casualtySide = _casualty getVariable [QGVAR(CasualtySide), 0];
-    
+
     private _evacuationSide = _object getVariable [QGVAR(EvacuationSide), sideEmpty];
 
     if (_evacuationSide == sideEmpty) exitWith {false};

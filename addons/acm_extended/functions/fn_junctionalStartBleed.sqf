@@ -1,9 +1,8 @@
-// Owner-only junctional hemorrhage worker, independent of ACE's ordinary wound drain.
-// B31 balances the extra junctional contribution at 0.10 normalized units per part
-// (hardcore 0.15). The old 0.35 bypassed ACM's native platelet partition and added
-// roughly 44 mL/s per fresh junction on top of the original wound loss at full volume.
-// Existing pressure, packing, wrap, AAJT and XStat controls are retained. Native ACE
-// wounds are separate injuries and remain present with their own bleed/treatment path.
+// Owner-only junctional hemorrhage rate worker.
+// B102 keeps the intended extra junctional severity, but it no longer writes blood volume in a second PFH.
+// This worker publishes one L/s contribution which the normal ACM circulation tick consumes in its single
+// blood-volume update. That removes the junctional-only double update while preserving the existing pressure,
+// packing, wrap, AAJT and XStat controls. Native ACE wounds remain separate injuries.
 // Reference-rate stroke flow, temporary compensation, resistance and the mission's
 // bleeding coefficient still affect loss. This is gameplay tuning, not a clinical model.
 params ["_unit"];
@@ -22,14 +21,14 @@ private _handle = [{
     if (isNull _unit || {!local _unit} || {_epoch != ([_unit] call ACME_fnc_clinicalEpoch)}) exitWith {
         [_h] call CBA_fnc_removePerFrameHandler;
         if (!isNull _unit && {(_unit getVariable ["ACME_juncPFH", -1]) == _h}) then {
-            _unit setVariable ["ACME_juncPFH", -1]; _unit setVariable ["ACME_JuncBleedActive", false];
+            _unit setVariable ["ACME_juncPFH", -1];
+            _unit setVariable ["ACME_JuncBleedActive", false];
+            _unit setVariable ["ACME_junctionalBleedLPS", 0, false];
         };
     };
-    private _dt = [_unit, "junctional", 1, 5] call ACME_fnc_clinicalTickDelta;
     private _parts = ["leftarm", "rightarm", "leftleg", "rightleg"];
     private _norm  = missionNamespace getVariable ["ACME_junctionalBleedNorm", 0.10];
-    private _dpCtl = missionNamespace getVariable ["ACME_junctionalDPControl", 0.15];
-    private _pkCtl = missionNamespace getVariable ["ACME_junctionalPackControl", 0.0];
+    private _dpCtl = missionNamespace getVariable ["ACME_junctionalDPControl", 0.10];
     // XStat 30, the hemostatic sponge bolus. it seats fast, with the bleed ramping from full to 0 over _xRamp
     // seconds, then holds until the dwell limit, after which the bolus fails and the junction rebleeds. it is
     // permanent until surgery or a full heal.
@@ -47,7 +46,7 @@ private _handle = [{
         if ((count _applyRaw) >= 2) then {
             private _stamp = _applyRaw param [0, -1];
             _applyPart = toLowerANSI (_applyRaw param [1, ""]);
-            if (_stamp >= 0 && {time - _stamp < 25}) then {_applyActive = true;} else {
+            if (_stamp >= 0 && {serverTime - _stamp < 25}) then {_applyActive = true;} else {
                 _unit setVariable ["ACME_Junc_AAJTApplying", [], true];
             };
         };
@@ -88,7 +87,11 @@ private _handle = [{
             private _rebleedDur = missionNamespace getVariable ["ACME_xstatRebleedTime", 120];  // 2 min to a full rebleed.
             private _rebleedMax = missionNamespace getVariable ["ACME_xstatRebleedMaxFrac", 0.5];  // at most half the original.
             private _rebleed = 0;
-            if (_dwell > _dwellLimit) then {
+            private _rebled = _dwell > _dwellLimit;
+            if ((_unit getVariable [format ["ACME_Junc_XStatRebled_%1", _x], false]) isNotEqualTo _rebled) then {
+                _unit setVariable [format ["ACME_Junc_XStatRebled_%1", _x], _rebled, true];
+            };
+            if (_rebled) then {
                 // the fraction of the way through the 2-minute rebleed ramp, 0 to 1. it starts at a trickle and climbs.
                 private _rf = ((_dwell - _dwellLimit) / (_rebleedDur max 0.001)) max 0 min 1;
                 _rebleed = _norm * _rebleedMax * _rf;
@@ -135,6 +138,16 @@ private _handle = [{
             if !(_vaso isEqualType 0) then { _vaso = 0 };
             private _able = (missionNamespace getVariable ["ACME_junctionalCompFloorFrac", 0.4])
                 + ((1 - (missionNamespace getVariable ["ACME_junctionalCompFloorFrac", 0.4])) * ((_vaso / 50) max 0 min 1));
+            // Severe TBI/brainstem autonomic failure reduces the separate transient spasm/plug response. Signed TBI
+            // tone is intentionally not applied here because total peripheral resistance below already contains it.
+            if (_unit getVariable ["ACME_tbi_HasTBI", false]) then {
+                private _tbiState = _unit getVariable ["ACME_tbi_State", createHashMap];
+                if ((count _tbiState) > 0) then {
+                    private _autoInt = (_tbiState getOrDefault ["autonomicIntegrity", 1]) max 0 min 1;
+                    private _minAbility = missionNamespace getVariable ["ACME_tbi_autonomicJuncMinAbility", 0.25];
+                    _able = _able * (_minAbility + ((1 - _minAbility) * _autoInt));
+                };
+            };
             private _depth = (missionNamespace getVariable ["ACME_junctionalCompDepth", 0.55]) * _shape * _able;
             _partNorm = _partNorm * ((1 - _depth) max 0.05);
 
@@ -167,8 +180,25 @@ private _handle = [{
                 && {!(_m getVariable ["ACME_DP_Paused", false])});
 
             if (_packing) then {
-                // the hands and gauze tamponade it, so bleeding subsides while actively packing.
-                _partNorm = _partNorm * _pkCtl;
+                // B108: Combat Gauze follows the same progressive-hemostasis rule as every other bandage.
+                // Start at the wound's open bleed rate and ease toward the completed packed-gauze state
+                // (ACME_junctionalGauzeControl, normally 0.50) using B107's quadratic treatment-progress curve.
+                // If the action is interrupted, the progress record disappears and the wound immediately returns
+                // to its true open-state bleed rate. No permanent partial packing is written before success.
+                private _gauze = missionNamespace getVariable ["ACME_junctionalGauzeControl", 0.50];
+                private _packProgress = 0;
+                private _activeBandages = _unit getVariable ["ACM_damage_BandageProgress", createHashMap];
+                if (_activeBandages isEqualType createHashMap) then {
+                    {
+                        _y params ["_bp", "", "_started", "_duration", ["_bandageClass", ""]];
+                        if (_bandageClass == "ACME_PackJunctional" && {_bp == _x}) then {
+                            private _p = ((serverTime - _started) / (_duration max 0.01)) max 0 min 1;
+                            _packProgress = _packProgress max (_p * _p);
+                        };
+                    } forEach _activeBandages;
+                };
+                private _packRemaining = 1 - ((1 - _gauze) * _packProgress);
+                _partNorm = _partNorm * _packRemaining;
             } else {
                 if (_state == "packed") then {
                     // combat gauze packing is the first-stage control. a finished packing holds the junction at 50 percent control,
@@ -179,7 +209,24 @@ private _handle = [{
                     // definitive step that makes control permanent, because the wrapped state excludes the part.
                     private _gauze   = missionNamespace getVariable ["ACME_junctionalGauzeControl", 0.50];
                     private _gauzeDP = missionNamespace getVariable ["ACME_junctionalGauzeDPControl", 0.00];
-                    _partNorm = _partNorm * (if (_dpHeld) then { _gauzeDP } else { _gauze });
+
+                    // B107: while the pressure dressing is being secured, progressively move the packed wound
+                    // from gauze-only control toward the wrapped state.  This uses the same quadratic curve as
+                    // ordinary bandages.  Direct Pressure still wins while it is actively held.
+                    private _wrapProgress = 0;
+                    private _juncPart = _x;
+                    private _activeBandages = _unit getVariable ["ACM_damage_BandageProgress", createHashMap];
+                    if (_activeBandages isEqualType createHashMap) then {
+                        {
+                            _y params ["_bp", "", "_started", "_duration", ["_bandageClass", ""]];
+                            if (_bandageClass == "ACME_WrapJunctional" && {_bp == _juncPart}) then {
+                                private _p = ((serverTime - _started) / (_duration max 0.01)) max 0 min 1;
+                                _wrapProgress = _wrapProgress max (_p * _p);
+                            };
+                        } forEach _activeBandages;
+                    };
+                    private _wrapRemaining = _gauze * (1 - _wrapProgress);
+                    _partNorm = _partNorm * (if (_dpHeld) then { _gauzeDP } else { _wrapRemaining });
                 } else {
                     // an open bleeder: direct pressure partially controls it. this is the most dangerous wound on the limb, so dp
                     // prioritizes it, and holding pressure here is the first-line control.
@@ -205,12 +252,14 @@ private _handle = [{
         _unit setVariable ["ACME_JuncLeakSfxSrc", objNull, true];
         _unit setVariable ["ACME_JuncBleedActive", false];
         _unit setVariable ["ACME_juncPFH", -1];
+        _unit setVariable ["ACME_junctionalBleedLPS", 0, false];
         _unit setVariable ["ACME_JuncLeakNext", -1, true];  // reset, so the next bleed re-inits the leak timer.
     };
 
     // fully controlled, such as an XStat seated and holding, and kept alive to watch the dwell. silence the leak and
     // do not drain. only run the leak sfx and the blood drain when there is actual bleeding to express.
     if (_juncNorm <= 0) exitWith {
+        _unit setVariable ["ACME_junctionalBleedLPS", 0, false];
         private _leakSrc = _unit getVariable ["ACME_JuncLeakSfxSrc", objNull];
         if (!isNull _leakSrc) then { deleteVehicle _leakSrc; _unit setVariable ["ACME_JuncLeakSfxSrc", objNull, true]; };
         _unit setVariable ["ACME_JuncLeakNext", -1, true];
@@ -218,11 +267,14 @@ private _handle = [{
 
     // past the exit gate, a junctional wound is still bleeding. the ambient leak is a deletable sound-source object
     // rather than a say3d, so an important action can stop it immediately instead of queueing.
+    // Leak scheduling is public because important treatment sounds may reserve the same patient from another
+    // client or the server. serverTime is therefore the only valid clock domain for this small audio scheduler.
+    private _audioNow = serverTime;
     private _leakNext = _unit getVariable ["ACME_JuncLeakNext", -1];
-    if (_leakNext < 0) then { _leakNext = time; };
+    if (_leakNext < 0) then { _leakNext = _audioNow; };
     private _busyUntil = _unit getVariable ["ACME_SfxBusyUntil", -1];
 
-    if (time >= _leakNext && {time >= _busyUntil}) then {
+    if (_audioNow >= _leakNext && {_audioNow >= _busyUntil}) then {
         private _oldLeak = _unit getVariable ["ACME_JuncLeakSfxSrc", objNull];
         if (!isNull _oldLeak) then { deleteVehicle _oldLeak; };
 
@@ -238,9 +290,9 @@ private _handle = [{
             };
         }, [_unit, _leakSrc], 2.38] call CBA_fnc_waitAndExecute;
 
-        _leakNext = time + 5 + random 5;
+        _leakNext = _audioNow + 5 + random 5;
     };
-    if (time < _busyUntil) then {
+    if (_audioNow < _busyUntil) then {
         _leakNext = _leakNext max (_busyUntil + 0.5 + random 2);
     };
     _unit setVariable ["ACME_JuncLeakNext", _leakNext, true];
@@ -272,7 +324,9 @@ private _handle = [{
     private _passive = missionNamespace getVariable ["ACME_junctionalPassiveBleed", 0.02];
     private _lps = _juncNorm * (_svTerm max _passive) * (100 / (_res max 1)) * _coeff;
 
-    private _bv = _unit getVariable ["ACM_circulation_Blood_Volume", 6];
-    [_unit, [["bloodVolume", 0 max (_bv - _lps * _dt)]], false] call ACM_circulation_fnc_setRuntimeState;  // bounded real elapsed time; no drain on an owner transition.
+    // Do not mutate blood volume here. ACM's circulation integration consumes this rate in the same write as
+    // ordinary external wound loss, so a junctional casualty produces one coherent blood-volume update per tick.
+    _unit setVariable ["ACME_junctionalBleedLPS", _lps max 0, false];
 }, 1, [_unit, _epoch]] call CBA_fnc_addPerFrameHandler;
 _unit setVariable ["ACME_juncPFH", _handle];
+_unit setVariable ["ACME_junctionalBleedLPS", 0, false];

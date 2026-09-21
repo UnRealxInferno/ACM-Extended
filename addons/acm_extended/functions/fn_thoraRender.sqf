@@ -9,6 +9,7 @@ private _side = uiNamespace getVariable ["ACME_Thora_Side", "right"];
 // redraw the committed incision of this side, if any. it persists per patient and side, and reappears if a tube is
 // removed.
 private _patient = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
+[] call ACME_fnc_thoraRenderBruises;
 private _inc = if (isNull _patient) then { [] } else { _patient getVariable [format ["ACME_thora_incision_%1", _side], []] };
 if (count _inc == 3) then {
     _inc params ["_ist", "_iang", "_ilenCm"];
@@ -21,6 +22,20 @@ if (count _inc == 3) then {
 [] call ACME_fnc_thoraRenderPrep;
 [] call ACME_fnc_thoraRenderOpen;
 [] call ACME_fnc_thoraRenderTube;
+
+// Arm mask: base chest -> prep/interventions -> arm overlay -> active cursor/palpation. Z-order comes from control
+// creation order in fn_thoraInit; this render pass only selects the correct side and keeps it aligned to the body.
+private _arm = uiNamespace getVariable ["ACME_Thora_ArmOverlay", controlNull];
+if (!isNull _arm) then {
+    private _rect = uiNamespace getVariable ["ACME_Thora_BodyRect", []];
+    if (count _rect == 4) then {
+        _arm ctrlSetPosition _rect;
+        _arm ctrlCommit 0;
+    };
+    _arm ctrlSetText (["\acm_extended\ui\chest_right_arm_overlay_ca.paa", "\acm_extended\ui\chest_left_arm_overlay_ca.paa"] select (_side == "left"));
+    _arm ctrlSetTextColor [1,1,1,1];
+    _arm ctrlShow true;
+};
 
 // the zone guide is debug-only: it is shown only when the debug menu is enabled and ACME_thora_showZone is on.
 // normal play always hides it, because the 5th ics is palpated by feel. it is drawn asset-free as a translucent box

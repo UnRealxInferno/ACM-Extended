@@ -23,3 +23,5 @@ _patient setVariable [VAR_INTERNAL_WOUNDS, createHashMap, true];
 
 _patient setVariable [QGVAR(Coagulation_Active), false, true];
 _patient setVariable [QGVAR(IBCoagulation_Active), false, true];
+// B107: a full heal/respawn must never retain temporary hemostasis from an interrupted dressing.
+_patient setVariable [QGVAR(BandageProgress), createHashMap, true];

@@ -1,8 +1,14 @@
-/* Remove the AAJT-S placement addressed by the selected body part. */
+/* Remove the AAJT-S placement addressed by the selected body part. The casualty owner is the only device-state
+   writer and returns exactly one reusable AAJT-S to the provider whose removal actually won. */
 params ["_medic", "_patient", "_bodyPart"];
-if (isNull _patient) exitWith {};
+if (isNull _patient || {isNull _medic}) exitWith {false};
+if (!local _patient) exitWith {
+    [_patient, "aajtRemove", [_medic, _patient, _bodyPart]] call ACME_fnc_ownerDispatch;
+    true
+};
 private _p = toLowerANSI _bodyPart;
 private _removed = false;
+private _site = "";
 switch (_p) do {
     case "body": {
         if (_patient getVariable ["ACME_AAJT_zone3", false]) then {
@@ -11,7 +17,7 @@ switch (_p) do {
             [_patient, "rightleg", false] call ACME_fnc_aajtSetLegTQ;
             [_patient] call ACME_fnc_aajtDownedStop;
             _removed = true;
-            ["AAJT-S removed (Zone 3 REBOA).", 2.5] call ace_common_fnc_displayTextStructured;
+            _site = "Zone 3 REBOA";
         };
     };
     case "leftleg";
@@ -20,7 +26,7 @@ switch (_p) do {
             [_patient, "inguinal", [false]] call ACME_fnc_aajtStateCommit;
             [_patient, _p, false] call ACME_fnc_aajtSetLegTQ;
             _removed = true;
-            ["AAJT-S removed (inguinal).", 2.5] call ace_common_fnc_displayTextStructured;
+            _site = "inguinal";
         };
     };
     case "leftarm": {
@@ -28,7 +34,7 @@ switch (_p) do {
             [_patient, "leftarm", [false]] call ACME_fnc_aajtStateCommit;
             [_patient, "leftarm", false] call ACME_fnc_aajtSetLegTQ;
             _removed = true;
-            ["AAJT-S removed (left axilla).", 2.5] call ace_common_fnc_displayTextStructured;
+            _site = "left axilla";
         };
     };
     case "rightarm": {
@@ -36,17 +42,14 @@ switch (_p) do {
             [_patient, "rightarm", [false]] call ACME_fnc_aajtStateCommit;
             [_patient, "rightarm", false] call ACME_fnc_aajtSetLegTQ;
             _removed = true;
-            ["AAJT-S removed (right axilla).", 2.5] call ace_common_fnc_displayTextStructured;
+            _site = "right axilla";
         };
     };
     default {};
 };
-if (!_removed) exitWith {};
+if (!_removed) exitWith {false};
 [_patient] call ACME_fnc_junctionalStartBleed;
-if (!isNull _medic) then {
-    if (_medic canAdd "ACME_AAJT_S") then {_medic addItem "ACME_AAJT_S";} else {
-        private _wh = createVehicle ["GroundWeaponHolder", getPosATL _medic, [], 0.5, "CAN_COLLIDE"];
-        _wh addItemCargoGlobal ["ACME_AAJT_S", 1];
-    };
-};
+["ACME_aajtReturnItem", [_medic], _medic] call CBA_fnc_targetEvent;
+[format ["AAJT-S removed (%1).", _site], 2.5, _medic] call ACME_fnc_netNotice;
 [_patient, "activity", "%1 removed an AAJT-S", [[_medic, false, true] call ace_common_fnc_getName]] call ace_medical_treatment_fnc_addToLog;
+true

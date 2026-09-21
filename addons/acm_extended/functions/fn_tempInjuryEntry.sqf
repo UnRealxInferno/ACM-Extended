@@ -12,7 +12,7 @@ private _at = _target getVariable ["ACME_tempReadingAt", -1];
 if (_at < 0) exitWith {};  // never measured -> show nothing
 
 private _t = _target getVariable ["ACME_tempReading", 37];
-private _ageS = CBA_missionTime - _at;
+private _ageS = (serverTime - _at) max 0;
 private _age = if (_ageS < 60) then {"just now"} else {format ["%1m ago", floor (_ageS / 60)]};
 
 // the color bands by the reading: a cold-blue family for hypothermia, deeper being colder, warm for fever and

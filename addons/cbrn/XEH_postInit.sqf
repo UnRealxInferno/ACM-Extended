@@ -45,9 +45,9 @@ GVAR(HazardType_Array) = [];
         {
             private _hazardClass = configFile >> "ACM_CBRN_Hazards" >> _category >> _x;
 
-            private _thresholdList = [0]; 
-            private _thresholdPositiveRateList = [1]; 
-            private _thresholdNegativeRateList = [1]; 
+            private _thresholdList = [0];
+            private _thresholdPositiveRateList = [1];
+            private _thresholdNegativeRateList = [1];
 
             if ((isArray (_hazardClass >> "thresholds")) && (isArray (_hazardClass >> "threshold_positiveRate"))) then {
                 _thresholdList = getArray (_hazardClass >> "thresholds");
@@ -119,7 +119,7 @@ GVAR(HazardType_Array) = [];
     ["ace_firedNonPlayer", LINKFUNC(handleFiredGrenade)] call CBA_fnc_addEventHandler;
     ["ace_firedPlayerVehicle", LINKFUNC(handleFiredArtillery)] call CBA_fnc_addEventHandler;
     ["ace_firedNonPlayerVehicle", LINKFUNC(handleFiredArtillery)] call CBA_fnc_addEventHandler;
-    
+
     ["CAManBase", "GetInMan", LINKFUNC(handleVehicleDoorOpen)] call CBA_fnc_addClassEventHandler;
     ["CAManBase", "GetOutMan", LINKFUNC(handleVehicleDoorOpen)] call CBA_fnc_addClassEventHandler;
 }] call CBA_fnc_addEventHandler;

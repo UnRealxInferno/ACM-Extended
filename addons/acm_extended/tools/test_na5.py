@@ -51,6 +51,8 @@ class ScannerFixtures(unittest.TestCase):
         w,d=self.writes('{_p setVariable [_x,nil];} forEach ["ACME_a"];');self.assertEqual(w[0]['kind'],'clear-only')
     def test_net_helper_nil_clear(self):
         w,d=self.writes('[_p,"ACME_a",nil] call ACME_fnc_setVarNet;');self.assertEqual(w[0]['kind'],'clear-only')
+    def test_approx_net_helper_is_write_evidence(self):
+        w,d=self.writes('[_p,"ACME_a",1.25,0.1,2] call ACME_fnc_setVarNetApprox;');self.assertEqual(w[0]['name'],'ACME_a')
     def test_false_assignment_is_real_writer(self):
         w,d=self.writes('_p setVariable ["ACME_a",false];');self.assertEqual(w[0]['kind'],'literal')
     def test_line_numbers_survive_comments(self):

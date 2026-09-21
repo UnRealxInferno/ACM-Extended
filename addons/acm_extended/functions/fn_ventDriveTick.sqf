@@ -56,7 +56,7 @@ if !(_mbTimes isEqualTo []) then {
     private _tNow = CBA_missionTime;
     private _kept = _mbTimes select {(_tNow - _x) <= 60};
     if ((count _kept) != (count _mbTimes)) then {
-        [_patient, "ACME_vent_manualBreathTimes", _kept] call ACME_fnc_setVarNet;
+        _patient setVariable ["ACME_vent_manualBreathTimes", _kept, false];
         [_patient, "ACME_vent_manualRR", (count _kept)] call ACME_fnc_setVarNet;
     };
 };
@@ -65,7 +65,7 @@ if !(_mbTimes isEqualTo []) then {
 private _simpleManual = _patient getVariable ["ACME_vent_simpleManualVolumes", []];
 private _keptSimpleManual = _simpleManual select {CBA_missionTime - (_x select 0) <= 60};
 if (count _keptSimpleManual != count _simpleManual) then {
-    [_patient, "ACME_vent_simpleManualVolumes", _keptSimpleManual] call ACME_fnc_setVarNet;
+    _patient setVariable ["ACME_vent_simpleManualVolumes", _keptSimpleManual, false];
 };
 _simpleManual = _keptSimpleManual;
 

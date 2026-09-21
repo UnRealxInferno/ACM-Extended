@@ -14,42 +14,8 @@ if (isNull _display) exitWith {};
 // replicates. this is what makes an open screen notice it: a version on the patient that no longer matches ours
 // means another medic committed something, so repaint from the authoritative state.
 // it runs every tick, so it lands within a frame of their commit rather than on a reopen.
-// Refresh the closure slot without changing a tool already in the provider's hand.
-private _medic = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
-([_medic] call ACME_fnc_thoraClosureMode) params ["_preferred", "_nT", "_canTube"];
-private _heldClosure = uiNamespace getVariable ["ACME_Thora_Held", ""];
-if (_heldClosure in ["seal", "tube"]) then {
-    _preferred = _heldClosure;
-    _nT = if (isNull _medic) then {0} else {
-        [_medic, if (_heldClosure == "seal") then {"ACM_ChestSeal"} else {"ACM_ChestTubeKit"}] call ace_common_fnc_getCountOfItem
-    };
-    if (_heldClosure == "tube" && {!_canTube}) then {_nT = 0;};
-};
-private _sealMode = _preferred == "seal";
-private _changedMode = _sealMode != (uiNamespace getVariable ["ACME_Thora_SealMode", false]);
-uiNamespace setVariable ["ACME_Thora_SealMode", _sealMode];
-uiNamespace setVariable ["ACME_Thora_CanTube", _canTube];
-if (_changedMode) then {[] call ACME_fnc_thoraUpdateTrayIcons;};
-private _sealCtrl = uiNamespace getVariable ["ACME_Thora_CountCtrl", controlNull];
-if (!isNull _sealCtrl) then {
-    _sealCtrl ctrlSetStructuredText parseText format ["<t align='right' size='0.75' color='%1'>x%2</t>", if (_nT > 0) then {"#ffffff"} else {"#ff6666"}, _nT];
-};
-{
-    if ((_x getVariable ["thoraTool", ""]) == "tube") then {
-        private _selected = _heldClosure in ["seal", "tube"];
-        private _ic = _x getVariable ["thoraIcon", controlNull];
-        if (!isNull _ic) then {
-            _ic ctrlSetTextColor (if (_selected) then {[0,0,0,1]} else {if (_nT > 0) then {[1,1,1,0.85]} else {[0.4,0.4,0.4,0.5]}});
-        };
-        _x setVariable ["thoraLocked", _nT <= 0];
-        private _bt = _x getVariable ["thoraBtn", controlNull];
-        if (!isNull _bt) then {
-            // Keep the selected slot clickable so an unavailable held tool can be put down.
-            _bt ctrlEnable (_nT > 0 || {_selected});
-            _bt ctrlSetTooltip (if (_sealMode) then {"Place a chest seal"} else {"Place a chest tube"});
-        };
-    };
-} forEach (uiNamespace getVariable ["ACME_Thora_SlotBGs", []]);
+// Refresh independent tube/seal inventory and permission state without changing the held tool.
+[] call ACME_fnc_thoraUpdateTrayIcons;
 
 private _thPat = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
 if (!isNull _thPat) then {
@@ -57,7 +23,11 @@ if (!isNull _thPat) then {
     private _sideSeen = uiNamespace getVariable ["ACME_Thora_Side", "right"];
     private _closureSeen = [_sideSeen,
         _thPat getVariable [format ["ACME_thora_tube_%1", _sideSeen], false],
-        _thPat getVariable [format ["ACME_thora_sealed_%1", _sideSeen], false]];
+        _thPat getVariable [format ["ACME_thora_sealed_%1", _sideSeen], false],
+        _thPat getVariable [format ["ACME_thora_closed_%1", _sideSeen], false]];
+    if (!(_closureSeen select 2) || {_closureSeen select 1}) then {
+        uiNamespace setVariable ["ACME_Thora_Burp", ["", 0, 0, false]];
+    };
     // Closure values can arrive separately from the version. Observe the values too.
     if (_tv != (uiNamespace getVariable ["ACME_thora_verSeen", -1])
         || {!(_closureSeen isEqualTo (_display getVariable ["ACME_Thora_ClosureSeen", []]))}) then {
@@ -77,6 +47,8 @@ if (count _thBase >= 4) then {
     ([_display, "ACME_Thora_ShakeBase"] call ACME_fnc_uiShakeApply) params ["_tdx", "_tdy"];
     _thBase params ["_tbx", "_tby", "_tbw", "_tbh"];
     uiNamespace setVariable ["ACME_Thora_BodyRect", [_tbx + _tdx, _tby + _tdy, _tbw, _tbh]];
+    // The bruise layer rides with the chest during cabin motion.
+    [] call ACME_fnc_thoraRenderBruises;
 };
 
 // the darkness is drawn first, before any branch can bail out.
@@ -146,7 +118,11 @@ if (!isNull _spr) then {
             private _pat = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
             private _inc = if (isNull _pat) then { [] } else { _pat getVariable [format ["ACME_thora_incision_%1", _sside], []] };
             private _openst = if (isNull _pat) then { "" } else { _pat getVariable [format ["ACME_thora_open_%1", _sside], ""] };
-            private _closed = !isNull _pat && {(_pat getVariable [format ["ACME_thora_tube_%1", _sside], false]) || {(_held == "seal") && {_pat getVariable [format ["ACME_thora_sealed_%1", _sside], false]}}};
+            private _closed = !isNull _pat && {
+                (_pat getVariable [format ["ACME_thora_tube_%1", _sside], false])
+                || {_pat getVariable [format ["ACME_thora_closed_%1", _sside], false]}
+                || {(_held == "seal") && {_pat getVariable [format ["ACME_thora_sealed_%1", _sside], false]}}
+            };
             if (count _inc == 3 && {_openst == "finger"} && {!_closed}) then {
                 _inc params ["_ist", "_iang", "_ilenCm"];
                 _ist params ["_isu", "_isv"];
@@ -158,7 +134,8 @@ if (!isNull _spr) then {
                     _cuv params ["_ccu", "_ccv"];
                     private _dU = _ccu - _icU;
                     private _dV = (_ccv - _icV) * (1 / _afS);
-                    if ((sqrt ((_dU * _dU) + (_dV * _dV))) <= (missionNamespace getVariable ["ACME_thora_tubeSnapR", 0.055])) then {
+                    private _snapR = if (_held == "seal") then {missionNamespace getVariable ["ACME_thora_sealSnapR", 0.085]} else {missionNamespace getVariable ["ACME_thora_tubeSnapR", 0.055]};
+                    if ((sqrt ((_dU * _dU) + (_dV * _dV))) <= _snapR) then {
                         private _anchor = _closureArt select 2;
                         _anchor params ["_au", "_av"];
                         _px = (_bxS + (_icU * _bwS)) - (_au * _wS);

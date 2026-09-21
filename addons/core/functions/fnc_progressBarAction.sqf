@@ -39,7 +39,7 @@ if (!_inVehicle && stance _medic in ["STAND","CROUCH"]) then {
     _allArgs params ["_args", "_extraArgs"];
     _extraArgs params ["", "", "_onCancel"];
     _args call _onCancel;
-}, _text, 
+}, _text,
 ([{
     params ["_allArgs"];
     _allArgs params ["_args", "_extraArgs"];

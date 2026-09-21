@@ -18,12 +18,17 @@ if (_patient getVariable ["ACME_headElevated", false]) exitWith {
     if (!isNull _medic) then { ["Head is already elevated.", 2, _medic] call ace_common_fnc_displayTextStructured; };
 };
 
+// Revalidate on the patient owner after the treatment timer/network hop, before moving gear or posing.
+// This also protects automatic transport restoration if the patient got up in the meantime.
+if !([_patient, _medic] call ACME_fnc_headElevateCanStart) exitWith {};
+
 // Head elevation does NOT roll the casualty. A roll put the casualty into a conscious prone state and started a
 // second animation that competed with the grab. The grab is played from the pose the casualty is in, which is
 // what ACE dragging does. The _afterProneRoll argument is kept so an older call still works.
 if (_patient getVariable ["ACME_headElev_vestRemoved", false]) then {
     [_patient] call ACME_fnc_headElevVestRestore;
 };
+[_patient] call ACME_fnc_chestAccessVestRestore;
 if (_patient getVariable ["ACME_headElev_vestRemoved", false]) exitWith {};
 // something has to physically prop the casualty up. a worn backpack does it directly, and if there is no backpack
 // but the casualty is wearing a plate carrier, we strip the carrier, lift them, and wedge it behind the

@@ -1,10 +1,21 @@
 // Shared Direct Pressure per-frame worker. Direct Pressure itself never owns ACM's global continuous-action gate.
-// Movement yields pressure on another casualty, while ordinary medical treatments may replace only the provider
-// animation. True ACM maneuvers suspend both the pose and the clinical pressure marker, then the hold resumes after
-// the maneuver finishes. This keeps every medical-menu action responsive without granting hemorrhage control while
-// the provider is physically performing an incompatible maneuver.
+// Deliberate movement now releases the hold entirely. Ordinary compatible treatments may replace only the provider
+// animation; true ACM maneuvers temporarily suspend the pose/clinical marker and can resume after the maneuver.
+// This keeps the menu responsive without letting a stale pressure loop swallow the provider's movement input.
 params ["_args", "_pfhId"];
 _args params ["_medic", "_patient", "_bodyPart", "_mode"];
+
+// B127 session ownership. The PFH id stored on the provider is the Direct Pressure episode identity. A callback
+// which survived removal from an older episode must never observe a later ACME_DP_Active=true and begin operating on
+// its old patient/body part again. Fingerprint the patient/part/mode as a second guard in case a CBA PFH id is ever
+// recycled during a long session.
+if (isNull _medic
+    || {(_medic getVariable ["ACME_DP_PFH", -1]) != _pfhId}
+    || {!((_medic getVariable ["ACME_DP_Patient", objNull]) isEqualTo _patient)}
+    || {(_medic getVariable ["ACME_DP_Part", ""]) != _bodyPart}
+    || {(_medic getVariable ["ACME_DP_Mode", ""]) != _mode}) exitWith {
+    [_pfhId] call CBA_fnc_removePerFrameHandler;
+};
 
 if !(_medic getVariable ["ACME_DP_Active", false]) exitWith {[_pfhId] call CBA_fnc_removePerFrameHandler;};
 if !(missionNamespace getVariable ["ACME_sys_dp", true]) exitWith {
@@ -16,7 +27,11 @@ private _stop = "";
 if (!alive _medic || {_medic getVariable ["ACE_isUnconscious", false]}) then {_stop = "down";};
 if (_stop == "" && {isNull _patient}) then {_stop = "patient";};
 
-private _leash = if (_mode == "torso") then {2.2} else {missionNamespace getVariable ["ACME_DP_leashDist", 1.7]};
+private _leash = if (_mode == "torso") then {
+    missionNamespace getVariable ["ACME_DP_torsoLeashDist", 3.2]
+} else {
+    missionNamespace getVariable ["ACME_DP_leashDist", 2.7]
+};
 private _medicVehicle = objectParent _medic;
 private _patientVehicle = objectParent _patient;
 if (_stop == "" && {_medicVehicle isNotEqualTo _patientVehicle}) then {_stop = "far";};
@@ -28,15 +43,23 @@ if (_stop != "") exitWith {
     [_pfhId] call CBA_fnc_removePerFrameHandler;
 };
 
-// Torso, head and limb pressure share the same yield/resume pose controller. It retires the looping hold on movement
-// or when another treatment owns the provider animation and reapplies it after the provider settles again.
-if (_mode in ["torso", "limb"]) then {[_medic, _patient] call ACME_fnc_directPressurePose;};
-
+// Movement is an explicit release request, not a temporary pressure yield. Check it before the pose controller so
+// the looping hold cannot consume the first movement frames and then quietly reapply itself when the key is released.
+// inputAction respects remapped movement keys/controllers, unlike hard-coded DIK handlers.
 private _moveInput = (inputAction "MoveForward") + (inputAction "MoveBack")
                    + (inputAction "MoveLeft") + (inputAction "MoveRight")
+                   + (inputAction "TurnLeft") + (inputAction "TurnRight")
                    + (inputAction "MoveFastForward") + (inputAction "MoveSlowForward")
                    + (inputAction "Evasive");
-private _moving = (_mode != "self") && {_moveInput > 0.01};
+private _moving = _moveInput > 0.01;
+if (_moving) exitWith {
+    [true, _medic, false] call ACME_fnc_directPressureStop;
+    [_pfhId] call CBA_fnc_removePerFrameHandler;
+};
+
+// Stationary torso/head/limb pressure shares the same yield/resume pose controller. Other medical treatments can
+// temporarily own the provider animation, but an actual attempt to move has already ended Direct Pressure above.
+if (_mode in ["torso", "limb"]) then {[_medic, _patient] call ACME_fnc_directPressurePose;};
 private _maneuverActive = missionNamespace getVariable ["ACM_core_ContinuousAction_Active", false];
 private _manualPause = _medic getVariable ["ACME_DP_Paused", false];
 private _pauseClass = _medic getVariable ["ACME_DP_PauseTreatmentClass", ""];
@@ -45,14 +68,12 @@ if (_manualPause && {_maneuverActive} && {_pauseClass in ["cpr", "usebvm", "useb
     _medic setVariable ["ACME_DP_PauseTreatmentClass", "", false];
     _manualPause = false;
 };
-private _mustYieldClinical = _moving || {_maneuverActive} || {_manualPause};
+private _mustYieldClinical = _maneuverActive || {_manualPause};
 private _yieldedClinical = _medic getVariable ["ACME_DP_ClinicalYield", false];
 
 if (_mustYieldClinical) exitWith {
     if (!_yieldedClinical) then {
-        if ((_patient getVariable [format ["ACME_DP_press_%1", _bodyPart], objNull]) isEqualTo _medic) then {
-            _patient setVariable [format ["ACME_DP_press_%1", _bodyPart], objNull, true];
-        };
+        [_patient, "directPressureMarker", [_medic, _bodyPart, false]] call ACME_fnc_ownerDispatch;
         _medic setVariable ["ACME_DP_ClinicalYield", true];
         _medic setVariable ["ACME_DP_ClinicalYieldStart", CBA_missionTime];
     };
@@ -67,7 +88,7 @@ if (_yieldedClinical) then {
     _medic setVariable ["ACME_DP_NextClot", (_medic getVariable ["ACME_DP_NextClot", CBA_missionTime]) + _yieldDuration];
     _medic setVariable ["ACME_DP_ClinicalYield", false];
     _medic setVariable ["ACME_DP_ClinicalYieldStart", 0];
-    _patient setVariable [format ["ACME_DP_press_%1", _bodyPart], _medic, true];
+    [_patient, "directPressureMarker", [_medic, _bodyPart, true]] call ACME_fnc_ownerDispatch;
 };
 
 private _held = CBA_missionTime - (_medic getVariable ["ACME_DP_Start", CBA_missionTime]);
@@ -75,4 +96,7 @@ if (_held < 15) exitWith {};
 if (CBA_missionTime < (_medic getVariable ["ACME_DP_NextClot", 0])) exitWith {};
 _medic setVariable ["ACME_DP_NextClot", CBA_missionTime + 2];
 
-[_patient, _bodyPart, 2, 3, true, false] call ACM_damage_fnc_clotWoundsOnBodyPart;
+// Wound arrays belong to the casualty owner. The provider owns only the hold timer/animation; ask the patient
+// owner to perform this clot attempt against its current wound state so simultaneous damage/coagulation cannot
+// race a remote client's read/modify/write.
+[_patient, "directPressureClot", [_medic, _bodyPart]] call ACME_fnc_ownerDispatch;

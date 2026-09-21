@@ -32,6 +32,8 @@ if (!(_patient getVariable ["ACME_headElev_Suspended", false])
     && {_anim == _restAnim}) exitWith {};
 
 _patient setVariable ["ACME_headElev_lastAnim", _anim];
+// If a backpack-supported chest-access vest is temporarily out, keep it superior to the head across pose changes.
+[_patient] call ACME_fnc_chestAccessVestPark;
 
 // the repositioning set of ACM. it is matched loosely, because these appear with suffixes and variants.
 private _cancelOn = missionNamespace getVariable ["ACME_headElev_acmCancelAnims", ["acm_recoveryposition"]];

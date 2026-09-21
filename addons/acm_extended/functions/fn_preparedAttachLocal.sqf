@@ -66,6 +66,12 @@ if (_ok) then {
         };
     };
     _ok = _doseId != "";
+    if (_ok) then {
+        // ivBagLocal can attach to an IV whose native site gate was left at zero by an earlier stop or by the
+        // infusion-prep pause. IO usually remained at its default 1, which is why the same prepared infusion
+        // appeared to work on IO but not on IV. Starting a newly attached infusion explicitly starts this site.
+        [_patient, _part, _iv, _site] call ACME_fnc_resumeSiteFlow;
+    };
 };
 _results set [_id, [_ok, _doseId]];
 if (count _results > 128) then {_results deleteAt ((keys _results) select 0);};

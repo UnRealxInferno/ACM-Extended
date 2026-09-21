@@ -1,21 +1,17 @@
 #include "..\script_component.hpp"
 /*
- * Author: Blue
+ * Author: Blue / ACM Extended B125
  * Handle airway collapse due to loss of reflexes.
  *
- * Arguments:
- * 0: Patient <OBJECT>
- *
- * Return Value:
- * None
- *
- * Example:
- * [player] call ACM_airway_fnc_handleAirwayCollapse;
- *
- * Public: No
+ * B125:airwayCollapseWakeClear
+ * A conscious patient cannot retain the unconscious soft-tissue-collapse ladder. Stock ACM stopped the PFH by
+ * writing collapse state 3 when the casualty woke, which left a stale severe/mild obstruction flag behind even
+ * though getAirwayState correctly returned a patent airway while awake. Wake now retires the worker and clears
+ * collapse to zero. True severe collapse still stops the worker at state 3 while the patient remains unconscious.
  */
 
 params ["_patient"];
+private _acmeReconcile = "B125:airwayCollapseWakeClear";
 
 if (_patient getVariable [QGVAR(AirwayCollapse_PFH), -1] != -1) exitWith {};
 
@@ -23,10 +19,18 @@ private _PFH = [{
     params ["_args", "_idPFH"];
     _args params ["_patient"];
 
-    private _keepAirwayIntact = false;
     private _collapseState = _patient getVariable [QGVAR(AirwayCollapse_State), 0];
 
-    if (!(IS_UNCONSCIOUS(_patient)) || _collapseState > 2) exitWith {
+    // B125: waking clears the unconscious collapse state instead of promoting it to severe obstruction.
+    if (!(IS_UNCONSCIOUS(_patient))) exitWith {
+        if (_collapseState != 0) then {
+            _patient setVariable [QGVAR(AirwayCollapse_State), 0, true];
+        };
+        _patient setVariable [QGVAR(AirwayCollapse_PFH), -1];
+        [_idPFH] call CBA_fnc_removePerFrameHandler;
+    };
+
+    if (_collapseState > 2) exitWith {
         _patient setVariable [QGVAR(AirwayCollapse_State), 3, true];
         _patient setVariable [QGVAR(AirwayCollapse_PFH), -1];
         [_idPFH] call CBA_fnc_removePerFrameHandler;
@@ -36,6 +40,11 @@ private _PFH = [{
         _patient setVariable [QGVAR(AirwayReflex_State), false, true];
     };
 
+    private _keepAirwayIntact = (_patient getVariable [QGVAR(RecoveryPosition_State), false])
+        || (_patient getVariable [QGVAR(HeadTilt_State), false])
+        || ((_patient getVariable [QGVAR(AirwayItem_Oral), ""]) == "SGA")
+        || (_patient getVariable [QGVAR(SurgicalAirway_State), false])
+        || (_patient getVariable ["ACME_ETT_Inserted", false]);
     if (_keepAirwayIntact) exitWith {};
 
     if (random 1 < (0.3 * GVAR(airwayCollapseChance))) then {

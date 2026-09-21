@@ -52,5 +52,6 @@ if (_wasElevated && {!_inVehicle}) then {
 };
 
 [_patient] call ACME_fnc_headElevVestRestore;
+[_patient, true] call ACME_fnc_chestAccessVestRestore;
 _patient setVariable ["ACME_headElev_preserveFaceDown", nil, true];
 _patient setVariable ["ACME_headElev_baseAnim", nil, true];

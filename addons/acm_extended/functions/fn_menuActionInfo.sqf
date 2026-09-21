@@ -32,6 +32,7 @@ if (_category == "examine") exitWith {
     [_category, _bucket, false]
 };
 private _iv = (_category == "advanced") && {
+    _name in ["acme_removeio_fast1", "acme_removeio_ez"] || {
     (_lineage findIf {_x in [
         "insertiv_16_upper", "removeiv_16_upper", "insertio_fast1", "removeio_fast1",
         "opentransfusionmenu", "bloodiv", "acme_place18g_upper", "acme_ivminigamestart",
@@ -41,7 +42,7 @@ private _iv = (_category == "advanced") && {
         (_name find "insertiv_") == 0 || {(_name find "removeiv_") == 0} || {
             (_name find "insertio_") == 0 || {(_name find "removeio_") == 0}
         }
-    }
+    }}
 };
 if (_iv) exitWith {["medication", "iv_access", false]};
 if (_name in ["checkairway", "headturn", "beginheadtiltchinlift"] || {(_lineage findIf {_x in [

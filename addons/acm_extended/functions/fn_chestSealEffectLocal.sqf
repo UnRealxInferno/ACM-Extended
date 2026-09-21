@@ -21,16 +21,20 @@ switch (_op) do {
     case "thoraSeal": {
         _args params [["_side", ""], ["_clinicalEpoch", -1]];
         if (!(_side in ["left", "right"]) || {_clinicalEpoch != ([_patient] call ACME_fnc_clinicalEpoch)}) exitWith {};
-        if (!(_patient getVariable [format ["ACME_thora_sealed_%1", _side], false])
-            || {(_patient getVariable [format ["ACME_thora_open_%1", _side], ""]) != "finger"}
+        // The provider publishes immediate seal/closed presentation before this owner command. Do not require
+        // those two newly-published booleans here: on a remote patient the owner event can arrive before their
+        // publicVariable replication. The pre-existing patent finger tract plus no tube is the authoritative gate.
+        if ((_patient getVariable [format ["ACME_thora_open_%1", _side], ""]) != "finger"
             || {_patient getVariable [format ["ACME_thora_tube_%1", _side], false]}) exitWith {};
         [_patient] call ACME_fnc_ptxEnsure;
-        [_patient, [["chestSeal", true]], true] call ACM_breathing_fnc_setRuntimeState;
+        // This is a per-tract closure, not ACM's global whole-chest ChestSeal_State. Setting the native
+        // aggregate here would incorrectly imply that unrelated penetrating chest wounds are also sealed.
 
-        // A seal over the finger-thoracostomy is a true closure of that surgical communication. Preserve the
-        // incision and the placed seal for presentation/aftercare, but retire the tract from the patent "finger"
-        // state exactly as suture closure retires the open outlet. ptxContext therefore no longer counts this side
-        // as a drain or vent while the chest-seal artwork remains visible from ACME_thora_sealed_<side>.
+        // A seal over the finger-thoracostomy is a true occlusive closure of that surgical communication.
+        // Preserve the incision/seal evidence, but retire the tract from the patent finger-drain state. It is
+        // deliberately NOT a vent: any remaining internal pleural leak can therefore reaccumulate after closure.
+        [_patient, _side, "sealed", true] call ACME_fnc_thoraSideStateCommit;
+        [_patient, _side, "closed", true] call ACME_fnc_thoraSideStateCommit;
         [_patient, _side, "open", "sealed"] call ACME_fnc_thoraSideStateCommit;
         [_patient] call ACME_fnc_thoraBumpVer;
         [_patient, "thoraSeal"] call ACME_fnc_ptxTreat;

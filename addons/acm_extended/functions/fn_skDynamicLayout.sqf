@@ -42,6 +42,11 @@ if (!isNull _group) then {
 // This keeps visible padding from both the top edge and the head at every UI scale instead of pinning a magic Y.
 private _patientHeader = _d displayCtrl 84002;
 if (!isNull _patientHeader) then {
+    // Body Map owns a patient-name-only header. Reassert it on every layout pass so carousel/view transitions can
+    // never leave the native header blank or replace it with a body-part/preparation string.
+    private _namePatient = _d getVariable ["ACME_SK_ReturnPatient", objNull];
+    if (isNull _namePatient) then {_namePatient = uiNamespace getVariable ["ACME_SK_Patient", objNull];};
+    if (!isNull _namePatient) then {_patientHeader ctrlSetText (name _namePatient);};
     private _hr = +(_d getVariable ["ACME_SK_PatientHeaderNativeRect", ctrlPosition _patientHeader]);
     private _screenTop = safeZoneY + safeZoneH*0.004;
     private _headTop = (_bodyRect select 1) + (_bodyRect select 3)*0.055;
@@ -95,7 +100,9 @@ if (!isNull _zone) then {
     // height that can cross the button when UI scale is unusual.
     private _zoneY = (_editRect select 1) + (_editRect select 3) + safeZoneH*0.007;
     private _actionCtrl = _d displayCtrl 84820;
-    private _boundRect = if (!isNull _actionCtrl) then {ctrlPosition _actionCtrl} else {ctrlPosition (_d displayCtrl 84150)};
+    private _durationCtrl = _d displayCtrl 84830;
+    private _boundCtrl = if (!isNull _durationCtrl && {ctrlShown _durationCtrl}) then {_durationCtrl} else {_actionCtrl};
+    private _boundRect = if (!isNull _boundCtrl) then {ctrlPosition _boundCtrl} else {ctrlPosition (_d displayCtrl 84150)};
     private _zoneBottom = (_boundRect select 1) - safeZoneH*0.012;
     private _zoneH = (_zoneBottom - _zoneY) max 0;
     _zone ctrlSetPosition [_carX,_zoneY,_carW,_zoneH];

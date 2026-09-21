@@ -23,7 +23,7 @@ if (!local _patient) exitWith {};
 if !(_state) exitWith {
     if !(IS_UNCONSCIOUS(_patient)) then { // On wakeup
         [_patient] call FUNC(resetVariables);
-    }; 
+    };
 };
 
 [_patient] call FUNC(handleAirway);

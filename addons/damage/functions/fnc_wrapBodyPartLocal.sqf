@@ -19,15 +19,16 @@
  */
 
 params ["_medic", "_patient", "_bodyPart", "_type"];
+private _acmeReconcile = "B106:wrappedWoundReopen";
 
 private _fnc_handleReopening = {
     params ["_patient", "_bodyPart", "_id", "_type"];
 
-    private _delay = random [360, 600, 900];
+    private _delay = random [300, 450, 900];
 
     [{
         params ["_patient", "_bodyPart", "_id", "_type"];
-        
+
         private _wrappedWounds = GET_WRAPPED_WOUNDS(_patient);
         private _wrappedWoundsOnPart = _wrappedWounds getOrDefault [_bodyPart, []];
 
@@ -63,7 +64,7 @@ private _fnc_handleReopening = {
 
         _patient setVariable [_targetWoundsVar, _targetWounds, true];
 
-        [_patient, _type] call EFUNC(damage,refreshWounds);
+        [_patient, _type] call FUNC(refreshWounds);
 
         [_patient] call ACEFUNC(medical_status,updateWoundBloodLoss);
 
@@ -83,9 +84,9 @@ private _fnc_handleReopening = {
 
         private _plateletCount = GET_PLATELET_COUNT(_patient);
 
-        if (random 1 < (linearConversion [2.5, 1, _plateletCount, 1, 0.1, true])) exitWith {};
+        if (random 1 < ((linearConversion [2.5, 1, _plateletCount, 1, 0.1, true]) * EGVAR(core,wrappedWoundReopenChance))) exitWith {};
 
-        private _timeToReopen = linearConversion [2.5, 1, _plateletCount, 1200, 900, true];
+        private _timeToReopen = linearConversion [2.5, 1, _plateletCount, 600, 180, true];
 
         [{
             params ["_patient", "_bodyPart", "_id", "_type"];
@@ -95,7 +96,7 @@ private _fnc_handleReopening = {
             private _targetWoundsOnPart = _targetWounds getOrDefault [_bodyPart, []];
 
             private _targetIndex = _targetWoundsOnPart findIf {(_x select 0) isEqualTo _id && {_x select 1 > 0}};
-            
+
             if (_targetIndex < 0) exitWith {};
 
             (_targetWoundsOnPart select _targetIndex) params ["", "_targetAmountOf", "_targetBleeding", "_targetDamage"];
@@ -166,7 +167,7 @@ private _wrappedWounds = GET_WRAPPED_WOUNDS(_patient);
 private _wrappedWoundsOnPart = _wrappedWounds getOrDefault [_bodyPart, []];
 
 // Handle incrementing or creating new entry for wrapped wounds
-if (_wrappedWoundsOnPart isEqualTo []) then { 
+if (_wrappedWoundsOnPart isEqualTo []) then {
     _wrappedWounds set [_bodyPart, _wrappableListOnPart];
 } else {
     {

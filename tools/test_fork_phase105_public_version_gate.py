@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Phase 105: keep public/runtime/debug version identity set to v1.2.0-r0 during fork development."""
+"""Phase 105: keep public/runtime/debug version identity set to v1.2.2."""
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
 CFG = ROOT / 'addons/acm_extended/config.cpp'
 START = ROOT / 'addons/acm_extended/functions/fn_initForkStartupRuntime.sqf'
-DEBUG = ROOT / 'addons/acm_extended/functions/fn_debugMenu.sqf'
-EXPECTED = '1.2.0-r0'
+DEBUG = [ROOT / 'addons/acm_extended/functions' / name for name in (
+    'fn_debugMenuClinical.sqf', 'fn_debugMenuNetwork.sqf'
+)]
+EXPECTED = '1.2.2'
 
 
 def main() -> None:
@@ -22,9 +24,10 @@ def main() -> None:
     batch = re.search(r'ACME_buildBatch\s*=\s*"(B\d+)"\s*;', start)
     assert batch, 'internal build batch stamp missing or malformed'
 
-    debug = DEBUG.read_text(encoding='utf-8', errors='replace')
-    assert 'configFile >> "CfgPatches" >> "ACM_Extended" >> "version"' in debug
-    assert 'ACME_infusion_version' in debug
+    for page in DEBUG:
+        debug = page.read_text(encoding='utf-8', errors='replace')
+        assert 'configFile >> "CfgPatches" >> "ACM_Extended" >> "version"' in debug
+        assert 'ACME_infusion_version' in debug
 
     # Public runtime code must not hard-code an obsolete pre-1.1 public version. Historical tests/docs are excluded.
     obsolete=[]

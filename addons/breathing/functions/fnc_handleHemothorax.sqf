@@ -64,7 +64,13 @@ private _PFH = [{
     // Preserve ACM's circulation/platelet gates, but do not make severe hypovolemia an absolute TXA lockout.
     // Previously a casualty below 3.6 L effective blood volume could have active TXA and still remain permanently
     // unable to make a hemothorax clot attempt. Untreated profound shock retains the original gate.
-    if (GET_HEART_RATE(_patient) < 20
+    // B135: a resuscitating hemothorax is allowed to stabilize. CPR restores enough forward circulation for
+    // clotting attempts, and TXA that was already delivered systemically remains active during arrest. Do not let
+    // HR<20 turn an otherwise treatable hemothorax into a permanent source. Untreated profound shock still blocks
+    // clotting, while TXA retains the existing low-volume exception.
+    private _cprActive = [_patient] call EFUNC(core,cprActive);
+    private _hemostaticPerfusion = (GET_HEART_RATE(_patient) >= 20) || {_cprActive} || {_TXACount > 0.1};
+    if (!_hemostaticPerfusion
         || {(_plateletCount < 1 && {_TXACount < 0.1})}
         || {(GET_EFF_BLOOD_VOLUME(_patient) < 3.6) && {_TXACount < 0.1}}) exitWith {};
 

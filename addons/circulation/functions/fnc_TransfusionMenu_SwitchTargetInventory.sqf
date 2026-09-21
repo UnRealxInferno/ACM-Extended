@@ -165,10 +165,14 @@ private _fnc_addToInventoryPanel = {
             _name = format [C_LLSTRING(FreshBloodBag_Short), (format ["%1 (%2ml) [%3]", _bloodTypeString, _volume, _id])];
         } else {
             // Registry metadata can trail an inventory transfer on MP/JIP. Keep the real bag visible while it catches up.
-            _name = [(getText (_config >> "displayName")), (getText (_config >> "shortName"))] select (isText (_config >> "shortName"));
+            private _shortName = getText (_config >> "shortName");
+            _name = if (_shortName != "") then {_shortName} else {getText (_config >> "displayName")};
+            if (_name == "") then {_name = _entry;};
         };
     } else {
-        _name = [(getText (_config >> "displayName")), (getText (_config >> "shortName"))] select (isText (_config >> "shortName"));
+        private _shortName = getText (_config >> "shortName");
+        _name = if (_shortName != "") then {_shortName} else {getText (_config >> "displayName")};
+        if (_name == "") then {_name = _entry;};
     };
 
     private _i = _ctrlInventoryPanel lbAdd _name;
@@ -195,7 +199,7 @@ if (GVAR(TransfusionMenu_Selected_Inventory) == 2) then {
     {
         private _count = [_target, _x] call ACEFUNC(common,getCountOfItem);
 
-        if (_count > 0) then { 
+        if (_count > 0) then {
             [_ctrlInventoryPanel, _fluidsArrayData, _count, _x, _forEachIndex] call _fnc_addToInventoryPanel;
         };
     } forEach _fluidsArray;

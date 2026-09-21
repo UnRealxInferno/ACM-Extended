@@ -4,6 +4,7 @@ PREP(initFullHealFacility);
 PREP(initHealTent);
 PREP(initTrainingComputer);
 PREP(moduleInitFullHealFacility_Eden);
+PREP(moduleInitElevationOverride_Eden);
 PREP(generatePatient);
 PREP(generatePatients);
 PREP(spawnCustomPatient);

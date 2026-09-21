@@ -23,7 +23,11 @@ if (count _existing > 0 && {!_force}) exitWith {_existing};
 private _baseICP = missionNamespace getVariable ["ACME_tbi_baseICP", 10];  // todo[ref]: the normal ICP in mmhg.
 private _state = createHashMapFromArray [
     ["icp", _baseICP],  // the ICP proxy, mmhg-like.
-    ["severity", _severity],  // 0 to 1 of structural injury severity.
+    ["severity", _severity],  // B119: current acute/reversible TBI burden, 0 to 1.
+    ["structuralSeverity", _severity],  // high-water structural injury grade; history/vulnerability, not an automatic deterioration timer.
+    ["autoregIntegrity", -1],  // first-tick sentinel; replaced with the structural-grade baseline.
+    ["autonomicIntegrity", -1],  // first-tick sentinel; replaced with the structural-grade baseline.
+    ["autonomicTone", 0],  // signed systemic TBI tone: +1 sympathetic clamp, -1 vasomotor failure.
     ["herniating", false],  // the herniation cascade is armed.
     ["herniationClock", -1],  // the seconds remaining until the next herniation stage. -1 is inactive.
     ["herniationStage", 0],  // 0 is none, 1 unilateral, 2 bilateral and 3 terminal.

@@ -22,6 +22,20 @@
 params ["_patient", "_buildup", "_isExposed", "_isExposedExternal", "_activePPE"];
 _activePPE params ["_filtered", "_protectedBody", "_protectedEyes", "_filterLevel"];
 
+// ACME unifies ACM's severe nerve-agent seizure with the same generalized seizure machine used by TBI and
+// lidocaine toxicity. The old local camera-jitter "seizure" presentation is deliberately retired; once Sarin
+// reaches the severe neurologic band the casualty gets the same LOC, apnea, postictal state, benzo response and
+// 1.35x GestureSpasm3-6 convulsion sequence as every other ACME seizure source. The default threshold is 10,
+// matching the exact buildup where ACM's original Midazolam-suppressible seizure/shake behavior began.
+private _sarinSeizureThreshold = missionNamespace getVariable ["ACME_sarin_seizureThreshold", 10];
+private _sarinSeizureCause = _buildup >= _sarinSeizureThreshold;
+if ((_patient getVariable ["ACME_sarinSeizureCause", false]) != _sarinSeizureCause) then {
+    _patient setVariable ["ACME_sarinSeizureCause", _sarinSeizureCause, true];
+};
+if (_sarinSeizureCause && {!isNil "ACME_circ_activePatients"}) then {
+    ACME_circ_activePatients pushBackUnique _patient;
+};
+
 if (_buildup < 0.1) exitWith {};
 
 if (_isExposed && GET_PAIN(_patient) < 0.3) then {
@@ -32,15 +46,8 @@ if (_isExposed && GET_PAIN(_patient) < 0.3) then {
 
 if (_buildup < 10) exitWith {};
 
-private _midazolamDose = ([_patient, "Midazolam", false] call ACEFUNC(medical_status,getMedicationCount));
-
-if (ACE_player == _patient && _midazolamDose < 0.95 && ((_patient getVariable [QGVAR(Chemical_Sarin_NextShake), -1]) < CBA_missionTime)) then {
-    private _nextShakeTime = (linearConversion [10, 60, _buildup, 10, 2, true]) + random (linearConversion [10, 60, _buildup, 10, 3, true]);
-    _patient setVariable [QGVAR(Chemical_Sarin_NextShake), (CBA_missionTime + _nextShakeTime)];
-    private _severity = 10 min ((linearConversion [10, 60, _buildup, 0.05, 10, true]) + random (linearConversion [10, 60, _buildup, 0.05, 5, true]));
-    addCamShake [0.5 * _severity, 5 min (3 * _severity), 1.5 * _severity];
-};
-
+// The old ACM implementation used intermittent first-person camera shake here. ACME no longer synthesizes
+// seizures through camera jitter; the shared seizure state machine below the severe threshold owns the presentation.
 if (_buildup < 60) exitWith {};
 
 private _atropineDose = ([_patient, "Atropine", false] call ACEFUNC(medical_status,getMedicationCount)) + ([_patient, "Atropine_IV", false] call ACEFUNC(medical_status,getMedicationCount));

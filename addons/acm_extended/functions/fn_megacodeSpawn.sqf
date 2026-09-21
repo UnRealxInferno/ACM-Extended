@@ -28,6 +28,8 @@ _u unassignItem "NVGoggles";
 _u setVariable ["ACME_isMegacode", true, true];
 _u setName "Megacode Kelly";
 _u disableAI "ALL";
+// Keep the skeleton enabled for clinical poses and seizure gestures; autonomous movement stays disabled.
+_u enableAI "ANIM";
 // CAUTION: The command is setBehaviour with a u. There is no setBehavior.
 // The wrong name made this whole file fail to compile, so the module did nothing at all.
 // The RPT reported "Missing ;" at this line and named this file.

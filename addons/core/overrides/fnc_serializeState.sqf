@@ -36,7 +36,7 @@ private _variableList = [
     [VAR_OPEN_WOUNDS, createHashMap],
     [VAR_BANDAGED_WOUNDS, createHashMap],
     [VAR_STITCHED_WOUNDS, createHashMap],
-    
+
     [VAR_FRACTURES, DEFAULT_FRACTURE_VALUES],
     // State transition should handle this
     // [VAR_UNCON, false],
@@ -77,7 +77,7 @@ private _variableList = [
     [QEGVAR(breathing,ChestSeal_State), false],
     [QEGVAR(breathing,Thoracostomy_State), nil],
     [QEGVAR(breathing,Thoracostomy_UsedKit), false],
-    [QEGVAR(breathing,PulseOximeter_Display), [[0,0],[0,0]]], 
+    [QEGVAR(breathing,PulseOximeter_Display), [[0,0],[0,0]]],
     [QEGVAR(breathing,PulseOximeter_Placement), [false,false]],
     [QEGVAR(breathing,PulseOximeter_LastSync), [-1,-1]],
     [QEGVAR(breathing,Hardcore_Pneumothorax), false],

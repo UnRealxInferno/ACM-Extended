@@ -10,6 +10,24 @@ if (isNull _display) exitWith {};
 
 private _context = missionNamespace getVariable ["ACME_infusion_pendingContext", []];
 private _mode = if (_context isEqualTo []) then {"active"} else {_context select 0};
+
+// Prep Infusion is one medication at a time, so use ACM's native syringe mover directly.
+// The previous implementation borrowed the Narc Box compound layer, but that layer assumes every
+// pull is finalized with Draw and advances a component floor. Prep Infusion never performs that
+// component-lock step, which made release/re-grab and return-to-vial behavior diverge.
+// Native Syringe_Draw already has ACME's exact physical-vial clamp in its live drag loop.
+if ((uiNamespace getVariable ["ACME_SK_WasteStage", ""]) != "") then {
+    [] call ACME_fnc_skWasteEnd;
+};
+uiNamespace setVariable ["ACME_SK_WasteStage", ""];
+uiNamespace setVariable ["ACME_SK_WasteMoving", false];
+missionNamespace setVariable ["ACM_circulation_SyringeDraw_Moving", false];
+
+private _nativePlunger = _display displayCtrl 84009;
+if (!isNull _nativePlunger) then {
+    _nativePlunger ctrlSetEventHandler ["MouseButtonUp", "call ACM_circulation_fnc_Syringe_Draw_Move"];
+    _nativePlunger ctrlSetTooltip "Click to grab the plunger, move to draw or return medication, click again to release";
+};
 private _topText = ["Select medication, pull syringe, then inject into active saline bag", "Select medication, pull syringe, then prep the saline bag"] select (_mode == "prepared");
 private _bottomText = ["Active bag infusion mode", "Prepared bag mode - use Give Prep after inserting the IV/IO"] select (_mode == "prepared");
 
@@ -38,12 +56,14 @@ private _ctrlPush = _display displayCtrl 84004;
 _ctrlPush ctrlShow false;
 _ctrlPush ctrlEnable false;
 
+// Prep Infusion has no destructive Cancel state. Every accepted injection is already physically in the bag, so the
+// lower-right action is the single Done/confirm control. It finalizes the accepted mixture and returns to Transfuse.
 private _ctrlCancel = _display displayCtrl 84005;
 _ctrlCancel ctrlShow true;
 _ctrlCancel ctrlEnable true;
-_ctrlCancel ctrlSetText "Cancel";
-_ctrlCancel ctrlSetTooltip "Cancel medication infusion";
-_ctrlCancel ctrlSetEventHandler ["ButtonClick", "call ACME_fnc_cancelInfusionDraw"];
+_ctrlCancel ctrlSetText "Done";
+_ctrlCancel ctrlSetTooltip "Confirm the medications in this bag and return to Transfuse";
+_ctrlCancel ctrlSetEventHandler ["ButtonClick", "call ACME_fnc_infusionDone"];
 _ctrlCancel ctrlSetPosition [_rightX, _buttonY, _buttonW, _buttonH];
 _ctrlCancel ctrlSetFontHeight (safeZoneH / 42);
 _ctrlCancel ctrlCommit 0;
@@ -55,16 +75,13 @@ _ctrlSwitch ctrlEnable false;
 private _ctrlInventoryText = _display displayCtrl 84008;
 _ctrlInventoryText ctrlSetText "Allowed infusion medications";
 
-// the infusion-mode ui changes.
-// the body map toggle, 84150, has no meaning while injecting into a bag, so it becomes a done button that closes the
-// infusion menu.
-// The tally reports all accepted components. Closing never undoes committed injections.
+// The normal Body Map / page-navigation control has no meaning in infusion mode. Keep exactly one completion
+// control: the bottom-right Done button above. A second Done in the navigation strip was ambiguous and made the
+// old Cancel button look as though it would undo already-injected medication.
 private _doneBtn = _display displayCtrl 84150;
 if (!isNull _doneBtn) then {
-    _doneBtn ctrlSetText "Done";
-    _doneBtn ctrlSetTooltip "Finish and close the infusion menu";
-    _doneBtn ctrlSetEventHandler ["ButtonClick", "call ACME_fnc_infusionDone"];
-    _doneBtn ctrlCommit 0;
+    _doneBtn ctrlShow false;
+    _doneBtn ctrlEnable false;
 };
 // hide the route toggle, which is body-view only, in infusion mode.
 private _routeBtn = _display displayCtrl 84151;
@@ -102,6 +119,8 @@ _tallyBody ctrlCommit 0;
 ACM_circulation_SyringeDraw_InventorySelection = 0;
 [] call ACM_circulation_fnc_Syringe_UpdateMedicationList;
 
+// ACM's native Syringe_Draw continuous action owns the live plunger. This PFH only refreshes
+// the infusion stock/tally and button state; it never writes plunger position or draw volume.
 private _stockPFH = _display getVariable ["ACME_infusionStockPFH", -1];
 if (_stockPFH < 0) then {
     _stockPFH = [{

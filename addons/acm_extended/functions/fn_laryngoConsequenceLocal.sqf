@@ -23,7 +23,7 @@ if (_reason in ["awakeTube", "tubeManip"]) exitWith {
     private _remaining = _patient getVariable ["ACM_airway_AirwayObstructionVomit_Count", 0];
     private _poolBefore = [_patient] call ACME_fnc_laryngoFluidState;
     private _previousVomit = if ((_poolBefore select 1) == "v") then {_poolBefore select 2} else {0};
-    private _amount = 2 + floor random 4;
+    private _amount = if (_reason == "awakeTube") then {1 + floor random 2} else {2 + floor random 3};
     private _stage = (_previousVomit + _amount) min 8;
     [_patient, [["vomit", _old + 1], ["vomitCount", (_remaining - 1) max 0], ["vomitGrace", CBA_missionTime]], true] call ACM_airway_fnc_setAirwayState;
     _patient setVariable ["ACME_laryngo_emesis", [_id, _old + 1, _stage], true];
@@ -33,6 +33,14 @@ if (_reason in ["awakeTube", "tubeManip"]) exitWith {
     [_patient] call ACME_fnc_vomitDislodgeOPA;
     _patient setVariable ["ACME_laryngo_lastGagAt", CBA_missionTime, true];
     playSound3D [format ["acm_extended\sound\wet_gag%1_sfx.ogg", 1 + floor random 3], _patient, false, getPosASL _patient, 2.2, 1, 14];
+    if (_reason == "awakeTube") then {
+        private _until = CBA_missionTime + (missionNamespace getVariable ["ACME_laryngo_irritationSec", 45]);
+        _patient setVariable ["ACME_laryngo_irritationUntil", _until, true];
+        _patient setVariable ["ACME_laryngo_irritationNext", CBA_missionTime + 1, true];
+        private _active = missionNamespace getVariable ["ACME_clinical_activePatients", []];
+        _active pushBackUnique _patient;
+        missionNamespace setVariable ["ACME_clinical_activePatients", _active];
+    };
 };
 
 if (_reason == "success") exitWith {

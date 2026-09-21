@@ -502,7 +502,7 @@ class ACEGVAR(medical_treatment,actions) {
         items[] = {"ACM_Paracetamol_SinglePack","ACM_Paracetamol_DoublePack","ACM_Paracetamol"};
         medicRequired = 0;
         treatmentTime = 4;
-        condition = QUOTE([_patient] call ACEFUNC(common,isAwake) && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE([_patient] call ACEFUNC(common,isAwake));
         //animationMedic = "AinvPknlMstpSnonWnonDnon_medic1";
         sounds[] = {{QPATHTOEF(circulation,sound\paracetamol.wav),10,1,30}};
         litter[] = {};
@@ -523,7 +523,7 @@ class ACEGVAR(medical_treatment,actions) {
         items[] = {"ACM_AmmoniaInhalant"};
         medicRequired = QEGVAR(circulation,allowAmmoniaInhalant);
         treatmentTime = 3;
-        condition = QUOTE(!(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = "true";
         ACM_rollToBack = 1;
         ACM_menuIcon = "ACM_AmmoniaInhalant";
     };
@@ -532,7 +532,7 @@ class ACEGVAR(medical_treatment,actions) {
         displayNameProgress = ECSTRING(circulation,UseNaloxoneSpray_Progress);
         items[] = {"ACM_Spray_Naloxone"};
         treatmentTime = 4;
-        condition = QUOTE(!(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = "true";
         ACM_rollToBack = 1;
         sounds[] = {};
         ACM_menuIcon = "ACM_Spray_Naloxone";
@@ -544,7 +544,7 @@ class ACEGVAR(medical_treatment,actions) {
         medicRequired = QEGVAR(circulation,allowFentanylLozenge);
         allowSelfTreatment = 0;
         treatmentTime = 4;
-        condition = QUOTE(_patient call ACEFUNC(common,isAwake) && ((_patient getVariable [ARR_2(QQEGVAR(circulation,LozengeItem),'')]) == '') && ((_patient getVariable [ARR_2(QQGVAR(Lying_State),false)]) || (_patient getVariable [ARR_2(QQGVAR(Sitting_State),false)])) && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(_patient call ACEFUNC(common,isAwake) && ((_patient getVariable [ARR_2(QQEGVAR(circulation,LozengeItem),'')]) == '') && ((_patient getVariable [ARR_2(QQGVAR(Lying_State),false)]) || (_patient getVariable [ARR_2(QQGVAR(Sitting_State),false)])));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,'Fentanyl')] call EFUNC(circulation,setLozenge));
         ACM_rollToBack = 1;
         sounds[] = {};
@@ -577,7 +577,7 @@ class ACEGVAR(medical_treatment,actions) {
         displayNameProgress = ECSTRING(disability,SlapAwake_Progress);
         allowedSelections[] = {"Head"};
         treatmentTime = 3;
-        condition = QUOTE(!([_patient] call ACEFUNC(common,isAwake)) && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(!([_patient] call ACEFUNC(common,isAwake)));
         callbackSuccess = QEFUNC(disability,slapAwake);
         animationMedic = "AinvPknlMstpSnonWnonDr_medic3";
         ACM_rollToBack = 1;
@@ -754,7 +754,7 @@ class ACEGVAR(medical_treatment,actions) {
         callbackSuccess = QUOTE([ARR_7(_medic,_patient,_bodyPart,'Epinephrine',1,false,true)] call EFUNC(circulation,Syringe_Inject));
         ACM_menuIcon = "ACM_Syringe_1";
     };
-    
+
     SYRINGE_ACTION_IM(Morphine,10,__EVAL(call compile SYRINGE_ACTION_FORMAT(Inject,10,Morphine,Intramuscular)),__EVAL(call compile SYRINGE_PROGRESS_FORMAT(Injecting,Morphine)));
     SYRINGE_ACTION_IM(Morphine,5,__EVAL(call compile SYRINGE_ACTION_FORMAT(Inject,5,Morphine,Intramuscular)),__EVAL(call compile SYRINGE_PROGRESS_FORMAT(Injecting,Morphine)));
     SYRINGE_ACTION_IM(Morphine,3,__EVAL(call compile SYRINGE_ACTION_FORMAT(Inject,3,Morphine,Intramuscular)),__EVAL(call compile SYRINGE_PROGRESS_FORMAT(Injecting,Morphine)));

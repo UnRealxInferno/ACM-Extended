@@ -59,10 +59,9 @@ private _cv = _v max _visR min (1 - _visR);
 
 // the bruise carries no hole texture. rendermarks only draws a puncture when one is given, so a seated hub
 // leaves a bruise and nothing else.
-// the stamp is CBA_missionTime and NOT diag_tickTime. the mark is broadcast, and diag_tickTime counts from the
-// moment each client launched the game, so a second medic reading this mark would compute an age of hours and
-// see a bruise that had already faded out. mission time is the same number on every machine.
-[_cu, _cv, "miss", "", "", _gauge, CBA_missionTime, _scale, random 360, 0.72] call ACME_fnc_ivMinigameAddMark;
+// Bruise age is presentation shared by every provider, so use the engine's shared serverTime rather than either
+// diag_tickTime or client-local CBA_missionTime.
+[_cu, _cv, "miss", "", "", _gauge, serverTime, _scale, random 360, 0.72] call ACME_fnc_ivMinigameAddMark;
 
 // flag the access as compromised. this is the same flag the extravasation model already reads, so a drug pushed
 // through this line infiltrates instead of circulating, and everything downstream behaves with nothing new to
@@ -78,7 +77,7 @@ if (!isNull _patient) then {
     // like a good one.
     private _bpKey = _bpKeyPart;
     if (_bpKey == "ej") then { _bpKey = "head"; };
-    _patient setVariable [format ["ACME_ivCompromised_%1_%2", _bpKey, _siteIdx], true, true];
+    [_patient, "ivCompromised", [_bpKey, _siteIdx, "set"]] call ACME_fnc_ownerDispatch;
 };
 
 

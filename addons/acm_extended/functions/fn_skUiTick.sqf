@@ -82,8 +82,13 @@ if (_body) then {
         call ACME_fnc_skPendingTagRender;
     };
 };
-if (_body) then {call ACME_fnc_skBodyActionRender;};
-(_d displayCtrl 84153) ctrlSetBackgroundColor (["info", 0.30 + 0.45 * (0.5 + 0.5 * sin (_now * 220))] call ACME_fnc_a11yColor);
+if (_body) then {
+    // Keep Push validation live while typing. The renderer only changes edit geometry/enable state when needed.
+    call ACME_fnc_skBodyActionRender;
+};
+private _navPulse = ["info", 0.30 + 0.45 * (0.5 + 0.5 * sin (_now * 220))] call ACME_fnc_a11yColor;
+(_d displayCtrl 84153) ctrlSetBackgroundColor _navPulse;
+(_d displayCtrl 84157) ctrlSetBackgroundColor _navPulse;
 // Native access changes can show Push again; retain the Narc Box's Save action and view.
 (_d displayCtrl 84005) ctrlShow _infusion;
 (_d displayCtrl 84005) ctrlEnable _infusion;
@@ -108,68 +113,12 @@ if (_stage == "") then {
             _hardMax = _hardMax max 0;
             ACM_circulation_SyringeDraw_MaxDose = _hardMax;
 
-            // Do not rely only on ACM reading MaxDose on its next frame. Clamp the actual plunger and mouse to the
-            // remaining source volume here as well, so an exhausted vial is a physical hard stop even if native
-            // selection logic briefly rewrites MaxDose. This covers infusion-prep draws and any plain native draw.
+            // The native ACM drag loop now consumes this hard limit on the same frame and is the sole writer while
+            // the plunger is moving.  ACME only repairs an already-staged overage caused by an external stock/source
+            // change, keeping DrawnAmount and both plunger controls synchronized instead of fighting the animation.
             private _drawnNow = (missionNamespace getVariable ["ACM_circulation_SyringeDraw_DrawnAmount", 0]) max 0;
-            if (_drawnNow > _hardMax + 0.0001 || {missionNamespace getVariable ["ACM_circulation_SyringeDraw_Moving", false]}) then {
-                private _top = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Ctrl_LimitTop", -1];
-                private _bottom = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Ctrl_LimitBottom", -1];
-                if (_top >= 0 && {_bottom >= 0}) then {
-                    private _maxY = linearConversion [0, _sizeMl, _hardMax, _top, _bottom, true];
-                    private _plunger = _d displayCtrl 84009;
-                    private _visIdc = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Ctrl_PlungerVisual", -1];
-                    private _vis = _d displayCtrl _visIdc;
-                    private _adjust = missionNamespace getVariable ["ACM_circulation_SyringeDraw_Ctrl_PlungerAdjustment", 0];
-                    if (_drawnNow > _hardMax + 0.0001) then {
-                        ACM_circulation_SyringeDraw_DrawnAmount = _hardMax;
-                        if (!isNull _plunger) then {
-                            (ctrlPosition _plunger) params ["_px", "", "_pw", "_ph"];
-                            _plunger ctrlSetPosition [_px, _maxY, _pw, _ph];
-                            _plunger ctrlCommit 0;
-                        };
-                        if (!isNull _vis) then {
-                            (ctrlPosition _vis) params ["_vx", "", "_vw", "_vh"];
-                            _vis ctrlSetPosition [_vx, _maxY - _adjust, _vw, _vh];
-                            _vis ctrlCommit 0;
-                        };
-                    };
-                    if (missionNamespace getVariable ["ACM_circulation_SyringeDraw_Moving", false]) then {
-                        private _res5 = (getResolution select 5) max 0.1;
-                        getMousePosition params ["", "_my"];
-                        private _maxMouse = _maxY + (0.026 * (0.55 / _res5));
-                        if (_my > _maxMouse) then {setMousePosition [_uiX + _uiW / 2, _maxMouse];};
-                        // B73 current-vial depletion endpoint. If native mouse rounding leaves <=0.01 mL in the vial
-                        // while the hand is physically against its lower stop, finish the draw at the exact hard max.
-                        if ((_hardMax - _drawnNow) <= 0.015 && {_my >= _maxMouse - (2 * pixelH)} && {!isNull _plunger}) then {
-                            ACM_circulation_SyringeDraw_DrawnAmount = _hardMax;
-                            (ctrlPosition _plunger) params ["_pxB73", "", "_pwB73", "_phB73"];
-                            _plunger ctrlSetPosition [_pxB73, _maxY, _pwB73, _phB73];
-                            _plunger ctrlCommit 0;
-                            if (!isNull _vis) then {
-                                (ctrlPosition _vis) params ["_vxB73", "", "_vwB73", "_vhB73"];
-                                _vis ctrlSetPosition [_vxB73, _maxY - _adjust, _vwB73, _vhB73];
-                                _vis ctrlCommit 0;
-                            };
-                        };
-                        // B70 exact empty syringe endpoint. Native mouse/control geometry can leave 0.01 mL when the plunger is
-                        // visually at the top. Snap only at the physical top, never in the middle of travel.
-                        if (_drawnNow <= 0.015 && {!isNull _plunger}) then {
-                            (ctrlPosition _plunger) params ["_px0", "", "_pw0", "_ph0"];
-                            private _topMouse = _top + (_ph0 / 2);
-                            if (_my <= _topMouse + (2 * pixelH)) then {
-                                ACM_circulation_SyringeDraw_DrawnAmount = 0;
-                                _plunger ctrlSetPosition [_px0, _top, _pw0, _ph0];
-                                _plunger ctrlCommit 0;
-                                if (!isNull _vis) then {
-                                    (ctrlPosition _vis) params ["_vx0", "", "_vw0", "_vh0"];
-                                    _vis ctrlSetPosition [_vx0, _top - _adjust, _vw0, _vh0];
-                                    _vis ctrlCommit 0;
-                                };
-                            };
-                        };
-                    };
-                };
+            if (_drawnNow > _hardMax + 0.0001) then {
+                [_hardMax, _d, false] call ACME_fnc_syringeDrawSetAmount;
             };
         };
     };

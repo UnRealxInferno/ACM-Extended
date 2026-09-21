@@ -1,3 +1,5 @@
+PREP(bandageProgressStart);
+PREP(bandageProgressStop);
 PREP(canStitch);
 PREP(canWrap);
 PREP(clotWoundsOnBodyPart);

@@ -85,6 +85,55 @@ ACME_tbi_recoverMAPmin        = 65;  // mmhg.
 ACME_tbi_recoverSpO2min       = 90;  // SpO2 at/above this is a recovery gate
 ACME_tbi_recoverICPmax        = 25;  // an ICP at or below this, the cushing threshold, is a recovery gate. the brain is no longer under pressure.
 ACME_tbi_recoverVentMinRatio  = 0.9;  // an alveolar-ventilation ratio at or above this, so no CO2 retention, is a recovery gate.
+
+// B119: structural injury is a high-water mark, while severity is the current reversible acute burden.
+// Mild and moderate injuries can therefore settle to an inactive acute state when oxygen delivery, ventilation,
+// pressure and ICP are stable. Severe/critical structural injury keeps less cerebrovascular/autonomic reserve.
+ACME_tbi_structuralMildMax       = 0.35;
+ACME_tbi_structuralModerateMax   = 0.60;
+ACME_tbi_structuralSevereMax     = 0.80;
+
+// Severity-specific perfusion floors. The universal MAP 85 injury gate was internally contradictory: a patient
+// could satisfy the shared recovery gate at MAP 65 while a second pathway simultaneously injured the brain.
+// Mild/moderate TBI now tolerates the normal recovery band; severe/critical injury progressively needs more MAP.
+ACME_tbi_hypotensionMAPMild      = 60;
+ACME_tbi_hypotensionMAPModerate  = 65;
+ACME_tbi_hypotensionMAPSevere    = 75;
+ACME_tbi_hypotensionMAPCritical  = 85;
+ACME_tbi_perfusionCPPSevereMin   = 55;  // severe structural TBI adds a real CPP floor without imposing it on concussion.
+ACME_tbi_perfusionCPPCriticalMin = 60;  // critical structural TBI becomes increasingly pressure-passive/CPP dependent.
+
+// Cerebral autoregulatory integrity, 0 to 1. Structural injury establishes the best recoverable baseline.
+// Acute burden, exhausted compensation and herniation can push it lower. Lost autoregulation blunts protective
+// low-CPP vasodilation and makes high CPP increasingly pressure-passive, while low-CPP secondary injury worsens.
+ACME_tbi_autoregMild              = 1.00;
+ACME_tbi_autoregModerate          = 0.95;
+ACME_tbi_autoregSevere            = 0.70;
+ACME_tbi_autoregCritical          = 0.35;
+ACME_tbi_autoregFallPerSec        = 0.018;
+ACME_tbi_autoregRecoverPerSec     = 0.0035;
+ACME_tbi_autoregLowCPPMultMax     = 2.0;
+ACME_tbi_pressurePassiveCPPstart  = 70;
+ACME_tbi_pressurePassiveCPPfull   = 100;
+ACME_tbi_pressurePassiveICPmax    = 8;
+
+// Systemic autonomic integrity and vasomotor tone. Tone is a signed state: +1 is a strong sympathetic/Cushing
+// clamp, 0 is neutral and -1 is profound vasomotor failure. Stable mild/moderate TBI contributes essentially no
+// systemic tone. Rising ICP first drives positive tone; exhausted reserve/brainstem failure becomes labile and
+// ultimately vasodilated. The junctional transient-spasm model reads integrity but not tone directly, because
+// total peripheral resistance already carries the tone effect and applying it twice would double-count it.
+ACME_tbi_autonomicMild             = 1.00;
+ACME_tbi_autonomicModerate         = 0.97;
+ACME_tbi_autonomicSevere           = 0.80;
+ACME_tbi_autonomicCritical         = 0.55;
+ACME_tbi_autonomicFallPerSec       = 0.022;
+ACME_tbi_autonomicRecoverPerSec    = 0.004;
+ACME_tbi_autonomicToneSlewPerSec   = 0.35;
+ACME_tbi_autonomicChaosStart       = 0.35;
+ACME_tbi_autonomicChaosAmp         = 0.55;
+ACME_tbi_autonomicVasoGain         = 0.30;  // max fractional resistance rise from a resistance-only positive autonomic swing.
+ACME_tbi_autonomicVasodilGain      = 0.45;  // max fractional resistance loss from resistance-only vasomotor failure.
+ACME_tbi_autonomicJuncMinAbility   = 0.25;
 ACME_tbi_osmoRecoverBonus     = 2.0;  // multiplier on the recovery rate for a short window after HTS or mannitol. osmotherapy treats actively and does not only move the number.
 ACME_tbi_osmoRecoverWindow    = 120;  // seconds after an osmotherapy bolus that the recovery bonus applies.
 

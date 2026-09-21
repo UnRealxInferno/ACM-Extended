@@ -20,6 +20,8 @@ if (_rhythm >= 100) exitWith {
     [_target, _g select 0, _g select 1] call ACME_fnc_ecgArtifactApply
 };
 
+// A morphology subtype, not a new rhythm code. CPR and post-shock visual states keep precedence.
+private _widePEA = _rhythm == 5 && {[_target] call ACME_fnc_peaIsWide};
 private _W = 176;
 private _lastIndex = _W - 1;
 private _dt = 0.03;
@@ -138,9 +140,15 @@ for "_i" from 0 to _lastIndex do {
                 private _deltaSec = _sampleTime - _beatTime;
                 private _offset = round (_deltaSec / _dt);
 
-                private _template = [];
-                private _rIndex = 0;
-                private _noiseAmp = 2.0;
+                // Default PEA uses the same P-QRS-T morphology as sinus. Electrical organization
+                // never implies a pulse: native rhythm 5 remains authoritative for physiology.
+                private _template = if ((_rr / _dt) < 18) then {
+                    [0,-4,-40,22,4,-4,2,0]
+                } else {
+                    [0,-1,-5,2,-4,-40,25,5,0,-5,-7,-1,5,4,0.8]
+                };
+                private _rIndex = if ((_rr / _dt) < 18) then {2} else {5};
+                private _noiseAmp = 1.8;
 
                 switch (_rhythm) do {
                     case -1: { // CPR artifact / organized compression trace.
@@ -148,10 +156,13 @@ for "_i" from 0 to _lastIndex do {
                         _rIndex = 5;
                         _noiseAmp = 5.0;
                     };
-                    case 5: { // PEA: organized but abnormal, with beat-to-beat morphology variability.
-                        _template = [0,-2,-8,-20,-38,-50,-48,-36,-16,5,18,27,23,14,6,1,0];
-                        _rIndex = 5;
-                        _noiseAmp = 2.6;
+                    case 5: {
+                        if (_widePEA) then {
+                            // Preserve the existing broad complex for severe uncovered transfusion burden.
+                            _template = [0,-2,-8,-20,-38,-50,-48,-36,-16,5,18,27,23,14,6,1,0];
+                            _rIndex = 5;
+                            _noiseAmp = 2.6;
+                        };
                     };
                     case 3;
                     case 4: { // PVT / VT broad ventricular complex.
@@ -159,16 +170,7 @@ for "_i" from 0 to _lastIndex do {
                         _rIndex = 3;
                         _noiseAmp = 2.5;
                     };
-                    default { // Sinus / organized perfusing rhythm.
-                        if ((_rr / _dt) < 18) then {
-                            _template = [0,-4,-40,22,4,-4,2,0];
-                            _rIndex = 2;
-                        } else {
-                            _template = [0,-1,-5,2,-4,-40,25,5,0,-5,-7,-1,5,4,0.8];
-                            _rIndex = 5;
-                        };
-                        _noiseAmp = 1.8;
-                    };
+                    default {}; // Sinus and narrow PEA keep the shared template above.
                 };
 
                 private _templateIndex = _rIndex + _offset;
@@ -176,9 +178,9 @@ for "_i" from 0 to _lastIndex do {
                     _value = _template select _templateIndex;
                     _isSafe = false;
 
-                    if (_rhythm == 5) then {
-                        // PEA should not look like a photocopied 100-BPM strip. Variation is deterministic per beat,
-                        // so it survives a buffer refresh without the complex changing shape underneath the sweep.
+                    if (_widePEA) then {
+                        // Wide PEA retains its deterministic beat-to-beat variation; narrow PEA keeps sinus morphology.
+                        // It survives a buffer refresh without the complex changing shape underneath the sweep.
                         private _amp = 0.84 + (0.30 * ((sin (((_beatOrdinal * 73) + 19) mod 360) + 1) / 2));
                         private _tAmp = 0.78 + (0.44 * ((sin (((_beatOrdinal * 41) + 117) mod 360) + 1) / 2));
                         private _base = (sin (((_beatOrdinal * 29) + 53) mod 360)) * 2.4;
@@ -191,7 +193,7 @@ for "_i" from 0 to _lastIndex do {
 
                     _value = _value + ([_sampleIndex, _noiseAmp, (_beatOrdinal * 17) + (_rhythm * 31)] call _fnc_noise);
                 } else {
-                    private _baselineAmp = if (_rhythm == 5) then {2.2} else {1.4};
+                    private _baselineAmp = if (_widePEA) then {2.2} else {1.4};
                     _value = [_sampleIndex, _baselineAmp, (_rhythm * 37)] call _fnc_noise;
                 };
             };

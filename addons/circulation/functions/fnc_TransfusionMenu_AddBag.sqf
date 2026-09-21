@@ -28,6 +28,26 @@ if (_targetIndex < 0) exitWith {};
 
 private _medic = ACE_player;
 private _patient = GVAR(TransfusionMenu_Target);
+// ACME Y-refill claims are optional. Ordinary Add Bag calls carry an empty context and remain native behavior.
+private _yRefill = +(uiNamespace getVariable ["ACME_yRefillActive", []]);
+
+// FBTK is a donor-collection circuit, not an infusion product. The circulation model deliberately
+// refuses to draw donor blood through IO. Reject it before inventory consumption so the kit can never
+// be hung on a line that will sit at 0 mL forever and look broken to the provider.
+private _isFBTK = (_itemClassname in FBTK_ARRAY) || {_actionClassname in FBTK_ARRAY_DATA};
+if (_isFBTK && {!GVAR(TransfusionMenu_SelectIV)}) exitWith {
+    ["FBTK blood collection requires IV access. It cannot collect through IO.", 3, ACE_player, 13] call ACEFUNC(common,displayTextStructured);
+};
+
+private _validAccess = [
+    _patient,
+    GVAR(TransfusionMenu_Selected_BodyPart),
+    GVAR(TransfusionMenu_SelectIV),
+    GVAR(TransfusionMenu_Selected_AccessSite)
+] call ACME_fnc_transfusionAccessValid;
+if (!_validAccess) exitWith {
+    ["Establish and select an IV or IO before hanging fluid.",2.5,ACE_player,13] call ACEFUNC(common,displayTextStructured);
+};
 
 private _vehicle = objectParent _medic;
 
@@ -55,28 +75,52 @@ if (GVAR(TransfusionMenu_Selected_Inventory) == 2) then {
     _target removeItem _itemClassname;
 };
 
-private _itemClassNameString = getText (configFile >> "CfgWeapons" >> _itemClassName >> "displayName");
+private _itemClassNameString = getText (configFile >> "CfgWeapons" >> _itemClassname >> "displayName");
 
-[[_medic, _patient, _target, _itemClassname, _actionClassname, _vehicle], {
-    params ["_medic", "_patient", "_target", "_itemClassname", "_actionClassname"];
-    
-    [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart), _actionClassname, objNull, _itemClassname, GVAR(TransfusionMenu_SelectIV), GVAR(TransfusionMenu_Selected_AccessSite)] call ACEFUNC(medical_treatment,ivBag);
+[[_medic, _patient, _target, _itemClassname, _actionClassname, _vehicle, _yRefill], {
+    params ["_medic", "_patient", "_target", "_itemClassname", "_actionClassname", "_vehicle", "_yRefill"];
+
+    private _bodyPart = GVAR(TransfusionMenu_Selected_BodyPart);
+    private _iv = GVAR(TransfusionMenu_SelectIV);
+    private _site = GVAR(TransfusionMenu_Selected_AccessSite);
+    private _yRequest = "";
+    if (_yRefill isEqualType [] && {count _yRefill >= 11} && {(_yRefill select 0) isEqualTo _patient}
+        && {(_yRefill select 9) == _itemClassname} && {(_yRefill select 10) == _actionClassname}) then {
+        _yRefill params ["", "_yRequest", "_yMode", "_yPart", "_yIV", "_ySite", "_yEpoch", "_yCooler", "_yWarmer"];
+        _bodyPart = _yPart;
+        _iv = _yIV;
+        _site = _ySite;
+    };
+
+    [_medic, _patient, _bodyPart, _actionClassname, objNull, _itemClassname, _iv, _site] call ACEFUNC(medical_treatment,ivBag);
+    if (_yRequest != "") then {
+        [_patient,"yRefill",[_patient,_medic,"finalize",_yRequest,_yMode,_bodyPart,_iv,_site,_yEpoch,_yCooler,_yWarmer]] call ACME_fnc_ownerDispatch;
+        private _active = uiNamespace getVariable ["ACME_yRefillActive",[]];
+        if (_active isEqualType [] && {(_active param [1,""]) == _yRequest}) then {uiNamespace setVariable ["ACME_yRefillActive",[]];};
+    };
     closeDialog 0;
-    
-    [{
-        params ["_medic", "_patient"];
 
-        [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart)] call FUNC(openTransfusionMenu);
-    }, [_medic, _patient], 0.05] call CBA_fnc_waitAndExecute;
+    [{
+        params ["_medic", "_patient", "_bodyPart"];
+        [_medic, _patient, _bodyPart] call FUNC(openTransfusionMenu);
+    }, [_medic, _patient, _bodyPart], 0.05] call CBA_fnc_waitAndExecute;
 }, {
-    params ["_medic", "_patient", "_target", "_itemClassname", "", "_vehicle"];
+    params ["_medic", "_patient", "_target", "_itemClassname", "", "_vehicle", "_yRefill"];
 
     if (GVAR(TransfusionMenu_Selected_Inventory) == 2) then {
         _vehicle addItemCargoGlobal [_itemClassname, 1];
     } else {
         [_target, _itemClassname] call ACEFUNC(common,addToInventory);
     };
+    private _bodyPart = GVAR(TransfusionMenu_Selected_BodyPart);
+    if (_yRefill isEqualType [] && {count _yRefill >= 9} && {(_yRefill select 0) isEqualTo _patient}) then {
+        _yRefill params ["", "_yRequest", "_yMode", "_yPart", "_yIV", "_ySite", "_yEpoch", "_yCooler", "_yWarmer"];
+        _bodyPart = _yPart;
+        [_patient,"yRefill",[_patient,_medic,"cancel",_yRequest,_yMode,_yPart,_yIV,_ySite,_yEpoch,_yCooler,_yWarmer]] call ACME_fnc_ownerDispatch;
+        private _active = uiNamespace getVariable ["ACME_yRefillActive",[]];
+        if (_active isEqualType [] && {(_active param [1,""]) == _yRequest}) then {uiNamespace setVariable ["ACME_yRefillActive",[]];};
+    };
     closeDialog 0;
-    
-    [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart)] call FUNC(openTransfusionMenu);
+
+    [_medic, _patient, _bodyPart] call FUNC(openTransfusionMenu);
 }, (format [LLSTRING(TransfusionMenu_AddBag_Progress), _itemClassNameString]), 5] call EFUNC(core,progressBarAction);

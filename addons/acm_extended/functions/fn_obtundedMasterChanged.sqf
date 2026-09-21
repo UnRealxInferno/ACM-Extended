@@ -9,22 +9,10 @@
 // so the switch releases every obtunded unit on this machine as it goes off. a casualty who is genuinely
 // unconscious is handed straight back to ACE and drops where they lie, which is the correct outcome and the same
 // one the tick would have produced.
-// the on direction does not force a casualty state. B65 only uses it to allow the optional ACRE babble language
-// to register once the mission has explicitly enabled Obtundation; physiology still owns who actually enters it.
+// the on direction does not force a casualty state; physiology still owns who actually enters it.
 
 if (!hasInterface) exitWith {};
-if (missionNamespace getVariable ["ACME_sys_obtunded", false]) exitWith {
-    // If the mission enables obtundation after client startup, this is the point where the optional ACRE language
-    // is allowed to register.  Registration never happens while the master remains OFF.
-    call ACME_fnc_acreBabbleInit;
-};
-
-// B65 safety gate: the instant the master goes OFF, scrub any active/stale ACRE obtunded language before doing
-// anything else.  Cleanup is force-authorized even if this client never created the current state flag.
-[false, false, true] call ACME_fnc_acreBabbleSet;
-uiNamespace setVariable ["ACME_acre_babbleWasSpeaking", false];
-uiNamespace setVariable ["ACME_acre_babbleNextPulse", -1];
-uiNamespace setVariable ["ACME_acre_babblePulseUntil", -1];
+if (missionNamespace getVariable ["ACME_sys_obtunded", false]) exitWith {};
 
 {
     if (local _x && {_x getVariable ["ACME_obtunded", false]}) then {

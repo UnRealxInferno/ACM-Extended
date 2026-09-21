@@ -82,9 +82,10 @@ class EJOrientation(unittest.TestCase):
 
     def test_requested_public_version_is_consistent(self):
         config = (ROOT/'config.cpp').read_text(encoding='utf-8-sig')
-        self.assertIn('version = "1.2.0-r0";', config)
-        self.assertIn('ACME_infusion_version = getText', src('postInit'))
-        self.assertIn('ACME_buildBatch = "B92"', src('postInit'))
+        startup = src('initForkStartupRuntime')
+        self.assertIn('version = "1.2.2.1";', config)
+        self.assertIn('ACME_infusion_version = getText', startup)
+        self.assertIn('ACME_buildBatch = "B116"', startup)
 
 if __name__ == '__main__':
     unittest.main()

@@ -24,7 +24,7 @@ _display setVariable ["ACME_IV_RetractPFH", -1];
     ["ACME_IV_PullIdx", -1], ["ACME_IV_PullProg", 0], ["ACME_IV_PullPin", []],
     ["ACME_IV_PullBroke", false], ["ACME_IV_PullCtrl", controlNull],
     ["ACME_IV_PullBase", []], ["ACME_IV_PullSuffix", ""],
-    ["ACME_IV_SnapActive", []], ["ACME_IV_Stage", "needband"]
+    ["ACME_IV_SnapActive", []], ["ACME_IV_ProbeSite", ""], ["ACME_IV_Stage", "ready"]
 ];
 // Cancel any outgoing crossfade before the catheter control is reused.
 {

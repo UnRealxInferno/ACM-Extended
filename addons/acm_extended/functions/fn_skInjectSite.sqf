@@ -2,7 +2,9 @@
 // which is vascular iv or io, or im. _this is [bodypart]. it consumes both the filled syringe magazine, because
 // syringe_inject removes the ACM_Syringe_<size>_<med> the draw created, and the matching ACME_narcStore record
 // kept here.
-params ["_bodyPart"];
+params ["_bodyPart", ["_pushSec", 3]];
+if !(_pushSec isEqualType 0 && {finite _pushSec} && {_pushSec > 0}) then {_pushSec = 3;};
+_pushSec = (_pushSec max 1) min 300;
 private _display = findDisplay 84000;
 if (isNull _display) exitWith {};
 private _patient = uiNamespace getVariable ["ACME_SK_Patient", objNull];
@@ -42,7 +44,7 @@ if (((_store select _storeIdx) param [6, ""]) == "epiMixB12") exitWith {
     private _total = _amt + _nsMl;
     private _choice = uiNamespace getVariable ["ACME_SK_EpiDoseChoice", 0];
     private _ml = ([1, 2, _total] select _choice) min _total;
-    if ([ACE_player, _patient, _bodyPart, _storeIdx, _ml, _siteIdx] call ACME_fnc_epinephrinePushStored) then {
+    if ([ACE_player, _patient, _bodyPart, _storeIdx, _ml, _siteIdx, _pushSec] call ACME_fnc_epinephrinePushStored) then {
         if (_ml >= _total - 0.001) then {
             [_storeIdx] call ACME_fnc_skAfterStoredRemoval;
         } else {
@@ -87,8 +89,8 @@ private _componentMl = 0;
     };
 } forEach _sourceParts;
 if (abs (_componentMl - _amt) > 0.001) then {_valid = false;};
-// B68: Body Map stored-syringe administration is a single 3-second manual push, regardless of barrel volume.
-private _pushSec = 3;
+// B115: use the provider-selected IV/IO push duration for rate-sensitive pharmacology. IM callers retain the
+// original 3-second default because the duration box is only exposed after selecting a vascular access site.
 {_x pushBack _pushSec; _x pushBack _virtual;} forEach _doses;
 if (!_valid) exitWith {
     ["This syringe has an unsupported component or route. Nothing was administered or consumed.", 4, ACE_player] call ace_common_fnc_displayTextStructured;

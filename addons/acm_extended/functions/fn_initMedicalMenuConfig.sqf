@@ -70,13 +70,20 @@ ACME_menuGroups = [
         "Induce/Clear Obtunded Prone (debug)",
         "Obtunded BACK pose only (debug)",
         "Force Shake (debug)",
+        "Visual FX: Hypoxia cycle (debug)",
+        "Visual FX: Hypotension / shock cycle (debug)",
+        "Visual FX: Hypercapnia cycle (debug)",
+        "Visual FX: Ketamine / dissociation cycle (debug)",
+        "Visual FX: Near-syncope cycle (debug)",
+        "Visual FX: Clear debug overrides",
         "Step Hypothermia: mild/mod/severe/clear (debug)",
         "Rhythm: AFib-RVR on/off (debug)",
         "Rhythm: Atrial Fibrillation (controlled) on/off (debug)",
         "Rhythm: Atrial Tachycardia on/off (debug)",
         "Rhythm: Torsades / polymorphic VT on/off (debug)",
         "Rhythm: SVT on/off (debug)",
-        "Respirations: Cheyne-Stokes on/off (debug)"
+        "Respirations: Cheyne-Stokes on/off (debug)",
+        "Induce Seizure (debug)"
     ], {[] call ACME_fnc_debugEnabled}, [0.92, 0.80, 0.24, 1]]
 ];
 // Examination membership and display order share one class-based definition.

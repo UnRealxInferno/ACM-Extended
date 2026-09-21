@@ -14,7 +14,7 @@
 // the lock is released by MOVING OFF THE SEAL, in fn_chestSealTick, which also lays it flat. that is the only
 // release, and it is an input rather than a timer.
 //
-// IT IS FRAME BY FRAME AND THERE IS NO CLOCK ANYWHERE IN IT.
+// The peel remains frame by frame, with no timer between burps.
 // each notch moves exactly one frame, 0 to 5, and the seal sits at that frame until the medic moves the wheel
 // again. fn_chestSealRender is EVENT DRIVEN and never runs per frame, so a frame chosen from elapsed time was
 // written once and never advanced, which is why earlier versions drew nothing. a notch IS an event, so this
@@ -32,6 +32,7 @@ params [["_src", displayNull], ["_scroll", 0]];
 if (!hasInterface) exitWith {false};
 if (_scroll == 0) exitWith {false};
 
+if ((uiNamespace getVariable ["ACME_CS_FlipLockedUntil",0]) > diag_tickTime) exitWith {false};
 private _maxFrame = 5;
 // 1 is up and -1 is down. only the sign carries meaning, because a mouse can report any magnitude.
 private _dir = if (_scroll > 0) then { 1 } else { -1 };
@@ -53,6 +54,7 @@ private _lockIdx = uiNamespace getVariable ["ACME_CS_BurpIdx", -1];
 // DOWN peels from the RIGHT and UP peels from the LEFT. the side names the art folder directly,
 // ui/chest_seal/burp_left and burp_right, so there is no mapping to get backwards.
 if (_lockIdx != _onSeal) exitWith {
+    if (!([uiNamespace getVariable ["ACME_CS_Patient",objNull]] call ACME_fnc_chestSealBurpReady)) exitWith {false};
     uiNamespace setVariable ["ACME_CS_BurpIdx", _onSeal];
     uiNamespace setVariable ["ACME_CS_BurpFrame", 1];
     uiNamespace setVariable ["ACME_CS_BurpFired", false];
@@ -69,7 +71,19 @@ if (_lockIdx != _onSeal) exitWith {
 // THE SAME SEAL, ALREADY LOCKED. the locked direction lifts and the other lays down. the side never changes.
 private _fr = uiNamespace getVariable ["ACME_CS_BurpFrame", 0];
 if (!(_fr isEqualType 0) || {!finite _fr}) then { _fr = 0; };
+if (_fr <= 0 && {!([uiNamespace getVariable ["ACME_CS_Patient",objNull]] call ACME_fnc_chestSealBurpReady)}) exitWith {false};
 private _openDir = uiNamespace getVariable ["ACME_CS_BurpDir", 0];
+
+// A completed burp must not latch this seal forever at full lift. A new opening
+// scroll immediately starts a fresh peel cycle without moving off the seal.
+// Reversing the wheel still lays the corner down immediately.
+if (_fr >= _maxFrame && {uiNamespace getVariable ["ACME_CS_BurpFired", false]}
+    && {_dir isEqualTo _openDir}
+    && {[uiNamespace getVariable ["ACME_CS_Patient", objNull]] call ACME_fnc_chestSealBurpReady}) then {
+    _fr = 0;
+    uiNamespace setVariable ["ACME_CS_BurpFrame", 0];
+    uiNamespace setVariable ["ACME_CS_BurpFired", false];
+};
 
 if (_dir isEqualTo _openDir) then {
     // further open. it stops at full lift rather than wrapping.

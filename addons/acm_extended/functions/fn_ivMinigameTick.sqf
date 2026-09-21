@@ -8,8 +8,9 @@ _acmeNVArgs call {
 // with the needle held, the full-size catheter sits on the cursor, tip at the cursor, and there is no feel dot.
 // the stick is blind, so you must remember where you felt the vein. clicking commits the stick, which
 // fn_ivminigameclick handles.
-// with nothing held, the band on and lmb held, the palpating finger shows and runs red, then yellow, then green
-// near the vein. it never locks or finds, so palpate as you like.
+// with nothing held and lmb held, the palpating finger shows and runs red, then yellow, then green near the vein.
+// A BOA improves venous filling but is not required. Pressure and the band/site relationship determine how much
+// vein can actually be felt. It never locks or finds, so palpate as you like.
 // the held item routes through the dynamic ACME_IV_HeldCursor sprite, so it always draws above the buttons.
 private _display = uiNamespace getVariable ["ACME_IV_DLG", displayNull];
 if (isNull _display) exitWith {};
@@ -27,11 +28,28 @@ if !([] call ACME_fnc_ivUiValid) exitWith {_display closeDisplay 2;};
 // loop.
 private _ivPat = uiNamespace getVariable ["ACME_IV_Patient", objNull];
 if (!isNull _ivPat) then {
+    private _needMarkRender = false;
     private _mv = _ivPat getVariable ["ACME_IV_MarkVer", 0];
     if (_mv != (uiNamespace getVariable ["ACME_IV_MarkVerSeen", -1])) then {
         uiNamespace setVariable ["ACME_IV_MarkVerSeen", _mv];
-        call ACME_fnc_ivMinigameRenderMarks;
+        _needMarkRender = true;
     };
+
+    // Medical injury state can change without an IV mark being added or removed.  Repaint the trauma layer when
+    // ACE contusions or the site-specific extravasation severity changes, otherwise the visual can lag behind the
+    // actual patient until the medic places another catheter or re-opens the minigame.
+    private _visBP = uiNamespace getVariable ["ACME_IV_BodyPart", ""];
+    private _visualSig = str [
+        netId _ivPat,
+        [_ivPat, _visBP] call ACME_fnc_visualBruiseState,
+        [_ivPat, _visBP] call ACME_fnc_ivExtravasationState
+    ];
+    if (_visualSig != (uiNamespace getVariable ["ACME_IV_TraumaSig", ""])) then {
+        uiNamespace setVariable ["ACME_IV_TraumaSig", _visualSig];
+        _needMarkRender = true;
+    };
+
+    if (_needMarkRender) then {call ACME_fnc_ivMinigameRenderMarks;};
 };
 // vehicle motion.
 // the limb moves under the needle. it is applied before hit-testing, so the vein you palpated a second ago is not
@@ -62,7 +80,6 @@ _rect params ["_bx", "_by", "_bw", "_bh"];
 private _af = uiNamespace getVariable ["ACME_IV_AspectFix", 0.5625];
 
 private _held    = uiNamespace getVariable ["ACME_IV_Held", "none"];
-private _bandOn  = uiNamespace getVariable ["ACME_IV_BandOn", false];
 private _drag    = uiNamespace getVariable ["ACME_IV_Dragging", false];
 private _dot     = uiNamespace getVariable ["ACME_IV_DotCtrl", controlNull];
 // keep the instrument in the hand above the dabs, the marks and the bruises. ctrlCreate appends above every
@@ -128,22 +145,23 @@ if (!isNull _clean) then {
     };
 };
 
-// the fading miss-site bruises, independent of what is held. they run 0 to 100 percent over 15 s, then hold.
+// the fading miss-site bruises, independent of what is held. they develop over the configured few seconds, then hold.
 {
     _x params ["_bc", "_bt"];
     if (!isNull _bc && {[_bt] call _finite} && {_bt >= 0}) then {
-        // the age is on CBA_missionTime, the same clock fn_ivInfiltrated stamps and fn_ivMinigameRenderMarks
-        // reads. the two curves are identical on purpose: if they disagree, the bruise steps brightness the
-        // moment the fade loop hands over to the render path.
-        private _e = CBA_missionTime - _bt;
+        // Miss marks are stamped with shared serverTime so every observer sees the same bruise age. Keep this
+        // per-frame fade on that same clock. Mixing CBA_missionTime here made fresh remote marks look old and
+        // jump straight to full opacity on clients whose local CBA clock differed from the shared stamp.
+        private _e = serverTime - _bt;
         private _cap = (missionNamespace getVariable ["ACME_iv_bruiseMaxAlpha", 0.90]);
         if (!(_cap isEqualType 0) || {!finite _cap}) then { _cap = 0.90 };
         _cap = (_cap max 0.05) min 1;
         private _life = missionNamespace getVariable ["ACME_iv_bruiseLifeSec", 1200];
         private _out  = missionNamespace getVariable ["ACME_iv_bruiseFadeOutSec", 300];
+        private _fadeIn = (missionNamespace getVariable ["ACME_iv_bruiseFadeInSec", 5.0]) max 0.1;
         private _al = switch (true) do {
-            case (_e < 0):              { _cap };
-            case (_e < 15):             { (_e / 15) * _cap };
+            case (_e < 0):              { 0 };
+            case (_e < _fadeIn):        { (_e / _fadeIn) * _cap };
             case (_e < (_life - _out)): { _cap };
             case (_e < _life):          { _cap * (((_life - _e) / (_out max 1)) max 0) };
             default                     { 0 };
@@ -152,7 +170,7 @@ if (!isNull _clean) then {
         _bc ctrlCommit 0;
         // THE VISIBILITY IS SET BOTH WAYS, NOT HIDDEN ONE WAY.
         // this used to be a bare hide when the alpha reached the floor, with nothing anywhere to show the control
-        // again. a bruise is created at the START of its 15 s fade in, so its alpha is about zero on the frame it
+        // again. a bruise is created at the START of its configured fade in, so its alpha is about zero on the frame it
         // appears, and this loop hid it on that first frame and left it hidden for good. it came back only when
         // fn_ivMinigameRenderMarks ran again and rebuilt the sprite, which is why placing a new IV made every
         // existing bruise appear at once.
@@ -162,19 +180,76 @@ if (!isNull _clean) then {
     };
 } forEach (uiNamespace getVariable ["ACME_IV_BruiseFades", []]);
 
+// A worsening infiltration/extravasation does not pop to the next image.  Both severity sprites are kept alive
+// for ten seconds and their opacity is blended here every frame.  Once the blend completes the old control is
+// deleted and the state is collapsed to the new severity so future repaints do not restart the transition.
+private _exFades = uiNamespace getVariable ["ACME_IV_ExtravasationFades", []];
+if !(_exFades isEqualTo []) then {
+    private _keepEx = [];
+    private _exState = uiNamespace getVariable ["ACME_IV_ExtravasationVisualState", createHashMap];
+    {
+        _x params ["_oldCtrl", "_newCtrl", "_started", ["_cap", 0.86], ["_key", ""], ["_target", 1], ["_duration", 10]];
+        _duration = _duration max 0.1;
+        private _t = ((CBA_missionTime - _started) / _duration) max 0 min 1;
+        if (!isNull _oldCtrl) then {
+            _oldCtrl ctrlSetTextColor [1,1,1,_cap * (1 - _t)];
+            _oldCtrl ctrlShow (_t < 0.996);
+            _oldCtrl ctrlCommit 0;
+        };
+        if (!isNull _newCtrl) then {
+            _newCtrl ctrlSetTextColor [1,1,1,_cap * _t];
+            _newCtrl ctrlShow (_t > 0.004);
+            _newCtrl ctrlCommit 0;
+        };
+        if (_t >= 1) then {
+            if (!isNull _oldCtrl) then {ctrlDelete _oldCtrl;};
+            if (_key != "") then {_exState set [_key, [_target, -1, -1]];};
+        } else {
+            _keepEx pushBack _x;
+        };
+    } forEach _exFades;
+    uiNamespace setVariable ["ACME_IV_ExtravasationFades", _keepEx];
+    uiNamespace setVariable ["ACME_IV_ExtravasationVisualState", _exState];
+};
+
 private _ui = call ACME_fnc_ivMinigameCursor;
 if (_ui isEqualTo []) exitWith {};
 _ui params ["_ux", "_uy"];
 if !(([_ux] call _finite) && {[_uy] call _finite}) exitWith {};
 private _fx = (_ux - _bx) / _bw;
 private _fy = (_uy - _by) / _bh;
+private _probeBP = uiNamespace getVariable ["ACME_IV_BodyPart", "leftarm"];
+private _probeView = uiNamespace getVariable ["ACME_IV_View", ""];
+private _artBounds = [_probeBP, _probeView, _fy] call ACME_fnc_ivLimbBounds;
+private _onPatientArt = false;
+if (count _artBounds == 2) then {
+    _onPatientArt = _fx >= (_artBounds select 0) && {_fx <= (_artBounds select 1)};
+};
+
+// On a limb the vein under the finger is selected by the finger's location, not by the BOA. This is what makes
+// an unbanded stick possible and what lets a mid-arm/AC band still expose a weaker distal wrist target. The band
+// site remains ACME_IV_Site; ACME_IV_ProbeSite is only the site currently being examined/stuck.
+if (!(uiNamespace getVariable ["ACME_IV_EJMode", false]) && {_onPatientArt}) then {
+    private _probeSite = [_fx, _fy] call ACME_fnc_ivSiteAtPoint;
+    if (_probeSite in ["upper", "middle", "lower"]) then {
+        uiNamespace setVariable ["ACME_IV_ProbeSite", _probeSite];
+        private _probeData = [_probeBP, _probeSite] call ACME_fnc_ivSiteData;
+        if (count _probeData >= 6 && {(_probeData select 0) == _probeView}) then {
+            private _pU = _probeData select 4;
+            private _pV = _probeData select 5;
+            uiNamespace setVariable ["ACME_IV_VeinUV", [_pU, _pV]];
+            uiNamespace setVariable ["ACME_IV_VeinSet",
+                [(uiNamespace getVariable ["ACME_IV_Patient", objNull]), _probeBP, _probeSite, _pU, _pV] call ACME_fnc_ivVeinSet];
+        };
+    };
+};
 
 // ej: two fixed sites either side of the throat, with no band. pick the jugular nearest the cursor each frame and
 // make it the active stick target, so the palpation and the stick track whichever side you reach for.
 // screen-right is the patient's left.
 if (uiNamespace getVariable ["ACME_IV_EJMode", false]) then {
-    private _vL = uiNamespace getVariable ["ACME_IV_EJVeinL", [0.555, 0.125]];
-    private _vR = uiNamespace getVariable ["ACME_IV_EJVeinR", [0.445, 0.125]];
+    private _vL = uiNamespace getVariable ["ACME_IV_EJVeinL", [0.560, 0.505]];
+    private _vR = uiNamespace getVariable ["ACME_IV_EJVeinR", [0.440, 0.505]];
     private _dL = (abs (_fx - (_vL select 0))) + (abs (_fy - (_vL select 1)));
     private _dR = (abs (_fx - (_vR select 0))) + (abs (_fy - (_vR select 1)));
     private _nearL = (_dL <= _dR);  // the cursor is nearest the patient-left vein, which is screen-right.
@@ -205,9 +280,21 @@ if (_distV < 1e8) then {
     _distV = [_fx, _fy] call ACME_fnc_ivVeinDist;
     _nvQ = 1;
 };
-private _feelRadius = uiNamespace getVariable ["ACME_IV_FeelRadius", 0.008];
-private _hitRadius  = uiNamespace getVariable ["ACME_IV_HitRadius", 0.004];
-private _maxHot     = uiNamespace getVariable ["ACME_IV_MaxHot", 1.0];
+// Recompute palpability from live MAP/SBP every frame. A selected BOA changes the returned values, but no BOA is
+// a valid state. The nearest anatomical site owns the difficulty, so a wrist palpated below an AC band receives
+// the smaller distal-band benefit rather than the AC-fossa value.
+private _diffSite = if (uiNamespace getVariable ["ACME_IV_EJMode", false]) then {
+    uiNamespace getVariable ["ACME_IV_EJAnatomicalSide", "left"]
+} else {
+    uiNamespace getVariable ["ACME_IV_ProbeSite", uiNamespace getVariable ["ACME_IV_Site", "middle"]]
+};
+private _liveDiff = [uiNamespace getVariable ["ACME_IV_Patient", objNull], _probeBP,
+    uiNamespace getVariable ["ACME_IV_Gauge", 16], _diffSite] call ACME_fnc_ivSiteDifficulty;
+_liveDiff params ["_livePatency", "_feelRadius", "_hitRadius", "_maxHot"];
+uiNamespace setVariable ["ACME_IV_Patency", _livePatency];
+uiNamespace setVariable ["ACME_IV_FeelRadius", _feelRadius];
+uiNamespace setVariable ["ACME_IV_HitRadius", _hitRadius];
+uiNamespace setVariable ["ACME_IV_MaxHot", _maxHot];
 private _palp = [_distV, _feelRadius, _hitRadius, _maxHot, _nvQ,
                  (uiNamespace getVariable ["ACME_IV_Patient", objNull])] call ACME_fnc_ivPalpModel;
 _palp params ["_dotCol", "_dotSize", "_onVein"];
@@ -389,6 +476,12 @@ if (_held == "needle") exitWith {
     } else {_bpT in ["leftarm", "leftleg"]};
     private _artSide = if (_patientLeft) then {"left"} else {"right"};
     if (_isEJ) then {_artSide = if (_patientLeft) then {"right"} else {"left"};};
+    // Flipping an arm to its posterior face mirrors its resting 15-degree approach on screen. Use the opposite
+    // authored family on the rear face so the catheter does not keep leaning the front-view direction.
+    private _viewNow = toLower (uiNamespace getVariable ["ACME_IV_View", ""]);
+    if (!_isEJ && {_bpT in ["leftarm","rightarm"]} && {_viewNow find "_rear" >= 0}) then {
+        _artSide = if (_artSide == "left") then {"right"} else {"left"};
+    };
     private _frame = format [if (_isEJ) then {"_ej_15_%1"} else {"_15_%1"}, _artSide];
     private _displayAngle = 0;
     private _onBody = (_fx >= 0) && {_fx <= 1} && {_fy >= 0} && {_fy <= 1};
@@ -406,10 +499,15 @@ if (_held == "needle") exitWith {
             // The right arm slopes across its canvas. Read its outline at the
             // pointer's height instead of reusing the selected band's midpoint.
             private _tiltView = uiNamespace getVariable ["ACME_IV_View", _sdAngle param [0, ""]];
-            private _rowBounds = [_bpT, _tiltView, _fy] call ACME_fnc_ivLimbBounds;
-            if (count _rowBounds == 2) then {
-                _edgeLeft = _rowBounds select 0;
-                _edgeRight = _rowBounds select 1;
+            // Preserve the established catheter-angle model. Only the patient right arm needed row-specific
+            // correction for its strongly sloped canvas; the expanded ivLimbBounds profiles are also used as
+            // puncture hit masks, but must not silently retune the other authored limb angles.
+            if (_bpT == "rightarm") then {
+                private _rowBounds = [_bpT, _tiltView, _fy] call ACME_fnc_ivLimbBounds;
+                if (count _rowBounds == 2) then {
+                    _edgeLeft = _rowBounds select 0;
+                    _edgeRight = _rowBounds select 1;
+                };
             };
             private _refU = _sdAngle param [7, missionNamespace getVariable ["ACME_iv_tiltRefU", 0.5]];
             if ((_edgeLeft isEqualType 0) && {finite _edgeLeft} && {_edgeRight isEqualType 0} && {finite _edgeRight} && {_edgeRight > _edgeLeft}) then {
@@ -434,10 +532,11 @@ if (_held == "needle") exitWith {
         };
     };
     uiNamespace setVariable ["ACME_IV_NeedleFrame", _frame];
-    // the needle is held, not welded to the pointer. the tip lags and it trembles, and where it ends up is the
-    // point of the needle. everything downstream reads that settled point rather than the cursor, so the stick
-    // lands where the steel is and not where the mouse is.
-    ([_ux, _uy, diag_deltaTime] call ACME_fnc_ivNeedleTip) params ["_tipX", "_tipY"];
+    // The bevel itself is the aiming cursor. Keep the authored catheter anchored so the VERY TIP of the steel
+    // sits on the pointer every frame; do not add spring-lag or tremor between the cursor and the puncture point.
+    private _tipX = _ux;
+    private _tipY = _uy;
+    uiNamespace setVariable ["ACME_IV_NeedleTipPos", [_tipX,_tipY]];
     // frame 00 is the ready pose, with the bevel held just off the skin. the anchor is the insertion plane, so the
     // tip draws a little short of the cursor until the stick starts.
     _heldC ctrlSetText ([uiNamespace getVariable ["ACME_IV_Gauge", 16], _frame, 0] call ACME_fnc_ivCathTex);
@@ -464,9 +563,10 @@ if (_held == "needle") exitWith {
 };
 if (!isNull _heldC) then { _heldC ctrlShow false; };
 
-// nothing held: the palpating finger. it shows only with the band on and while holding lmb.
+// Nothing held: palpation is allowed with or without a BOA. Transparent canvas is not skin, so the finger does
+// not report a vein outside the authored patient silhouette.
 if (isNull _dot) exitWith {};
-if (!(_bandOn && _drag)) exitWith { _dot ctrlShow false; };
+if (!_drag || {!_onPatientArt}) exitWith { _dot ctrlShow false; };
 // the palpation model can tighten or swell the fingertip. a picture control has color, alpha and size and
 // nothing else, so size is a third of everything available to say what is under the finger.
 private _dotMul = uiNamespace getVariable ["ACME_IV_DotSize", 1];

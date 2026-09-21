@@ -1,3 +1,14 @@
+// Junctional auto-spawn must use ACE's supported woundReceived event. The old ACME path depended on overriding
+// ace_medical_damage_fnc_woundsHandlerBase, which ACE declares final; Arma can reject that override entirely.
+// ACE registers its own medical-damage woundReceived handler during preInit, while this ACME runtime registers in
+// postInit, so by the time this handler runs the native wound map already contains the wound created by this hit.
+if (isNil "ACME_junctionalWoundReceivedEH") then {
+    ACME_junctionalWoundReceivedEH = ["ace_medical_woundReceived", {
+        params ["_unit", ["_allDamages", []], ["_source", objNull], ["_ammo", ""]];
+        [_unit, _allDamages, _ammo] call ACME_fnc_junctionalRollSpawn;
+    }] call CBA_fnc_addEventHandler;
+};
+
 // NA3: junctionalRollSpawn receives only new wound records from the native wounds handler.
 
 // color-coded "Junctional Wound" row in the injury list. it hooks ACM's pre-render event and adds to the

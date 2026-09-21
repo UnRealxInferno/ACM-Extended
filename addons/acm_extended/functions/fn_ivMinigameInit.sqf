@@ -65,7 +65,8 @@ uiNamespace setVariable ["ACME_IV_SnapSites", _snapSites];
 // because an occupied location is still a valid target for the band and for a new stick.
 
 // the active site state, starting at the launched site.
-uiNamespace setVariable ["ACME_IV_Site", _site];
+uiNamespace setVariable ["ACME_IV_Site", _site];  // physical BOA site
+uiNamespace setVariable ["ACME_IV_ProbeSite", _site];  // independent vein currently under the provider
 uiNamespace setVariable ["ACME_IV_BandUV", [_bandU, _bandV]];
 uiNamespace setVariable ["ACME_IV_VeinUV", [_veinU, _veinV]];
 // the candidate veins at this site. outside the antecubital fossa this is the single strip it always was.
@@ -87,7 +88,7 @@ uiNamespace setVariable ["ACME_IV_Label", _label];
 // it current, so bringing it back is deleting the ctrlShow line below and nothing else.
 (_display displayCtrl 86504) ctrlSetText _label;
 (_display displayCtrl 86504) ctrlShow false;
-uiNamespace setVariable ["ACME_IV_Stage", "needband"];
+uiNamespace setVariable ["ACME_IV_Stage", "ready"];  // a BOA improves palpability; it is never an IV permission gate.
 uiNamespace setVariable ["ACME_IV_BandOn", false];
 uiNamespace setVariable ["ACME_IV_Held", "none"];
 uiNamespace setVariable ["ACME_IV_Gauge", 16];
@@ -134,20 +135,21 @@ uiNamespace setVariable ["ACME_IV_AspectFix", _af];
 // The body rect: a framed limb, centered.
 private _szX = safeZoneX; private _szY = safeZoneY; private _szW = safeZoneW; private _szH = safeZoneH;
 private _cx = _szX + (_szW / 2);
-// ACME_iv_uiScaleV2 enlarges the limb. it CANNOT change the difficulty, and that is by construction rather than by
+// ACME_iv_uiScaleV3 enlarges the limb. it CANNOT change the difficulty, and that is by construction rather than by
 // care: fn_ivVeinDist returns its distance in BODY-WIDTH FRACTIONS, and fn_ivSiteDifficulty returns feel and hit
 // radii in the same fractions. the vein, the tolerance and the safe radii all scale with the rect together, so
 // the ratio the stick is judged on is identical at any size. what does change is pixels per fraction, so the
 // same tolerance covers more screen and is easier to aim at with a mouse. that is the point of making it bigger.
-// B34's versioned preference resets old saved scales once. New 1.0 is the
-// ACTUAL old 1.6 display height after its screen-fit clamp (0.925 safezoneH).
-// The minimum exactly preserves the old 1.0 height, and 1.5 truly enlarges it.
+// V3 rebases the user-facing scale: new 1.00 is exactly the former 1.10 visual size.
+// A new setting key intentionally resets saved V2 preferences so an old saved 1.10 does not become 1.21.
+// The lower setting limit is reduced by the same factor so the previous absolute minimum remains available.
 // Geometry, input, marks and instruments all read this one body rectangle.
-private _zoom = missionNamespace getVariable ["ACME_iv_uiScaleV2", 1];
-if (!(_zoom isEqualType 0) || {!finite _zoom}) then {_zoom = 1;};
-_zoom = (_zoom max (0.66 / 0.925)) min 1.5;
-// Match the old tray at both retained endpoints; above baseline it grows with
-// the patient. Its independent fit always keeps the final tray slot reachable.
+private _zoomSetting = missionNamespace getVariable ["ACME_iv_uiScaleV3", 1];
+if (!(_zoomSetting isEqualType 0) || {!finite _zoomSetting}) then {_zoomSetting = 1;};
+_zoomSetting = (_zoomSetting max ((0.66 / 0.925) / 1.10)) min 1.5;
+private _zoom = _zoomSetting * 1.10;
+// Match the old tray at the preserved minimum and then grow with the same physical
+// scale as the patient. Its independent fit always keeps the final tray slot reachable.
 private _k = if (_zoom < 1) then {
     linearConversion [0.66 / 0.925, 1, _zoom, 1, 1.6, true]
 } else {1.6 * _zoom};
@@ -195,7 +197,7 @@ if (!(missionNamespace getVariable ["ACME_ui_helpText", false])) then { (_displa
 // worst kind of thing to leave behind.
 private _rows  = 6;  // band, pad, 14g, 16g, 18g, 20g.
 if (missionNamespace getVariable ["ACME_iv_lineSlot", false]) then { _rows = 7; };
-// the tray takes the SAME scale the limb takes, so ACME_iv_uiScaleV2 grows the panel as one thing rather than
+// the tray takes the SAME physical scale the limb takes, so ACME_iv_uiScaleV3 grows the panel as one thing rather than
 // growing the casualty and leaving the instruments the size they were. the fit check below still shrinks the
 // column when it does not fit the screen height, so a large scale on a short screen degrades instead of
 // overflowing.
@@ -224,6 +226,8 @@ private _bandY = _colY;
 (_display displayCtrl 86533) ctrlSetPosition [_colX, _bandY + _slotH, _slotW, _lblH]; (_display displayCtrl 86533) ctrlCommit 0;  // the BAND label.
 (_display displayCtrl 86532) ctrlSetPosition [_colX, _bandY, _slotW, _slotH]; (_display displayCtrl 86532) ctrlCommit 0;
 uiNamespace setVariable ["ACME_IV_BandSlotRect", [_colX, _bandY, _slotW, _slotH]];
+(_display displayCtrl 86532) ctrlAddEventHandler ["MouseEnter", {["band",0,true] call ACME_fnc_ivTrayHover;}];
+(_display displayCtrl 86532) ctrlAddEventHandler ["MouseExit",  {["band",0,false] call ACME_fnc_ivTrayHover;}];
 
 // the pad slot, row 1.
 private _padY = _colY + _step;
@@ -232,6 +236,8 @@ private _padY = _colY + _step;
 (_display displayCtrl 86538) ctrlSetPosition [_colX, _padY + _slotH, _slotW, _lblH]; (_display displayCtrl 86538) ctrlCommit 0;  // the PAD label.
 (_display displayCtrl 86537) ctrlSetPosition [_colX, _padY, _slotW, _slotH]; (_display displayCtrl 86537) ctrlCommit 0;
 uiNamespace setVariable ["ACME_IV_PadSlotRect", [_colX, _padY, _slotW, _slotH]];
+(_display displayCtrl 86537) ctrlAddEventHandler ["MouseEnter", {["pad",0,true] call ACME_fnc_ivTrayHover;}];
+(_display displayCtrl 86537) ctrlAddEventHandler ["MouseExit",  {["pad",0,false] call ACME_fnc_ivTrayHover;}];
 
 // hide the old needle header, which is unused now.
 (_display displayCtrl 86539) ctrlShow false;
@@ -241,10 +247,10 @@ uiNamespace setVariable ["ACME_IV_PadSlotRect", [_colX, _padY, _slotW, _slotH]];
 // margins overflow harmlessly. the supercath art is about three times longer than the art this scale was first
 // set for, at 6.0, which is why the needles hung out of the tray.
 // the old art was 0.104 of its canvas tall and drew at 6.0, so it filled 0.62 of the box. the straight supercath
-// frame is 0.307 of its canvas, so 2.03 reproduces exactly the size the tray used to look right at.
-// tune it with ACME_iv_trayIconScale.
+// frame is 0.307 of its canvas. The catheter is rotated 90 degrees left for the tray and enlarged to use the
+// available slot width; tune it with ACME_iv_trayIconScale.
 private _nY0 = _colY + (_step * 2);
-private _iconScale = missionNamespace getVariable ["ACME_iv_trayIconScale", 2.03];
+private _iconScale = missionNamespace getVariable ["ACME_iv_trayIconScale", 2.45];
 private _gauges = [[86540,86541,86542,86543,14], [86544,86545,86546,86547,16], [86548,86549,86550,86551,18],
                    [86556,86557,86558,86559,20]];
 private _needleRects = [];
@@ -254,16 +260,23 @@ private _needleRects = [];
     private _iconH = _slotH * _iconScale;
     private _iconW = _iconH / _af;  // square in pixels.
     private _iconX = _colX + (_slotW / 2) - (_iconW / 2);
-    // the icons sat centered in the box and read as low, because the catheter art has its bulk in the lower half
-    // of its canvas. bias the anchor up the box. 0.5 is the old centered behavior.
-    private _iconBias = missionNamespace getVariable ["ACME_iv_trayIconBias", 0.34];
-    if (!(_iconBias isEqualType 0) || {!finite _iconBias}) then { _iconBias = 0.34 };
+    // Keep the resting catheter slightly low in its tray so the inventory fan has room to open upward.
+    // This is only tray placement; source-art centroid math lives in fn_ivTrayHover and must not be coupled to it.
+    private _iconBias = missionNamespace getVariable ["ACME_iv_trayIconBias", 0.40];
+    if (!(_iconBias isEqualType 0) || {!finite _iconBias}) then { _iconBias = 0.40 };
     private _iconY = _ry + (_slotH * ((_iconBias max 0) min 1)) - (_iconH / 2);
     (_display displayCtrl _bgIdc) ctrlSetPosition [_colX, _ry, _slotW, _slotH]; (_display displayCtrl _bgIdc) ctrlCommit 0;
-    (_display displayCtrl _logoIdc) ctrlSetPosition [_iconX, _iconY, _iconW, _iconH]; (_display displayCtrl _logoIdc) ctrlCommit 0;
+    private _logo = _display displayCtrl _logoIdc;
+    _logo ctrlSetPosition [_iconX, _iconY, _iconW, _iconH];
+    _logo ctrlSetAngle [-90,0.5,0.5,false];
+    _logo ctrlCommit 0;
     (_display displayCtrl _lblIdc) ctrlSetPosition [_colX, _ry + _slotH, _slotW, _lblH]; (_display displayCtrl _lblIdc) ctrlCommit 0;
-    (_display displayCtrl _clickIdc) ctrlSetPosition [_colX, _ry, _slotW, _slotH]; (_display displayCtrl _clickIdc) ctrlCommit 0;
-    _needleRects pushBack [_g, [_colX, _ry, _slotW, _slotH]];
+    private _click = _display displayCtrl _clickIdc;
+    _click ctrlSetPosition [_colX, _ry, _slotW, _slotH];
+    _click ctrlCommit 0;
+    _click ctrlAddEventHandler ["MouseEnter", compile format ["['needle',%1,true] call ACME_fnc_ivTrayHover",_g]];
+    _click ctrlAddEventHandler ["MouseExit",  compile format ["['needle',%1,false] call ACME_fnc_ivTrayHover",_g]];
+    _needleRects pushBack [_g, [_colX, _ry, _slotW, _slotH], [_iconX,_iconY,_iconW,_iconH], _logoIdc];
 } forEach _gauges;
 uiNamespace setVariable ["ACME_IV_NeedleRects", _needleRects];
 
@@ -410,7 +423,7 @@ _display displayAddEventHandler ["KeyDown", {
 
 // the hold, palpate and wipe state.
 uiNamespace setVariable ["ACME_IV_Dragging", false];
-uiNamespace setVariable ["ACME_IV_StripHalf", ([0.045, 0.080] select _isEJ)];  // EJ spans the usable lateral neck from below the jaw to just above the clavicle.
+uiNamespace setVariable ["ACME_IV_StripHalf", ([0.045, 0.085] select _isEJ)];  // EJ spans below the chin through the lateral neck/traps, stopping above the clavicles.
 uiNamespace setVariable ["ACME_IV_Palpated", false];
 uiNamespace setVariable ["ACME_IV_PalpTimer", 0];
 uiNamespace setVariable ["ACME_IV_Cleaned", false];

@@ -104,26 +104,17 @@ private _FBTKBags = 0;
                 _freshBloodBags = _freshBloodBags + 1;
             };
         };
-        _totalBags = _totalBags + 1;  
-    } forEach _IVBagsBodyPart; 
+        _totalBags = _totalBags + 1;
+    } forEach _IVBagsBodyPart;
 } forEach ALL_BODY_PARTS;
 
 if (_totalBags > 0) then {
     if (_FBTKBags > 0) then {
         _entries pushBack [format [LELSTRING(circulation,GUI_CollectingBlood), floor _FBTKBags], [1, 1, 1, 1]];
     };
-    if (_freshBloodBags > 0) then {
-        _entries pushBack [format [LELSTRING(circulation,GUI_TransfusingFreshBlood), floor _freshBloodBags], [1, 1, 1, 1]];
-    };
-    if (_bloodBags > 0) then {
-        _entries pushBack [format [LELSTRING(circulation,GUI_TransfusingBlood), floor _bloodBags], [1, 1, 1, 1]];
-    };
-    if (_plasmaBags > 0) then {
-        _entries pushBack [format [LELSTRING(circulation,GUI_TransfusingPlasma), floor _plasmaBags], [1, 1, 1, 1]];
-    };
-    if (_salineBags > 0) then {
-        _entries pushBack [format [LELSTRING(circulation,GUI_TransfusingSaline), floor _salineBags], [1, 1, 1, 1]];
-    };
+    // B115: connected transfusion contents are already annotated at the exact IV/IO site in the transfusion
+    // body map. Do not duplicate Blood/Plasma/Saline/Fresh Blood as global injury-list status rows. FBTK collection
+    // remains because it is a donor/collection state rather than a hung transfusion.
 } else {
     if (GVAR(showInactiveStatuses)) then {_entries pushBack [localize ACELSTRING(medical_treatment,Status_NoIv), _nonissueColor];};
 };
@@ -152,6 +143,22 @@ if (_target call ACEFUNC(common,isAwake)) then {
         _entries pushBack [localize _painText, [1, 1, 1, 1]];
     } else {
         if (GVAR(showInactiveStatuses)) then {_entries pushBack [localize ACELSTRING(medical_gui,Status_NoPain), _nonissueColor];};
+    };
+};
+
+// Non-rebreather mask. Keep this compact in the status list but distinguish a connected oxygen source from a
+// mask that was placed without oxygen. The overall overview exits below, so add its row before that return.
+private _nrbOn = _target getVariable ["ACME_nrb_on", false];
+private _nrbText = "";
+if (_nrbOn) then {
+    _nrbText = if (_target getVariable ["ACME_nrb_hasO2", false]) then {
+        format ["NRB [%1 L/min O2]", round (missionNamespace getVariable ["ACME_nrb_flowLPM", 15])]
+    } else {
+        "NRB [No O2]"
+    };
+
+    if (_selectionN == -1) then {
+        _entries pushBack [_nrbText, _breathingColor];
     };
 };
 
@@ -230,7 +237,7 @@ if (_selectionN == 0) then {
                 _entry = format ["%1 [%2]", _entry, LELSTRING(airway,GUI_SurgicalAirway_Strapped)];
             };
             if (_target getVariable [QEGVAR(airway,SurgicalAirway_Incision), false] && !(_target getVariable [QEGVAR(airway,SurgicalAirway_IncisionStitched), false])) then {
-                _entry = format ["%1 [%2]", _entry, LELSTRING(airway,GUI_SurgicalAirway_OpenIncision)]; 
+                _entry = format ["%1 [%2]", _entry, LELSTRING(airway,GUI_SurgicalAirway_OpenIncision)];
             };
         } else {
             if (_target getVariable [QEGVAR(airway,SurgicalAirway_InProgress), false]) then {
@@ -282,7 +289,7 @@ if (_selectionN in [0,2,3] && {!(alive _target) || (_oxygenSaturation < ACM_CYAN
 
 if (EGVAR(CBRN,enable)) then {
     private _skinIrritation = (_target getVariable [QEGVAR(CBRN,SkinIrritation), [0,0,0,0,0,0]]) select _selectionN;
-    
+
     if (_skinIrritation > 5) then {
         private _colorMultiplier = linearConversion [5, 85, _skinIrritation, 1, 0.7, true];
         private _severity = switch (true) do {
@@ -306,6 +313,11 @@ if (_selectionN == 0 && (_target getVariable [QEGVAR(breathing,BVM_Medic), objNu
         _string = LELSTRING(core,Common_Active);
     };
     _entries pushBack [format ["%1 %2 (%3)", LELSTRING(breathing,BVM_Short), _string, ([(_target getVariable [QEGVAR(breathing,BVM_Medic), objNull]), false, true] call ACEFUNC(common,getName))], _breathingColor];
+};
+
+// Keep the NRB visible on the whole-patient overview and on the two breathing-relevant body views.
+if (_selectionN in [0,1] && {_nrbOn}) then {
+    _entries pushBack [_nrbText, _breathingColor];
 };
 
 private _selectionBodyPart = ALL_BODY_PARTS select _selectionN;
@@ -341,17 +353,17 @@ if (_bodyPartIV isNotEqualTo [0,0,0]) then {
                 case ACM_IV_14G_M: {LELSTRING(circulation,IV_14g)};
             };
             _IVText = format ["%1 (%2)", _IVText, ([LELSTRING(circulation,IV_Upper), LELSTRING(circulation,IV_Middle), LELSTRING(circulation,IV_Lower)] select _forEachIndex)];
-    
+
             private _connectedBag = [_target, _selectionBodyPart, true, _forEachIndex, _x] call FUNC(getBodyPartIVBags);
-    
+
             private _IVEntry = "";
-    
+
             if (_connectedBag != "") then {
                 _IVEntry = format ["%1 [%2]", _IVText, _connectedBag];
             } else {
                 _IVEntry = _IVText;
             };
-    
+
             _entries pushBack [_IVEntry, _circulationColor];
         };
     } forEach _bodyPartIV;
@@ -415,8 +427,8 @@ if ((_selectionN == 1 || (_selectionN in [2,3] && _allowOnArm) || (_selectionN =
 // Pulse Oximeter
 if (_selectionN in [2,3] && {HAS_PULSEOX(_target,(_selectionN - 2))}) then {
     private _pr = (_target getVariable [QEGVAR(breathing,PulseOximeter_Display), [[0,0],[0,0]]] select (_selectionN - 2)) select 1;
-    private _spO2 = (_target getVariable [QEGVAR(breathing,PulseOximeter_Display), [[0,0],[0,0]]] select (_selectionN - 2)) select 0; 
-    
+    private _spO2 = (_target getVariable [QEGVAR(breathing,PulseOximeter_Display), [[0,0],[0,0]]] select (_selectionN - 2)) select 0;
+
     if (_spO2 < 1 || _pr < 1) then {
         _pr = "--";
         _spO2 = "--";
@@ -530,6 +542,8 @@ if (_fractureState != 0) then {
 };
 
 // Internal bleeding indicator
+private _bruisingText = ["STR_ACM_Breathing_InspectChest_Bruising_Short"] call ACME_fnc_clinTerm;
+if (_bruisingText == "") then {_bruisingText = LELSTRING(breathing,InspectChest_Bruising_Short);};
 private _selectionN_InternalBleeding = [_target, _selectionN] call EFUNC(damage,getBodyPartInternalBleeding);
 private _HTXFluid = _target getVariable [QEGVAR(breathing,Hemothorax_Fluid), 0];
 
@@ -538,14 +552,14 @@ switch (true) do {
         private _colorAdjustment = linearConversion [0.5, 1.5, _HTXFluid, 0.75, 0.45, true];
         if (_selectionN_InternalBleeding > 0.15) then {
             _colorAdjustment = _colorAdjustment max (linearConversion [0.15, 0.5, _selectionN_InternalBleeding, 0.75, 0.45, true]);
-            _entries pushBack [(format ["%1 (%2)", LELSTRING(breathing,InspectChest_Bruising_Short), LELSTRING(breathing,GUI_LowerAndUpperChest)]), [_colorAdjustment, 0.1, 0.6, 1]];
+            _entries pushBack [(format ["%1 (%2)", _bruisingText, LELSTRING(breathing,GUI_LowerAndUpperChest)]), [_colorAdjustment, 0.1, 0.6, 1]];
         } else {
-            _entries pushBack [(format ["%1 (%2)", LELSTRING(breathing,InspectChest_Bruising_Short), LELSTRING(breathing,GUI_UpperChest)]), [_colorAdjustment, 0.1, 0.6, 1]];
+            _entries pushBack [(format ["%1 (%2)", _bruisingText, LELSTRING(breathing,GUI_UpperChest)]), [_colorAdjustment, 0.1, 0.6, 1]];
         };
     };
     case (_selectionN_InternalBleeding > 0.15): {
         private _colorAdjustment = linearConversion [0.15, 0.5, _selectionN_InternalBleeding, 0.75, 0.45, true];
-        _entries pushBack [LELSTRING(breathing,InspectChest_Bruising_Short), [_colorAdjustment, 0.1, 0.6, 1]];
+        _entries pushBack [_bruisingText, [_colorAdjustment, 0.1, 0.6, 1]];
     };
     default {};
 };

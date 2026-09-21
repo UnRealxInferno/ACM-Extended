@@ -31,16 +31,22 @@ private _base = 84010 + 3 * (([10,5,3,1] find _size) max 0);
 {(_display displayCtrl _x) ctrlShow _body;} forEach [84151,84154,84155,84156];
 
 if (!_infusion) then {
-    private _viewButton = _display displayCtrl 84150;
+    private _leftPage = _display displayCtrl 84150;
+    private _rightPage = _display displayCtrl 84152;
     if (_body) then {
-        _viewButton ctrlSetText "< Draw Syringe";
-        _viewButton ctrlSetTooltip "Return to syringe preparation";
+        _leftPage ctrlSetText "< Narc Box";
+        _leftPage ctrlSetTooltip "Return to syringe preparation";
+        _rightPage ctrlSetText "Transfuse >";
+        _rightPage ctrlSetTooltip "Open Transfuse Fluids";
     } else {
-        _viewButton ctrlSetText "Body Map >";
-        _viewButton ctrlSetTooltip "Open the body injection map";
+        _leftPage ctrlSetText "< Transfuse";
+        _leftPage ctrlSetTooltip "Open Transfuse Fluids";
+        _rightPage ctrlSetText "Body Map >";
+        _rightPage ctrlSetTooltip "Open the body injection map";
     };
-    _viewButton ctrlShow true;
-
+    { _x ctrlShow true; _x ctrlEnable true; } forEach [_leftPage,_rightPage];
+} else {
+    {(_display displayCtrl _x) ctrlShow false;} forEach [84150,84152,84153,84157];
 };
 
 // B59 mini-carousel controls remain retired; B62 uses only the adaptive 84400-series carousel.
@@ -58,6 +64,9 @@ if (_body) then {
     (_display displayCtrl 84810) ctrlShow false;
     (_display displayCtrl 84819) ctrlShow false;
     (_display displayCtrl 84820) ctrlShow false;
+    (_display displayCtrl 84830) ctrlShow false;
+    (_display displayCtrl 84831) ctrlShow false;
+    (_display displayCtrl 84832) ctrlShow false;
     uiNamespace setVariable ["ACME_SK_PendingInjection",[]];
     uiNamespace setVariable ["ACME_SK_DiscardArmedId",""];
     uiNamespace setVariable ["ACME_SK_TagEditMode", false];

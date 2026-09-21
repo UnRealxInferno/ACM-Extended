@@ -92,7 +92,7 @@ private _fnc_onConfirm = {
     if (isNull _logic) exitWith {};
 
     private _attachedObject = attachedTo _logic;
-    private _attach = (cbChecked (_display displayCtrl IDC_MODULE_CREATE_HAZARDZONE_ATTACH)) && !(isNull _attachedObject); 
+    private _attach = (cbChecked (_display displayCtrl IDC_MODULE_CREATE_HAZARDZONE_ATTACH)) && !(isNull _attachedObject);
     private _targetObject = [_logic, _attachedObject] select _attach;
 
     private _hazardTypeSelection = lbCurSel (_display displayCtrl IDC_MODULE_CREATE_HAZARDZONE_LIST);

@@ -39,6 +39,8 @@ _patient setVariable [QGVAR(AirwaySpasm), false, true];
 _patient setVariable [QGVAR(Chemical_Chlorine_Blindness), false, true];
 
 _patient setVariable [QGVAR(Chemical_Sarin_NextShake), -1];
+// ACME's shared seizure state machine consumes this severe nerve-agent cause flag. CBRN reset must release it.
+_patient setVariable ["ACME_sarinSeizureCause", false, true];
 
 _patient setVariable [QGVAR(Chemical_Lewisite_Blindness), false, true];
 
@@ -53,7 +55,7 @@ _patient setVariable [QGVAR(Detector_Exposure_Severity), 0];
 
 {
     private _category = _x;
-    
+
     {
         private _hazardType = format ["%1_%2", _category, _x];
         _patient setVariable [(format ["ACM_CBRN_%1_Buildup", toLower _hazardType]), 0, true];

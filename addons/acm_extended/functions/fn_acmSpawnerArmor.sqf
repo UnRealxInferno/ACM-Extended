@@ -8,7 +8,9 @@ if (!(missionNamespace getVariable ["ACME_acmSpawnerPlateCarrierEnabled", true])
 if (isNull _patient) exitWith {};
 if (!alive _patient) exitWith {};
 if (isPlayer _patient) exitWith {};
-if (!local _patient) exitWith {};
+if (!local _patient) exitWith {
+    ["ACME_acmSpawnerArmorLocal", [_patient], _patient] call CBA_fnc_targetEvent;
+};
 
 private _grp = missionNamespace getVariable ["ACM_mission_TrainingCasualtyGroup", grpNull];
 if (isNull _grp) exitWith {};

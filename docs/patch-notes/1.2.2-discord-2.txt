@@ -1,0 +1,36 @@
+# ACM Extended v1.2.2 - Hotfix
+
+:exclamation~1:Remember to repair your mod:exclamation~1:
+
+-# Part 2 of 3
+
+## SERVER FIXES
+
+- Carry Assist now cancels with left click or Escape and returns to a movable crouch. Old input callbacks cannot cancel a new action.
+- Fixed chest seal and ventilator menu entry waiting on provider animations. Each provider now has one menu request and update loop, and stale panels cannot close newer ones.
+- Fixed repeated chest menu updates removing finger drag resistance. Closing one viewer no longer restores the workspace over another provider.
+- Dead patients no longer trigger the ventilator recovery warning or disable its controls. Attached equipment remains available to view and recover.
+- Fixed Head Tilt–Chin Lift, Carry Assist, Feel Pulse and stethoscope input cleanup. Added recovery for abandoned manual holds and chest viewers after provider death, respawn or disconnect, while preserving treatment evidence on the patient.
+- Corrected the remaining ownership check that kept hung IV bags and lines invisible to other clients after the initial fix. The same correction applies to frozen Feel Pulse and Auscultate Chest poses.
+- CPR now releases the provider and patient when stopped and plays the release animation before returning to a movable crouch. Pause and resume no longer let the old animation loop restart compressions.
+- Added CPR cleanup for respawn, disconnect and abandoned sessions. Corrected boolean status checks in CPR and BVM, including oxygen updates.
+- Other players can now see the held IV bag and its matching custom line, including players joining during a hold. Both remain visible through lowering and are removed when the session ends.
+- Restored ACM BVM flow and removed added heartbeat/session checks. Starting BVM releases your Direct Pressure, including its conflicting input and animation callbacks.
+- Fixed BVM input cleanup and recovery after provider death, respawn or disconnect. Pause/resume still reserves the patient, and old cleanup cannot cancel a newer session.
+
+## SEIZURES AND THE PATIENT SPAWNER
+
+- Added Head > Debug > Induce Seizure for living patients who are not in cardiac arrest. It requires the provider's debug setting and runs on the patient owner without the normal treatment stance/weapon preparation.
+- Unified seizure presentation around the shared seizure state machine, including Sarin while preserving ACM's original Sarin onset threshold.
+- Reworked startup so a settled unconscious or spawned training patient can begin convulsing without needing CPR or a manual roll first. The driver starts the gesture directly and preserves a downed patient's supine, prone or elevated hold during the animation handoff.
+- Corrected seizure speed to 1.05 times each native clip's speed. The previous shared speed value made the clips much too fast. Spasm3–6 now last approximately 4.0, 4.1, 4.6 and 7.4 seconds.
+- Published seizure state before collapse, prevented patients from waking spontaneously during active seizures, and stopped generic pose settling or manikin pose maintenance from cancelling the episode.
+- Seizures yield to CPR, active rolls, vehicles and drag/carry. Repeating the debug action can recover an interrupted visual driver without repeating the collapse.
+- Full heal, episode replacement and stop clear the seizure gesture and invalidate delayed callbacks, preventing an old episode from restarting.
+
+## PATIENT POSITIONING
+
+- Release builds omit the experimental drag handle regardless of branch. It remains available in dev or launch builds from dev. Standard ACE dragging and carrying remain available.
+- Semi-Fowler's is unavailable for standing or crouching patients, including when an old lying flag remains. Eligibility is checked in the menu and again before positioning.
+
+-# **[See documentation here](https://hesherson.github.io/ACM-Extended-Wiki/index.html)**

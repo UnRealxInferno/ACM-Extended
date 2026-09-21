@@ -19,6 +19,18 @@
 
 params ["_medic", "_patient", ["_type", ""]];
 
+if (isNull _patient || {!local _patient}) exitWith {};
+if (_type == "") exitWith {
+    _patient setVariable [QGVAR(LozengeItem), "", true];
+    _patient setVariable [QGVAR(LozengeItem_InsertTime), -1, true];
+    _patient setVariable ["ACME_lozengeInsertServer", -1, true];
+};
+
+private _insertTime = CBA_missionTime;
+_patient setVariable [QGVAR(LozengeItem_InsertTime), _insertTime, true];
+_patient setVariable [QGVAR(LozengeItem), _type, true];
+_patient setVariable ["ACME_lozengeInsertServer", serverTime, true];
+
 [{
     params ["_args", "_idPFH"];
     _args params ["_patient", "_insertTime", "_type"];
@@ -46,7 +58,9 @@ params ["_medic", "_patient", ["_type", ""]];
         };
 
         _patient setVariable [QGVAR(LozengeItem), "", true];
+        _patient setVariable [QGVAR(LozengeItem_InsertTime), -1, true];
+        _patient setVariable ["ACME_lozengeInsertServer", -1, true];
 
         [_idPFH] call CBA_fnc_removePerFrameHandler;
     };
-}, 0.1, [_patient, CBA_missionTime, _type]] call CBA_fnc_addPerFrameHandler;
+}, 0.1, [_patient, _insertTime, _type]] call CBA_fnc_addPerFrameHandler;

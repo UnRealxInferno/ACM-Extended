@@ -16,6 +16,15 @@ params [
     ["_deduplicate", false, [true]]
 ];
 if (isNull _patient) exitWith {[false, false, false, false]};
+if (!local _patient) exitWith {
+    [_patient, "ettAirwayState", [_inserted, _cuffInflated, _secured, _unsecured, _public, _deduplicate]] call ACME_fnc_ownerDispatch;
+    [
+        _patient getVariable ["ACME_ETT_Inserted", false],
+        _patient getVariable ["ACME_ETT_CuffInflated", false],
+        _patient getVariable ["ACME_ETT_Secured", false],
+        _patient getVariable ["ACME_ETT_Unsecured", false]
+    ]
+};
 private _writeInserted = _inserted isEqualType true;
 private _writeCuff = _cuffInflated isEqualType true;
 private _writeSecured = _secured isEqualType true;

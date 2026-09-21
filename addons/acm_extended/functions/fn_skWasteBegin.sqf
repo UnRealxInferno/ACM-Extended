@@ -149,10 +149,11 @@ private _h = [{
     ACM_circulation_SyringeDraw_MaxDose=_maxFill;
     private _floorMouse=_floorY+_mouseOffset;
     private _maxMouse=_maxY+_mouseOffset;
-    private _canvasNow = call ACME_fnc_uiCanvas;
-    _canvasNow params ["_uiXNow", "", "_uiWNow", ""];
-    setMousePosition [_uiXNow+_uiWNow/2,(_maxMouse min _mouseY max _floorMouse)];
-    private _rawY=(_mouseY-_mouseOffset) min _maxY max _floorY;
+    // Keep the native sticky cursor feel, but use the actual moving grab-control center instead of a canvas-derived
+    // anchor. This keeps the mouse physically attached to the plunger and prevents the post-page-layout jump.
+    private _mouseYClamped=(_maxMouse min _mouseY max _floorMouse);
+    setMousePosition [_plungerX + (_plungerW / 2), _mouseYClamped];
+    private _rawY=(_mouseYClamped-_mouseOffset) min _maxY max _floorY;
     private _fill=linearConversion [_limitTop,_limitBottom,_rawY,0,_size,true] max _floorMl min _maxFill;
     private _newY=linearConversion [0,_size,_fill,_limitTop,_limitBottom,true];
     // Exact endpoints: allow a pull to return fully to its floor and allow the selected vial to bottom out at 0.00.

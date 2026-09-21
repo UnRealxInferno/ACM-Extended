@@ -52,25 +52,42 @@ private _cached = _patient getVariable ["ACME_airwayGrade", []];
 if (_cached isEqualType [] && {count _cached == 2}) exitWith {
     private _previous = _patient getVariable ["ACME_airwayTraumaBump", _bump];
     private _increase = (_bump - _previous) max 0;
+    private _candidate = +_cached;
     if (_increase > 0) then {
-        _cached = [((_cached select 0) + _increase) min 4, ((_cached select 1) + _increase) min 4];
-        _patient setVariable ["ACME_airwayGrade", _cached, true];
+        _candidate = [((_cached select 0) + _increase) min 4, ((_cached select 1) + _increase) min 4];
     };
-    if (isNil {_patient getVariable "ACME_airwayTraumaBump"} || {_increase > 0}) then {
-        _patient setVariable ["ACME_airwayTraumaBump", _bump max _previous, true];
+    // The laryngoscope UI may run on any medic client. Durable "worst airway seen since heal" state belongs to
+    // the casualty owner; the caller can use the same candidate immediately while the owner serializes it.
+    if (_increase > 0 || {isNil {_patient getVariable "ACME_airwayTraumaBump"}}) then {
+        [_patient, "airwayGradeState", [_candidate, _bump max _previous]] call ACME_fnc_ownerDispatch;
     };
-    _cached
+    _candidate
 };
 
-// 1. the roll. there are two independent draws, so mallampati and the cormack-lehane variation are not locked
-// together.
+// 1. the roll. There are two independent draws, so Mallampati and Cormack-Lehane variation are not locked
+// together. Multiplayer AI cannot use random here: two medics opening the same airway at the same time would
+// otherwise generate different anatomy and race a public cache. Players retain the existing UID-slice behavior;
+// AI use a deterministic hash of their network identity for this mission.
 private _rMP = floor (random 100);
 private _rCL = floor (random 100);
-if (isPlayer _patient && {isMultiplayer}) then {
-    private _uid = getPlayerUID _patient;
-    if (count _uid > 14) then {
+if (isMultiplayer) then {
+    private _uid = if (isPlayer _patient) then {getPlayerUID _patient} else {""};
+    if (isPlayer _patient && {count _uid > 14}) then {
         _rMP = parseNumber (_uid select [11, 2]);
         _rCL = parseNumber (_uid select [13, 2]);
+    } else {
+        private _key = netId _patient;
+        if (_key == "") then {_key = format ["%1:%2:%3", typeOf _patient, vehicleVarName _patient, str _patient];};
+        private _draw = {
+            params ["_key", "_salt"];
+            private _h = 0;
+            {
+                _h = ((_h * 131) + _x + ((_forEachIndex + 1) * 17)) % 9973;
+            } forEach (toArray (_key + _salt));
+            _h % 100
+        };
+        _rMP = [_key, ":airway:mp"] call _draw;
+        _rCL = [_key, ":airway:cl"] call _draw;
     };
 };
 
@@ -103,8 +120,8 @@ private _cl = switch (true) do {
 _mp = (_mp + _bump) min 4;
 _cl = (_cl + _bump) min 4;
 
-// Preserve the established grade until a new injury or full heal changes it.
+// Preserve the established grade until a new injury or full heal changes it. The casualty owner owns the
+// persistent cache; this client only computes the deterministic candidate needed for the current airway scene.
 private _out = [_mp, _cl];
-_patient setVariable ["ACME_airwayGrade", _out, true];
-_patient setVariable ["ACME_airwayTraumaBump", _bump, true];
+[_patient, "airwayGradeState", [_out, _bump]] call ACME_fnc_ownerDispatch;
 _out

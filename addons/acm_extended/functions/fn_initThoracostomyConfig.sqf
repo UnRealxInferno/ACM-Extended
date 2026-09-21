@@ -70,6 +70,7 @@ ACME_thora_openAspect = 1.6;
 // fraction, and the anchor point within the art as a fraction of w and h. the anchor is the tape and entry
 // corner, and it seats on the incision, per side. all of it is tunable.
 ACME_thora_tubeSnapR = 0.055;
+ACME_thora_sealSnapR = 0.085;  // B120 chest seals magnetize more generously to the exact center of the finger-thoracostomy opening.
 ACME_thora_tubeSize = 0.34;
 ACME_thora_tubeAnchorRight = [0.154, 0.215];
 ACME_thora_tubeAnchorLeft  = [0.831, 0.215];

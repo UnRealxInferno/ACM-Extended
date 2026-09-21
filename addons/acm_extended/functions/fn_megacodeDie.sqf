@@ -28,7 +28,7 @@ if (alive _d && {!(_d getVariable ["ACE_isUnconscious", false])}) then {
 if (!isNull _op) then {
     ["MEGACODE KELLY DIED. Resetting.", 4] remoteExec ["ace_common_fnc_displayTextStructured", _op];
     [["PATIENT DIED. Resetting...", "#ff5555"]] remoteExec ["ACME_fnc_megacodeLog", _op];
-}; 
+};
 
 // after the death beat: a full reset and a refresh of the panel of the operator.
 [{

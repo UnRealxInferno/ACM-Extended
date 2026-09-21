@@ -6,9 +6,15 @@ class CfgPatches {
         units[] = {
             "ACM_HazardObject",
             QGVAR(moduleCreateHazardZone),
-            QGVAR(moduleCreateChemicalDevice)
+            QGVAR(moduleCreateChemicalDevice),
+            QGVAR(Eden_HazardZone),
+            QGVAR(Eden_ChemicalDevice)
         };
-        weapons[] = {};
+        weapons[] = {
+            "ACM_GasMaskFilter",
+            "ACM_Autoinjector_ATNA",
+            "ACM_Autoinjector_Midazolam"
+        };
         magazines[] = {
             "ACM_Mortar_Shell_8Rnd_CS",
             "ACM_Mortar_Shell_8Rnd_Chlorine"

@@ -27,7 +27,7 @@ private _return = 0;
 
     if (_xMed == _medication) then {
         private _timeInSystem = CBA_missionTime - _timeAdded;
-        
+
         if (_targetBodyPartIndex == -1 || {_targetBodyPartIndex == _bodyPartIndex}) then {
             if (_getCount) then {
                 // just return effective count, a medication will always start at 1 and only drop after reaching timeTilMaxEffect

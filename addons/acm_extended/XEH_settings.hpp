@@ -13,7 +13,7 @@
     ["TBI debug HUD", "Show a live TBI / CPP readout overlay (top-left) for the nearest tracked patient. Requires 'Enable debug features'."],
     ["ACM Extended: Debug", "Options"],
     false,
-    1,
+    2,
     {}
 ] call CBA_fnc_addSetting;
 
@@ -127,7 +127,7 @@
         ["Off / normal", "Deuteranomaly", "Deuteranopia", "Protanomaly", "Protanopia", "Tritanomaly", "Tritanopia", "Achromatopsia / monochrome"],
         0
     ],
-    0,
+    2,
     {
         missionNamespace setVariable ["ACME_a11y_colorblindMode", _this, false];
         // force color-built displays to rebuild immediately. per-frame cues recolor on their next tick.
@@ -152,7 +152,7 @@
     ["BVM ventilation visual cue", "Show a blue inflating circle when the BVM ventilation sound plays. Client-side per player."],
     ["ACM Extended: Accessibility", "Options"],
     true,
-    0,
+    2,
     {}
 ] call CBA_fnc_addSetting;
 
@@ -163,7 +163,7 @@
     ["BVM cue: inflate time (s)", "How long the circle takes to inflate from default size to peak."],
     ["ACM Extended: Accessibility", "Options"],
     [0.3, 3, 1.23, 2],
-    0,
+    2,
     {}
 ] call CBA_fnc_addSetting;
 
@@ -175,7 +175,7 @@
     ["Left-align medical menu", "Left-align treatment menu button labels. Client-side per player."],
     ["ACM Extended: Accessibility", "Options"],
     false,
-    0,
+    2,
     {
         private _disp = uiNamespace getVariable ["ace_medical_gui_menuDisplay", displayNull];
         if (isNull _disp) exitWith {};
@@ -193,7 +193,7 @@
     ["Group medical menu into dropdowns", "Groups treatments into expandable Airway, Breathing, Chest, Positioning, Capnography, AED and Debug sections. Head medications use PO/IN/BUC or By Mouth/Inhaled/Buccal, according to Clinical Descriptors. Groups use left alignment; turning this off restores a flat menu and your alignment choice. Client-side per player."],
     ["ACM Extended: Accessibility", "Options"],
     true,
-    0,
+    2,
     {
         private _disp = uiNamespace getVariable ["ace_medical_gui_menuDisplay", displayNull];
         if (!isNull _disp && {!isNil "ace_medical_gui_fnc_updateActions"}) then {
@@ -226,7 +226,7 @@
     ["Use separate colors for medical menu sections", "OFF (default): all dropdown headings use cream text. ON: each section uses its own color. Open headings keep their brightness. Regular action rows alternate white and very pale red. Requires grouped menus for headings. Personal display preference."],
     ["ACM Extended: Accessibility", "Options"],
     false,
-    0,
+    2,
     {}
 ] call CBA_fnc_addSetting;
 
@@ -237,7 +237,7 @@
     ["Colorblind correction strength", "How far to push the correction. Full strength is not always the most readable result, particularly for mild deficiency, so this can be dialled back. No effect when the mode above is Off."],
     ["ACM Extended: Accessibility", "Options"],
     [0, 1, 1, 2],
-    0,
+    2,
     { missionNamespace setVariable ["ACME_a11y_colorblindStrength", _this, false]; }
 ] call CBA_fnc_addSetting;
 
@@ -301,7 +301,7 @@
         ["Off", "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"],
         0
     ],
-    0,
+    2,
     {}
 ] call CBA_fnc_addSetting;
 
@@ -360,7 +360,7 @@
 // read the same live setting; no startup write silently overrides a server's customization.
 [
     "ACME_ket_induceThreshold", "SLIDER",
-    ["Ketamine: induction threshold", "Legacy IV-equivalent ketamine load for AI induction. Default 7 equals approximately 1.75 mg/kg IV or 3 mg/kg IM at full modeled effect, without other sedatives. Game tuning, not a clinical dosing tool. Propofol and midazolam contribute through a shared normalized hypnosis model; small analgesic doses alone do not cause induction."],
+    ["Ketamine: induction threshold", "Legacy IV-equivalent ketamine load for AI induction. Default 7 equals approximately 1.75 mg/kg IV or 4.4 mg/kg IM at full modeled effect, without other sedatives. Game tuning, not a clinical dosing tool. Propofol and midazolam contribute through a shared normalized hypnosis model; small analgesic doses alone do not cause induction."],
     ["ACM Extended: Airway", "Ketamine sedation"],
     [2, 25, 7, 1],
     1,
@@ -582,19 +582,19 @@
     "ACME_motion_interpolate", "CHECKBOX",
     ["Smooth vehicle shake", "Smooths the shared motion offset before artwork and hit targets move. Helps readability at low FPS. Does not generate frames."],
     ["ACM Extended: Cabin Motion", "Accessibility"],
-    true, 0, {}
+    true, 2, {}
 ] call CBA_fnc_addSetting;
 [
     "ACME_motion_interpolationTime", "SLIDER",
     ["Vehicle shake smoothing (s)", "Longer values soften rapid vibration more. Lower values follow the original movement more closely."],
     ["ACM Extended: Cabin Motion", "Accessibility"],
-    [0.02, 0.4, 0.12, 2], 0, {}
+    [0.02, 0.4, 0.12, 2], 2, {}
 ] call CBA_fnc_addSetting;
 [
     "ACME_minigameNV_focusBlur", "SLIDER",
     ["NV scene focus blur", "Adds a small local scene blur while goggles are on in a procedure. Zero disables it. Native NV masks, colors, grain and gain are left alone. This does not blur 2D dialog text or art."],
     ["ACM Extended: Cabin Motion", "Accessibility"],
-    [0, 1, 0.35, 2], 0, {}
+    [0, 1, 0.35, 2], 2, {}
 ] call CBA_fnc_addSetting;
 
 // minigame darkness.

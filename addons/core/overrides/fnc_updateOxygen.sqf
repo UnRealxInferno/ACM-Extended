@@ -213,7 +213,7 @@ switch (true) do {
         if (_BVMOxygenAssisted) then {
             _breathingEffectiveness = _breathingEffectiveness * 1.5;
         };
-        
+
         if (_breathingEffectivenessAdjustment != 0) then {
             _breathingEffectiveness = (_breathingEffectiveness * (1 + _breathingEffectivenessAdjustment)) min ((_breathingEffectiveness + 0.01) min 1);
         };

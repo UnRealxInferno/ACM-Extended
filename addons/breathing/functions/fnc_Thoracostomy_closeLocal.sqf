@@ -21,6 +21,7 @@ _patient setVariable ["ACM_breathing_Thoracostomy_UsedKit", false, true];
     _patient setVariable [format ["ACME_thora_open_%1", _x], "", true];
     _patient setVariable [format ["ACME_thora_tube_%1", _x], false, true];
     _patient setVariable [format ["ACME_thora_sealed_%1", _x], false, true];
+    _patient setVariable [format ["ACME_thora_closed_%1", _x], false, true];
     _patient setVariable [format ["ACME_thora_incision_%1", _x], [], true];
     _patient setVariable [format ["ACME_thora_site_%1", _x], [], true];
 } forEach ["left", "right"];

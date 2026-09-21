@@ -24,7 +24,20 @@ private _checks = [];
     ["ACM_circulation_fnc_handleCardiacArrest", "NA4:handleCardiacArrest"],
     ["ACM_circulation_fnc_handleReversibleCardiacArrest", "NA4:handleReversibleCardiacArrest"],
     ["ace_medical_treatment_fnc_ivBagLocal", "NA3:ivBagLocal"],
-    ["ace_medical_vitals_fnc_handleUnitVitals", "NA3:handleUnitVitals"]
+    ["ace_medical_vitals_fnc_handleUnitVitals", "NA3:handleUnitVitals"],
+    ["ACM_circulation_fnc_getBloodVolumeChange", "B106:volumeCanonical"],
+    ["ace_medical_status_fnc_getBloodVolumeChange", "B106:volumeBridge"],
+    ["ACM_circulation_fnc_setIV", "B106:setIVReconciled"],
+    ["ACM_airway_fnc_handleAirway", "B106:airwayWakeGuard"],
+    ["ACM_airway_fnc_handleAirwayCollapse", "B125:airwayCollapseWakeClear"],
+    ["ACM_core_fnc_getUpPrompt", "B106:getUpLifecycle"],
+    ["ACM_core_fnc_addVehiclePatientActions", "B106:vehicleUnloadGuard"],
+    ["ACM_disability_fnc_handleFracture", "B106:fracturePainChance"],
+    ["ACM_damage_fnc_wrapBodyPartLocal", "B106:wrappedWoundReopen"],
+    ["ace_dragging_fnc_canCarry", "B106:ace321Carry"],
+    ["ace_dragging_fnc_canDrag", "B106:ace321Drag"],
+    ["ace_dragging_fnc_dropObject_carry", "B106:ace321CarryDrop"],
+    ["ace_interact_menu_fnc_compileMenuSelfAction", "B106:ace321SelfMenu"]
 ];
 private _all = (_checks findIf {!(_x select 1)}) < 0;
 [_all, _checks]

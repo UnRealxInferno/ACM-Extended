@@ -35,7 +35,7 @@ private _fnc_getWoundsToTreat = {
         if (((_severityID + 1) <= _maximumSeverity) && _severityID < (_lowestID % 10) && _amountOf > 0 && _bleeding > 0) then {
             _lowestID = _id;
             _woundIndex = _forEachIndex;
-        };        
+        };
     } forEach _woundsList;
 
     _woundIndex;
@@ -54,7 +54,7 @@ private _fnc_handleReopening = {
 
     [{
         params ["_patient", "_bodyPart", "_id"];
-        
+
         private _clottedWounds = GET_CLOTTED_WOUNDS(_patient);
         private _clottedWoundsOnPart = _clottedWounds getOrDefault [_bodyPart, []];
 
@@ -63,12 +63,12 @@ private _fnc_handleReopening = {
         if (_clottedIndex isEqualTo -1) exitWith {};
 
         (_clottedWoundsOnPart select _clottedIndex) params ["", "_clottedAmountOf", "_clottedBleeding", "_clottedDamage"];
-        
+
         private _clottedWound = [_id, ((_clottedAmountOf - 1) max 0), _clottedBleeding, _clottedDamage];
 
         _clottedWoundsOnPart set [_clottedIndex, _clottedWound];
         _clottedWounds set [_bodyPart, _clottedWoundsOnPart];
-        
+
         _patient setVariable [VAR_CLOTTED_WOUNDS, _clottedWounds, true];
 
         [_patient, 1] call FUNC(refreshWounds);

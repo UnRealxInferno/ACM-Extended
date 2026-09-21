@@ -137,8 +137,11 @@ class IVRotationRegression(unittest.TestCase):
         self.assertIn('_x param [13,0]', source('ivMinigameRenderMarks'))
         self.assertIn('_x param [13,0]', source('ivMinigameGrabLine'))
         self.assertIn('ACME_IV_InsAngle', source('ivMinigameAddMark'))
-        self.assertIn('_marks, true', source('ivMinigameAddMark'))
-        self.assertIn('ACME_IV_MarkVer', source('ivMinigameAddMark'))
+        add_mark = source('ivMinigameAddMark')
+        self.assertIn('[_patient, "ivMarks", ["add"', add_mark)
+        self.assertNotIn('_patient setVariable ["ACME_IV_Marks"', add_mark)
+        self.assertIn('ACME_IV_MarkVer', source('ivMarkCommit'))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -181,84 +181,112 @@ uiNamespace setVariable ["ACME_IV_VeinSet",
     // holding a needle: the click is the stick. it only counts if it lands on the limb, and off the limb it does
     // nothing and the needle stays in hand. on the limb, a hit seats the catheter and a non-hit is a wasted miss.
     case "needle": {
-        private _onLimb = (_fx >= 0) && {_fx <= 1} && {_fy >= 0} && {_fy <= 1};
-        if (_onLimb) then {
-            // aim from the point of the needle, not from the pointer.
-            // the needle lags the cursor and trembles, so the two are not in the same place. the tip is what
-            // touches the skin, so the tip is what the vein is measured against. without this the medic could hit
-            // a vein the steel was not over, and a tremor would cost them nothing.
-            private _tipUV = uiNamespace getVariable ["ACME_IV_NeedleTipUV", []];
-            if (_tipUV isEqualType [] && {count _tipUV >= 3} && {(diag_tickTime - (_tipUV select 2)) < 0.25}) then {
-                _fx = _tipUV select 0;
-                _fy = _tipUV select 1;
+        // Aim from the settled needle tip, not the pointer. The tip can lag/tremble far enough to cross the
+        // silhouette edge, so artwork validity is tested AFTER this substitution.
+        private _tipUV = uiNamespace getVariable ["ACME_IV_NeedleTipUV", []];
+        if (_tipUV isEqualType [] && {count _tipUV >= 3} && {(diag_tickTime - (_tipUV select 2)) < 0.25}) then {
+            _fx = _tipUV select 0;
+            _fy = _tipUV select 1;
+        };
+
+        private _bpStick = uiNamespace getVariable ["ACME_IV_BodyPart", "leftarm"];
+        private _viewStick = uiNamespace getVariable ["ACME_IV_View", ""];
+        private _bounds = [_bpStick, _viewStick, _fy] call ACME_fnc_ivLimbBounds;
+        private _onArt = count _bounds == 2
+            && {_fx >= (_bounds select 0)}
+            && {_fx <= (_bounds select 1)};
+        // Transparent canvas is not patient skin. Clicking there consumes nothing, starts no catheter and leaves
+        // no bruise. The needle simply stays in the provider's hand.
+        if (!_onArt) exitWith {};
+
+        private _isEJc = uiNamespace getVariable ["ACME_IV_EJMode", false];
+        private _stickSite = "";
+        if (!_isEJc) then {
+            _stickSite = [_fx, _fy, _viewStick, uiNamespace getVariable ["ACME_IV_SiteList", []], _bpStick]
+                call ACME_fnc_ivSiteAtPoint;
+            if !(_stickSite in ["upper", "middle", "lower"]) exitWith {};
+
+            // The puncture site, not the BOA site, supplies the veins and the pressure/band difficulty. This is
+            // what lets a middle/AC band coexist with a real distal wrist stick on the same front artwork.
+            private _sdStick = [_bpStick, _stickSite] call ACME_fnc_ivSiteData;
+            if (count _sdStick < 6 || {(_sdStick select 0) != _viewStick}) exitWith {};
+            private _sU = _sdStick select 4;
+            private _sV = _sdStick select 5;
+            uiNamespace setVariable ["ACME_IV_ProbeSite", _stickSite];
+            uiNamespace setVariable ["ACME_IV_VeinUV", [_sU, _sV]];
+            uiNamespace setVariable ["ACME_IV_VeinSet",
+                [uiNamespace getVariable ["ACME_IV_Patient", objNull], _bpStick, _stickSite, _sU, _sV]
+                    call ACME_fnc_ivVeinSet];
+        } else {
+            // Resolve the anatomical EJ side from the actual steel tip at the click, not from the previous frame's
+            // cursor. Screen-right is patient-left.
+            private _vL = uiNamespace getVariable ["ACME_IV_EJVeinL", [0.560, 0.505]];
+            private _vR = uiNamespace getVariable ["ACME_IV_EJVeinR", [0.440, 0.505]];
+            private _dL = (abs (_fx - (_vL select 0))) + (abs (_fy - (_vL select 1)));
+            private _dR = (abs (_fx - (_vR select 0))) + (abs (_fy - (_vR select 1)));
+            private _nearL = _dL <= _dR;
+            uiNamespace setVariable ["ACME_IV_VeinUV", ([_vR, _vL] select _nearL)];
+            uiNamespace setVariable ["ACME_IV_EJAnatomicalSide", (["right", "left"] select _nearL)];
+            uiNamespace setVariable ["ACME_IV_EJSide", (["right", "left"] select _nearL)];
+        };
+
+        private _patientStick = uiNamespace getVariable ["ACME_IV_Patient", objNull];
+        private _gaugeStick = uiNamespace getVariable ["ACME_IV_Gauge", 16];
+        private _diffSite = if (_isEJc) then {uiNamespace getVariable ["ACME_IV_EJAnatomicalSide", "left"]} else {_stickSite};
+        private _punctureDifficulty = [_patientStick, _bpStick, _gaugeStick, _diffSite] call ACME_fnc_ivSiteDifficulty;
+        _punctureDifficulty params ["_patStick", "_feelStick", "_hit", "_hotStick"];
+        uiNamespace setVariable ["ACME_IV_Patency", _patStick];
+        uiNamespace setVariable ["ACME_IV_FeelRadius", _feelStick];
+        uiNamespace setVariable ["ACME_IV_HitRadius", _hit];
+        uiNamespace setVariable ["ACME_IV_MaxHot", _hotStick];
+
+        private _distV = 1e9;
+        if (_isEJc) then {
+            _distV = [_fx, _fy] call ACME_fnc_ivVeinDist;
+        } else {
+            private _nearStick = [_fx, _fy] call ACME_fnc_ivVeinNearest;
+            _nearStick params ["_nearDist", "_nearU", "_nearV", "_nearQ", "_nearName"];
+            _distV = _nearDist;
+            if (_nearDist < 1e8) then {
+                uiNamespace setVariable ["ACME_IV_VeinUV", [_nearU, _nearV]];
+                uiNamespace setVariable ["ACME_IV_NearVein", _nearName];
+                uiNamespace setVariable ["ACME_IV_NearQuality", _nearQ];
             };
-            private _isEJc = uiNamespace getVariable ["ACME_IV_EJMode", false];
+        };
 
-            // NO GATE STOPS A STICK. The medic decides when and where to put a catheter.
-            // r-27 to r-31 required a band on the limb and refused an occupied location. Both are removed.
-            // The band is a separate action. The medic applies it and removes it at any time.
-
-            // Find the point of entry of the needle. The site comes from the puncture.
-            // A stick in the fossa is a fossa IV. The site of the band does not change this.
-            private _stickSite = "";
-            if (!_isEJc) then {
-                _stickSite = [_fx, _fy] call ACME_fnc_ivSiteAtPoint;
-            };
-
-            // the site diagnostic is removed. it defaulted to on and it wrote to the RPT on every stick.
-            // ACME_iv_siteDebug is no longer read by anything in this file.
-
-            private _hit = uiNamespace getVariable ["ACME_IV_HitRadius", 0.004];
-            // Judge the puncture site, not a cached band-site margin. This also fixes the
-            // 14g wrist tolerance when the band or another observer changes the selected site.
-            if (!_isEJc && {_stickSite in ["upper", "middle", "lower"]}) then {
-                private _punctureDifficulty = [uiNamespace getVariable ["ACME_IV_Patient", objNull],
-                    uiNamespace getVariable ["ACME_IV_BodyPart", "leftarm"],
-                    uiNamespace getVariable ["ACME_IV_Gauge", 16], _stickSite] call ACME_fnc_ivSiteDifficulty;
-                _hit = _punctureDifficulty select 2;
-            };
-            private _distV = [_fx, _fy] call ACME_fnc_ivVeinDist;
-            if (_distV > _hit) then {
-                // the needle goes into the skin exactly as it would on a good stick, and the catheter can be
-                // pushed all the way in. the medic finds out at the end, when the line will not run.
-                // the accuracy is recorded as the worst case, so the blown-vein check cannot read a stale value
-                // from an earlier stick.
-                uiNamespace setVariable ["ACME_IV_StickAcc", 1];
-                [_fx, _fy, false, _stickSite] call ACME_fnc_ivMinigameInsertStart;
-            } else {
-                // how good was the stick, as a fraction of the target. 0 is dead on the vein and 1 is the very
-                // edge of what counted as a hit.
-                // it is recorded because landing the needle is not the only question. a wide cannula that just
-                // clipped the wall of the vein is not the same as one that went straight down the middle of it,
-                // and fn_ivminigamesticksuccess uses this to decide whether the vein blew.
-                uiNamespace setVariable ["ACME_IV_StickAcc", (if (_hit > 0) then { (_distV / _hit) min 1 } else { 0 })];
-                (uiNamespace getVariable ["ACME_IV_VeinUV", [0.5, 0.5]]) params ["_vu", "_vv"];
-                private _half = uiNamespace getVariable ["ACME_IV_StripHalf", 0.045];
-                // store the actual click point rather than the snapped vein centerline. success is still gated by the distance to
-                // the vein, and the visible seated catheter and hub must land exactly where the medic clicked. this keeps limb
-                // IVs and ej placement pixel-accurate with the cursor.
-                private _stickU = _fx;
-                private _stickV = _fy;
-                private _patient = uiNamespace getVariable ["ACME_IV_Patient", objNull];
-                private _bp = uiNamespace getVariable ["ACME_IV_BodyPart", "leftarm"];
-                private _view = uiNamespace getVariable ["ACME_IV_View", ""];
-                private _blocked = false; private _reason = "";
-                if (!isNull _patient) then {
-                    {
-                        _x params ["_mbp", "_mview", "_mu", "_mv", "_mkind", ["_mtex", ""], ["_mframe", ""], ["_mgauge", 0], ["_mmiss", -1], ["_mscale", 1], ["_msite", ""]];
-                        if (_mbp == _bp && {_mview == _view}) then {
-                            private _du = _stickU - _mu; private _dv = (_stickV - _mv) * (1 / _af);
-                            if (sqrt ((_du * _du) + (_dv * _dv)) <= 0.03) then { _blocked = true; _reason = "used"; };
-                            private _sameDrainageTrack = (!_isEJc) || {(toLowerANSI _msite) == (toLowerANSI (uiNamespace getVariable ["ACME_IV_EJAnatomicalSide", ""]))};
-                            if (_sameDrainageTrack && {_mkind == "removed"} && {_stickV >= _mv - 0.012}) then { _blocked = true; _reason = "above"; };
+        if (_distV > _hit) then {
+            // A real skin puncture that misses the vessel still advances and can infiltrate. This is one of the
+            // explicit situations allowed to create bruising.
+            uiNamespace setVariable ["ACME_IV_StickAcc", 1];
+            [_fx, _fy, false, _stickSite] call ACME_fnc_ivMinigameInsertStart;
+        } else {
+            uiNamespace setVariable ["ACME_IV_StickAcc", (if (_hit > 0) then {(_distV / _hit) min 1} else {0})];
+            private _stickU = _fx;
+            private _stickV = _fy;
+            private _blocked = false;
+            private _reason = "";
+            if (!isNull _patientStick) then {
+                {
+                    _x params ["_mbp", "_mview", "_mu", "_mv", "_mkind", ["_mtex", ""], ["_mframe", ""], ["_mgauge", 0], ["_mmiss", -1], ["_mscale", 1], ["_msite", ""]];
+                    if (_mbp == _bpStick && {_mview == _viewStick}) then {
+                        private _du = _stickU - _mu;
+                        private _dv = (_stickV - _mv) * (1 / _af);
+                        if (sqrt ((_du * _du) + (_dv * _dv)) <= 0.03) then {_blocked = true; _reason = "used";};
+                        private _sameDrainageTrack = (!_isEJc)
+                            || {(toLowerANSI _msite) == (toLowerANSI (uiNamespace getVariable ["ACME_IV_EJAnatomicalSide", ""]))};
+                        if (_sameDrainageTrack && {_mkind == "removed"} && {_stickV >= _mv - 0.012}) then {
+                            _blocked = true;
+                            _reason = "above";
                         };
-                    } forEach (_patient getVariable ["ACME_IV_Marks", []]);
-                };
-                if (_blocked) then {
-                    (_display displayCtrl 86503) ctrlSetText (if (_reason == "above") then { "" } else { "That site is already used." });
-                } else {
-                    [_stickU, _stickV, true, _stickSite] call ACME_fnc_ivMinigameInsertStart;
-                };
+                    };
+                } forEach (_patientStick getVariable ["ACME_IV_Marks", []]);
+            };
+            if (_blocked) then {
+                (_display displayCtrl 86503) ctrlSetText (if (_reason == "above") then {""} else {"That site is already used."});
+            } else {
+                // The exact U/V are retained by InsertStart -> StickSuccess -> AddMark. The coarse ACM access-site
+                // index is only the physiological slot; the minigame hub always returns to this exact puncture.
+                [_stickU, _stickV, true, _stickSite] call ACME_fnc_ivMinigameInsertStart;
             };
         };
     };

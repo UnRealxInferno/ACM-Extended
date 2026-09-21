@@ -30,12 +30,11 @@ private _mark = _marks select _idx;
 _mark params ["_mbp", "_mview", "_mu", "_mv", "_mkind", ["_mtex", ""], ["_mframe", ""], ["_mgauge", 16],
               ["_mmiss", -1], ["_mscale", 1], ["_msite", "middle"]];
 
-// the site becomes a puncture. the catheter is a consumable and does not come back.
-_mark set [4, "removed"];
-_mark set [5, format ["\acm_extended\ui\holes\hole%1_ca.paa", (floor random 8) + 1]];
-_patient setVariable ["ACME_IV_Marks", _marks, true];
-_patient setVariable ["ACME_IV_MarkVer", (_patient getVariable ["ACME_IV_MarkVer", 0]) + 1, true];
-uiNamespace setVariable ["ACME_IV_MarkVerSeen", (_patient getVariable ["ACME_IV_MarkVer", 0])];
+// The site becomes a puncture. Identify the exact hub semantically; a stale local array index can never mutate
+// a different provider's mark after concurrent IV work.
+private _hole = format ["\acm_extended\ui\holes\hole%1_ca.paa", (floor random 8) + 1];
+private _sig = [_mbp, _mview, _mu, _mv, _msite, _mgauge];
+[_patient, "ivMarks", ["remove", [_sig, _hole], [_patient] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
 
 // tell ACM the line is gone. the old Remove IV button only changed the picture, so the casualty kept an access
 // site that no longer existed on the body image and fluids still ran through it.
@@ -67,7 +66,7 @@ private _nativePart = if ((toLowerANSI _mbp) == "ej") then {"head"} else {_mbp};
 private _bpFlagRaw = if (_mbp isEqualType "") then { toLower _mbp } else { toLower (str _mbp) };
 private _bpFlag = _bpFlagRaw;
 if (_bpFlag == "ej") then { _bpFlag = "head"; };
-_patient setVariable [format ["ACME_ivCompromised_%1_%2", _bpFlag, _siteIdx], nil, true];
+[_patient, "ivCompromised", [_bpFlag, _siteIdx, "clear"]] call ACME_fnc_ownerDispatch;
 
 // a bag hung on this limb was running into a line that no longer exists. take it down with the line.
 // ACM clears its own IV_Bags for the site through setIV above, so this is only the physically hung bag, which

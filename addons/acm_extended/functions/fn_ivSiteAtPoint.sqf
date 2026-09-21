@@ -1,45 +1,21 @@
-// This function finds the IV site of a puncture. It uses the puncture point only.
-// Call the function as [_u, _v] call ACME_fnc_ivSiteAtPoint.
-// Call the function as [_u, _v, _view, _siteList] to test a different view.
-// _u and _v are the body fractions of the needle tip at the moment of the stick.
-// These are the same two values that ACME_IV_InsU and ACME_IV_InsV hold.
-// The function returns the site name "upper", "middle" or "lower".
-// The function returns "" if no site is near the point on this view.
+// Resolve the anatomical IV tier nearest a puncture point on the currently displayed patient artwork.
+// [_u,_v] call ACME_fnc_ivSiteAtPoint -> "upper"/"middle"/"lower", or "".
+// Optional arguments are [_u,_v,_view,_siteList,_bodyPart].
 //
-// REASON FOR THIS FUNCTION.
-// The registration read ACME_IV_Site before. That value is the site of the BAND.
-// Each reader in the chain used a different default value for an unset site.
-// There were eight different defaults. Three of them gave "lower".
-// The launcher sets the value 'lower'. A stick in the antecubital fossa kept that value.
-// The mod then recorded a lower cephalic IV.
-// The site of a catheter is a property of the puncture point.
-// Therefore this function measures the site from the puncture point only.
-//
-// The function returns the NEAREST site on the view. It applies no distance limit.
-// A limit refuses a stick, and no code refuses a stick that the medic wants.
-//
-// The anchors come from ACME_IV_SiteList.
-// fn_ivMinigameInit builds that list from fn_ivSiteData.
-// Therefore this function holds no coordinates. The function cannot disagree with the art.
-// A site list row is [site, view, bandU, bandV, veinU, veinV, label, bandTex].
-//
-// The view filter is necessary.
-// An arm shows the lower and middle sites on the front view.
-// An arm shows the upper site on the rear view.
-// A leg shows the lower and upper sites on the front view.
-// A leg shows the middle site on the rear view.
-// A point resolves only to a site on the view that the medic sees.
-//
-// The function measures distance in raw body fractions. It applies no aspect correction.
-// The sites are in a line along the v axis.
-// The ceiling below uses the same units as fn_ivSiteData.
-params ["_u", "_v", ["_view", ""], ["_siteList", []]];
-if (!(_u isEqualType 0) || {!(_v isEqualType 0)}) exitWith {""};
-if (!finite _u || {!finite _v}) exitWith {""};
+// The puncture coordinates, not the BOA site, own the IV location. Before selecting the nearest catalog vein,
+// this function now checks the alpha-derived silhouette for the active arm/leg/EJ artwork. Transparent canvas is
+// not patient skin: a catheter pushed there must not start an insertion or silently map to the nearest site.
+params ["_u", "_v", ["_view", ""], ["_siteList", []], ["_bodyPart", ""]];
+if (!(_u isEqualType 0) || {!(_v isEqualType 0)} || {!finite _u} || {!finite _v}) exitWith {""};
+if (_view isEqualTo "") then {_view = uiNamespace getVariable ["ACME_IV_View", ""];};
+if (_siteList isEqualTo []) then {_siteList = uiNamespace getVariable ["ACME_IV_SiteList", []];};
+if (_bodyPart isEqualTo "") then {_bodyPart = uiNamespace getVariable ["ACME_IV_BodyPart", ""];};
+if (_view isEqualTo "" || {_siteList isEqualTo []} || {_bodyPart isEqualTo ""}) exitWith {""};
 
-if (_view isEqualTo "") then { _view = uiNamespace getVariable ["ACME_IV_View", ""]; };
-if (_siteList isEqualTo []) then { _siteList = uiNamespace getVariable ["ACME_IV_SiteList", []]; };
-if (_view isEqualTo "" || {_siteList isEqualTo []}) exitWith {""};
+private _bounds = [_bodyPart, _view, _v] call ACME_fnc_ivLimbBounds;
+if (count _bounds != 2) exitWith {""};
+_bounds params ["_leftU", "_rightU"];
+if (_u < _leftU || {_u > _rightU}) exitWith {""};
 
 private _best = "";
 private _bestD = 1e9;
@@ -50,14 +26,8 @@ private _bestD = 1e9;
             private _du = _u - _vU;
             private _dv = _v - _vV;
             private _d = sqrt ((_du * _du) + (_dv * _dv));
-            if (_d < _bestD) then {
-                _bestD = _d;
-                _best = toLower _sName;
-            };
+            if (_d < _bestD) then {_bestD = _d; _best = toLower _sName;};
         };
     };
 } forEach _siteList;
-
-// Return the nearest site. Do not test a distance limit.
-// A limit here stops a stick, and the medic decides where to put a catheter.
 _best

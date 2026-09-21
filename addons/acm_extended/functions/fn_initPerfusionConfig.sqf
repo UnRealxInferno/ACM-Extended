@@ -51,8 +51,8 @@ ACME_permHypo_multMin    = 0.55;  // floor: even a nearly pulseless casualty sti
 ACME_permHypo_multMax    = 2.0;  // ceiling: the linear model stops being honest past this
 ACME_clotPop_mapCeiling  = 100;  // MAP at which the clot-pop pressure factor is fully engaged
 ACME_clotPop_mapMaxFactor = 1.8;  // and how much it multiplies the pop chance by there
-// the TBI exception. a head-injured casualty wants a higher pressure, so these two systems pull opposite ways
-// and a casualty with both injuries forces a real decision. a MAP of 85 is roughly 110 systolic.
+// B119 uses structural-grade MAP floors from fn_initTbiProgressionConfig. Keep the historical universal
+// MAP-85 value defined for mission/config compatibility, but it is no longer used as the active injury gate.
 ACME_tbi_hypotensionMAPFloor   = 85;
 ACME_tbi_hypotensionSevereMAP  = 60;
 ACME_tbi_severityPerSecHypotension = 0.012;

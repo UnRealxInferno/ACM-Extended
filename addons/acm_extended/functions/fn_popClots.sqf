@@ -1,48 +1,60 @@
-// reopen bandaged, or clotted, wounds on a patient. a fresh clot tears loose and that wound bleeds again.
-// it mirrors the own bandage-reopening surgery of ACE: move a fraction of the amount of each bandaged wound back
-// onto the matching open wound, index 1, then recompute the blood loss.
-// it runs where the unit is local, because the cold-chain tick targetevents this to the owner of the patient, so the
-// medical sim picks the new bleeding up authoritatively.
-params ["_unit", ["_fraction", 0.5]];
-if (isNull _unit || {!alive _unit}) exitWith {};
+// B120: one coagulopathy event partially reopens one previously controlled wound.  Earlier code reopened every
+// bandaged wound on the casualty at once, which made a single 8-second roll look like all dressings failed.
+params ["_unit", ["_fraction", 0.20]];
+if (isNull _unit || {!alive _unit} || {!local _unit}) exitWith {0};
+_fraction = _fraction max 0 min 0.75;
 
-private _open     = _unit getVariable ["ace_medical_openWounds", createHashMap];
+private _open = _unit getVariable ["ace_medical_openWounds", createHashMap];
 private _bandaged = _unit getVariable ["ace_medical_bandagedWounds", createHashMap];
-private _popped = 0;
-
+private _candidates = [];
 {
-    private _part    = _x;
-    private _bWounds = _bandaged get _part;
-    private _oWounds = _open getOrDefault [_part, []];
-    private _touched = false;
+    private _part = _x;
+    private _rows = _bandaged getOrDefault [_part, []];
     {
-        _x params ["_bid", "_bamt"];
-        if (_bamt > 0.01) then {
-            private _move = _bamt * _fraction;
-            // add the freed amount back onto the matching open wound, by class, or rebuild one if it is gone.
-            private _oi = _oWounds findIf { (_x select 0) == _bid };
-            if (_oi > -1) then {
-                private _ow = _oWounds select _oi;
-                _ow set [1, (_ow select 1) + _move];
-            } else {
-                private _new = +_x;
-                _new set [1, _move];
-                _oWounds pushBack _new;
-            };
-            _x set [1, _bamt - _move];
-            _popped = _popped + 1;
-            _touched = true;
+        private _amt = _x param [1, 0];
+        if (_amt > 0.01) then {
+            // Larger controlled wounds are more likely to be the one whose clot fails.
+            _candidates pushBack [_part, _forEachIndex, (_amt max 0.01)];
         };
-    } forEach _bWounds;
-    if (_touched) then { _open set [_part, _oWounds]; };
+    } forEach _rows;
 } forEach (keys _bandaged);
+if (_candidates isEqualTo []) exitWith {0};
 
-if (_popped > 0) then {
-    [_unit, [["openWounds", _open, true]]] call ACM_core_fnc_setAceMedicalState;
-    [_unit, [["bandagedWounds", _bandaged, true]]] call ACM_core_fnc_setAceMedicalState;
-    [_unit] call ace_medical_status_fnc_updateWoundBloodLoss;
-    if (_unit isEqualTo ACE_player) then {
-        ["A clot tore loose - bleeding has restarted.", 2] call ace_common_fnc_displayTextStructured;
-    };
+private _total = 0;
+{_total = _total + (_x select 2);} forEach _candidates;
+private _roll = random (_total max 0.001);
+private _pick = _candidates select 0;
+{
+    _roll = _roll - (_x select 2);
+    if (_roll <= 0) exitWith {_pick = _x;};
+} forEach _candidates;
+_pick params ["_part", "_idx"];
+private _bWounds = _bandaged getOrDefault [_part, []];
+if (_idx < 0 || {_idx >= count _bWounds}) exitWith {0};
+private _bw = _bWounds select _idx;
+private _bid = _bw param [0, -1];
+private _bamt = _bw param [1, 0];
+if (_bamt <= 0.01) exitWith {0};
+private _move = (_bamt * _fraction) max 0.01 min _bamt;
+private _oWounds = _open getOrDefault [_part, []];
+private _oi = _oWounds findIf {(_x select 0) == _bid};
+if (_oi > -1) then {
+    private _ow = _oWounds select _oi;
+    _ow set [1, (_ow select 1) + _move];
+    _oWounds set [_oi, _ow];
+} else {
+    private _new = +_bw;
+    _new set [1, _move];
+    _oWounds pushBack _new;
 };
-_popped
+_bw set [1, (_bamt - _move) max 0];
+_bWounds set [_idx, _bw];
+_bandaged set [_part, _bWounds];
+_open set [_part, _oWounds];
+[_unit, [["openWounds", _open, true]]] call ACM_core_fnc_setAceMedicalState;
+[_unit, [["bandagedWounds", _bandaged, true]]] call ACM_core_fnc_setAceMedicalState;
+[_unit] call ace_medical_status_fnc_updateWoundBloodLoss;
+if (_unit isEqualTo ACE_player) then {
+    ["A clot partially reopened one wound.", 2] call ace_common_fnc_displayTextStructured;
+};
+1

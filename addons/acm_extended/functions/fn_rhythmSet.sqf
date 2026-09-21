@@ -1,4 +1,4 @@
-/* NA3. Native-compatible proxies, with one pulseless torsades contract for all induction paths. */
+/* Authoritative custom-rhythm writer. Perfusing torsades remains custom until native physiology actually arrests the patient. */
 params ["_unit", ["_code", 0], ["_epoch", -1]];
 if (isNull _unit || {!(_code isEqualType 0)}) exitWith {};
 if (_epoch < 0) then {_epoch = [_unit] call ACME_fnc_clinicalEpoch;};
@@ -12,16 +12,30 @@ private _forceMonitorRefresh = {
     [_u, [["aedPadsLastSync", -1]], true] call ACM_circulation_fnc_setRuntimeState;
     [_u, [["aedEkgRhythm", -99]], true] call ACM_circulation_fnc_setRuntimeState;
 };
+if (_code in [100,101,102,103,104] && {(_unit getVariable ["ACME_rhythm_targetHR",0]) <= 0}) then {
+    private _fallbackHR = switch (_code) do {
+        case 100: {missionNamespace getVariable ["ACME_rhythm_afibHR",165]};
+        case 101: {missionNamespace getVariable ["ACME_rhythm_atHR",185]};
+        case 102: {missionNamespace getVariable ["ACME_rhythm_torsadesHR",210]};
+        case 103: {missionNamespace getVariable ["ACME_rhythm_afibControlledHR",80]};
+        case 104: {missionNamespace getVariable ["ACME_rhythm_svtHR",190]};
+        default {80};
+    };
+    [_unit,"ACME_rhythm_targetHR",_fallbackHR] call ACME_fnc_setVarNet;
+};
 if (_code == 102) exitWith {
-    if (!alive _unit) exitWith {};
+    if (!alive _unit || {_unit getVariable ["ace_medical_inCardiacArrest", false]}) exitWith {};
     if ((_unit getVariable ["ACME_rhythm_active", 0]) != 102) then {
         [_unit, "ACME_rhythm_torsadesStart", CBA_missionTime] call ACME_fnc_setVarNet;
+        [_unit, "ACME_rhythm_torsadesNonPerfusing", false] call ACME_fnc_setVarNet;
+        [_unit, "ACME_rhythm_torsadesPerfusion", 1] call ACME_fnc_setVarNet;
+        _unit setVariable ["ACME_rhythm_torsadesArrestRequestAt", -1, false];
     };
+    [_unit, "", -1, true, true] call ACME_fnc_rhythmNativeHoldCommit;
+    [_unit, 0, true, true, false] call ACME_fnc_rhythmNativeHighHRFloorCommit;
     [_unit, 102, true, true] call ACME_fnc_rhythmActiveCommit;
+    [_unit, [["cardiacRhythmState", 0]], true] call ACM_circulation_fnc_setRuntimeState;
     [_unit] call _forceMonitorRefresh;
-    [_unit, 3, _epoch] call ACME_fnc_arrestLocal;
-    // Native reversible causes may legitimately select a different arrest rhythm.
-    if (([_unit] call ACME_fnc_rhythmNative) != 3) then {[_unit] call ACME_fnc_rhythmRelease;};
 };
 if (_code in [100,101,103,104]) exitWith {
     if (!alive _unit || {_unit getVariable ["ace_medical_inCardiacArrest", false]}) exitWith {};
@@ -47,12 +61,18 @@ if (_code in [100,101,103,104]) exitWith {
         ["ACM_circulation_CardiacArrest_TargetRhythm", 0]
     ];
     [_unit, "ACME_rhythm_torsadesStart", nil] call ACME_fnc_setVarNet;
+    [_unit, "ACME_rhythm_torsadesNonPerfusing", nil] call ACME_fnc_setVarNet;
+    [_unit, "ACME_rhythm_torsadesPerfusion", nil] call ACME_fnc_setVarNet;
+    _unit setVariable ["ACME_rhythm_torsadesArrestRequestAt", nil, false];
     [_unit, _code, true, true] call ACME_fnc_rhythmActiveCommit;
     [_unit, [["cardiacRhythmState", 0]], true] call ACM_circulation_fnc_setRuntimeState;
     [_unit] call _forceMonitorRefresh;
 };
 if (_code >= -1 && {_code <= 5}) then {
     [_unit, "ACME_rhythm_torsadesStart", nil] call ACME_fnc_setVarNet;
+    [_unit, "ACME_rhythm_torsadesNonPerfusing", nil] call ACME_fnc_setVarNet;
+    [_unit, "ACME_rhythm_torsadesPerfusion", nil] call ACME_fnc_setVarNet;
+    _unit setVariable ["ACME_rhythm_torsadesArrestRequestAt", nil, false];
     [_unit] call ACME_fnc_rhythmRelease;
     if (_code == 5) then {
         private _brady = (random 1) < (missionNamespace getVariable ["ACME_peaBradyChance", 0]);

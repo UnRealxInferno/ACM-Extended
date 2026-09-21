@@ -21,7 +21,6 @@ ACM_circulation_SyringeDraw_DrawnAmount = 0;
 ACM_circulation_SyringeDraw_Moving = false;
 
 if (isNull _dlg) exitWith {};
-
 // restore the own plunger move handler of ACM, onmousebuttonup into syringe_draw_move, and clear the tooltip.
 private _plunger = _dlg displayCtrl 84009;
 if (!isNull _plunger) then {

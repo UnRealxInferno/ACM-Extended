@@ -1,6 +1,9 @@
 /* Authoritative persistent AAJT-S placement state. Network writes occur only when placement changes. */
 params ["_patient", "_op", ["_data", []]];
 if (isNull _patient) exitWith {};
+if (!local _patient) exitWith {
+    [_patient, "aajtState", [_patient, _op, _data]] call ACME_fnc_ownerDispatch;
+};
 private _key = toLowerANSI _op;
 switch (_key) do {
     case "inguinal": {
@@ -33,4 +36,14 @@ switch (_key) do {
         private _legs = _data select {_x in ["leftleg", "rightleg"]};
         _patient setVariable ["ACME_AAJT_legs", _legs arrayIntersect _legs, true];
     };
+};
+
+// Persistent pain/posture workers belong to the casualty owner. Starting them here also covers remote providers
+// without relying on the provider client to start owner-local PFHs after replication catches up.
+if (_patient getVariable ["ACME_AAJT_zone3", false]) then {[_patient] call ACME_fnc_aajtDownedTick;};
+if ((_patient getVariable ["ACME_AAJT_zone3", false])
+    || {_patient getVariable ["ACME_AAJT_inguinal", false]}
+    || {_patient getVariable ["ACME_AAJT_axillaleft", false]}
+    || {_patient getVariable ["ACME_AAJT_axillaright", false]}) then {
+    [_patient] call ACME_fnc_aajtPainTick;
 };

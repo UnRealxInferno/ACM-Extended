@@ -1,0 +1,356 @@
+/* Owner-local repair of transient multiplayer state.
+ *
+ * Durable clinical state is never guessed or erased here. This only repairs
+ * provider reservations, temporary treatment state, malformed flow caches,
+ * ghost IV-band flags, and expired animation/procedure leases.
+ */
+params [["_patient", objNull, [objNull]]];
+if (isNull _patient || {!local _patient}) exitWith {0};
+
+private _now = CBA_missionTime;
+private _netNow = serverTime;
+private _repairs = [];
+
+private _mark = {
+    params [["_name", "", [""]]];
+    if (_name != "") then {_repairs pushBackUnique _name;};
+};
+
+private _debouncedInvalid = {
+    params [["_key", "", [""]], ["_invalid", false, [false]], ["_grace", 2, [0]]];
+    if (_key == "") exitWith {false};
+    if (!_invalid) exitWith {
+        _patient setVariable [_key, nil, false];
+        false
+    };
+    private _at = _patient getVariable [_key, -1];
+    if !(_at isEqualType 0 && {finite _at}) then {_at = -1;};
+    if (_at < 0) exitWith {
+        _patient setVariable [_key, _now, false];
+        false
+    };
+    (_now - _at) >= (_grace max 0)
+};
+
+// BVM reservation.
+if (!isNil "ACM_breathing_fnc_bvmSessionValid" && {!isNil "ACM_breathing_fnc_bvmRelease"}) then {
+    private _medic = _patient getVariable ["ACM_breathing_BVM_Medic", objNull];
+    private _provider = _patient getVariable ["ACM_breathing_BVM_provider", objNull];
+    private _session = _patient getVariable ["ACM_breathing_BVM_session", []];
+    private _invalid = if (!isNull _medic) then {
+        !([_medic, _patient] call ACM_breathing_fnc_bvmSessionValid)
+    } else {
+        !isNull _provider || {!(_session isEqualTo [])}
+    };
+
+    if (["ACME_reconcileInvalidBVMAt", _invalid, 3] call _debouncedInvalid) then {
+        private _released = false;
+        if (!isNull _medic && {_session isEqualType []} && {count _session == 2}
+            && {(_session select 0) isEqualTo _medic}) then {
+            _released = [_medic, _patient, _session select 1] call ACM_breathing_fnc_bvmRelease;
+        };
+        if (!_released) then {
+            _patient setVariable ["ACM_breathing_BVM_provider", objNull, true];
+            _patient setVariable ["ACM_breathing_BVM_Medic", objNull, true];
+            _patient setVariable ["ACM_breathing_BVM_ConnectedOxygen", false, true];
+            _patient setVariable ["ACM_breathing_BVM_session", [], true];
+            if (!isNull _medic && {(_medic getVariable ["ACM_breathing_BVM_patient", objNull]) isEqualTo _patient}) then {
+                _medic setVariable ["ACM_breathing_isUsingBVM", false, true];
+                _medic setVariable ["ACM_breathing_BVM_patient", objNull, true];
+                _medic setVariable ["ACM_breathing_BVM_epoch", -1, true];
+            };
+        };
+        "BVM reservation" call _mark;
+    };
+};
+
+// CPR reservation.
+if (!isNil "ACM_circulation_fnc_cprSessionValid" && {!isNil "ACM_circulation_fnc_cprRelease"}) then {
+    private _medic = _patient getVariable ["ACM_circulation_CPR_Medic", objNull];
+    private _provider = _patient getVariable ["ace_medical_CPR_provider", objNull];
+    private _session = _patient getVariable ["ACM_circulation_CPR_session", []];
+    private _invalid = if (!isNull _medic) then {
+        !([_medic, _patient] call ACM_circulation_fnc_cprSessionValid)
+    } else {
+        !isNull _provider || {!(_session isEqualTo [])}
+    };
+
+    if (["ACME_reconcileInvalidCPRAt", _invalid, 3] call _debouncedInvalid) then {
+        private _released = false;
+        if (!isNull _medic && {_session isEqualType []} && {count _session == 2}
+            && {(_session select 0) isEqualTo _medic}) then {
+            _released = [_medic, _patient, _session select 1] call ACM_circulation_fnc_cprRelease;
+        };
+        if (!_released) then {
+            _patient setVariable ["ace_medical_CPR_provider", objNull, true];
+            _patient setVariable ["ACM_circulation_CPR_Medic", objNull, true];
+            _patient setVariable ["ACM_circulation_CPR_session", [], true];
+        };
+        "CPR reservation" call _mark;
+    };
+};
+
+// Hang Bag claim.
+private _hangMedic = _patient getVariable ["ACME_hang_Medic", objNull];
+private _hangInvalid = !isNull _hangMedic && {
+    !alive _hangMedic
+    || {!(_hangMedic getVariable ["ACME_hang_Active", false])}
+    || {!((_hangMedic getVariable ["ACME_hang_Patient", objNull]) isEqualTo _patient)}
+    || {_hangMedic getVariable ["ACE_isUnconscious", false]}
+};
+if (["ACME_reconcileInvalidHangAt", _hangInvalid, 2] call _debouncedInvalid) then {
+    if ((_patient getVariable ["ACME_hang_Medic", objNull]) isEqualTo _hangMedic) then {
+        _patient setVariable ["ACME_hang_Medic", objNull, true];
+        _patient setVariable ["ACME_hang_Episode", -1, true];
+        _patient setVariable ["ACME_hang_flowMult", 1, true];
+        "Hang Bag claim" call _mark;
+    };
+};
+
+// Direct Pressure markers.
+{
+    private _part = _x;
+    private _key = format ["ACME_DP_press_%1", _part];
+    private _medic = _patient getVariable [_key, objNull];
+    private _invalid = !isNull _medic && {
+        !alive _medic
+        || {!(_medic getVariable ["ACME_DP_Active", false])}
+        || {(_medic getVariable ["ACME_DP_Paused", false])}
+        || {!((_medic getVariable ["ACME_DP_Patient", objNull]) isEqualTo _patient)}
+        || {toLowerANSI (_medic getVariable ["ACME_DP_Part", ""]) != _part}
+    };
+    if ([format ["ACME_reconcileInvalidDP_%1", _part], _invalid, 2] call _debouncedInvalid) then {
+        if ((_patient getVariable [_key, objNull]) isEqualTo _medic) then {
+            _patient setVariable [_key, objNull, true];
+            if ((_patient getVariable ["ACME_DP_TorsoMedic", objNull]) isEqualTo _medic) then {
+                _patient setVariable ["ACME_DP_TorsoMedic", objNull, true];
+            };
+            if ((_patient getVariable ["ACME_DP_LimbMedic", objNull]) isEqualTo _medic) then {
+                _patient setVariable ["ACME_DP_LimbMedic", objNull, true];
+            };
+            format ["Direct Pressure %1", _part] call _mark;
+        };
+    };
+} forEach ["head", "body", "leftarm", "rightarm", "leftleg", "rightleg"];
+
+// Progressive bandage records.
+private _progress = _patient getVariable ["ACM_damage_BandageProgress", createHashMap];
+if !(_progress isEqualType createHashMap) then {
+    _progress = createHashMap;
+    _patient setVariable ["ACM_damage_BandageProgress", _progress, true];
+    "Bandage progress shape" call _mark;
+};
+private _progressChanged = false;
+{
+    private _row = _progress get _x;
+    private _expired = true;
+    if (_row isEqualType [] && {count _row >= 5}) then {
+        private _started = _row param [2, -1];
+        private _duration = _row param [3, 0];
+        _expired = !(_started isEqualType 0 && {finite _started})
+            || {!(_duration isEqualType 0 && {finite _duration})}
+            || {_started > _netNow + 5}
+            || {_netNow - _started > ((_duration max 0) + 3)};
+    };
+    if (_expired) then {
+        _progress deleteAt _x;
+        _progressChanged = true;
+    };
+} forEach +(keys _progress);
+if (_progressChanged) then {
+    _patient setVariable ["ACM_damage_BandageProgress", _progress, true];
+    if (!isNil "ace_medical_status_fnc_updateWoundBloodLoss") then {
+        [_patient] call ace_medical_status_fnc_updateWoundBloodLoss;
+    };
+    "Expired bandage progress" call _mark;
+};
+
+// Junctional packing must agree with an active packing treatment.
+{
+    private _part = _x;
+    private _state = toLowerANSI (_patient getVariable [format ["ACME_Junc_%1", _part], ""]);
+    private _packing = _patient getVariable [format ["ACME_Junc_Packing_%1", _part], false];
+    private _hasLivePack = false;
+    if (_state == "open") then {
+        {
+            _y params [["_bp", ""], "", ["_started", -1], ["_duration", 0], ["_class", ""]];
+            if (_class == "ACME_PackJunctional" && {_bp == _part}
+                && {_started isEqualType 0} && {finite _started}
+                && {_started <= _netNow + 2}
+                && {_netNow - _started <= ((_duration max 0) + 2)}) exitWith {
+                _hasLivePack = true;
+            };
+        } forEach _progress;
+    };
+    private _invalid = _packing && {_state != "open" || {!_hasLivePack}};
+    if ([format ["ACME_reconcileInvalidPacking_%1", _part], _invalid, 2] call _debouncedInvalid) then {
+        _patient setVariable [format ["ACME_Junc_Packing_%1", _part], false, true];
+        _patient setVariable [format ["ACME_Junc_PackStamp_%1", _part], -1, false];
+        format ["Junctional packing %1", _part] call _mark;
+    };
+} forEach ["leftarm", "rightarm", "leftleg", "rightleg"];
+
+// AAJT-S application marker only. Persistent AAJT-S placement is untouched.
+private _aajtApplying = _patient getVariable ["ACME_Junc_AAJTApplying", []];
+private _badAAJTApplying = false;
+if (_aajtApplying isEqualType []) then {
+    if !(_aajtApplying isEqualTo []) then {
+        private _stamp = _aajtApplying param [0, -1];
+        private _part = toLowerANSI (_aajtApplying param [1, ""]);
+        _badAAJTApplying = !(_stamp isEqualType 0 && {finite _stamp})
+            || {!(_part in ["body","leftarm","rightarm","leftleg","rightleg"])}
+            || {_stamp > _netNow + 5}
+            || {_netNow - _stamp >= 25};
+    };
+} else {
+    _badAAJTApplying = true;
+};
+if (_badAAJTApplying) then {
+    _patient setVariable ["ACME_Junc_AAJTApplying", [], true];
+    "AAJT-S applying marker" call _mark;
+};
+
+// IV_Bags_Active must follow the real authoritative bag map.
+private _bags = _patient getVariable ["ACM_circulation_IV_Bags", createHashMap];
+private _hasBags = (_bags isEqualType createHashMap) && {count _bags > 0};
+private _bagsActive = _patient getVariable ["ACM_circulation_IV_Bags_Active", false];
+if (_bagsActive isNotEqualTo _hasBags) then {
+    _patient setVariable ["ACM_circulation_IV_Bags_Active", _hasBags, true];
+    "IV_Bags_Active" call _mark;
+};
+
+// Repair malformed matrices only. Valid zero flow values remain intentional STOP states.
+private _fixIVMatrix = {
+    params ["_name"];
+    private _src = _patient getVariable [_name, []];
+    private _changed = !(_src isEqualType []);
+    if !(_src isEqualType []) then {_src = [];};
+    private _out = [];
+    for "_i" from 0 to 5 do {
+        private _row = _src param [_i, []];
+        if !(_row isEqualType []) then {_row = []; _changed = true;};
+        private _fixed = [];
+        for "_j" from 0 to 2 do {
+            private _v = _row param [_j, 1];
+            if !(_v isEqualType 0 && {finite _v}) then {_v = 1; _changed = true;};
+            _fixed pushBack _v;
+        };
+        if (count _row != 3) then {_changed = true;};
+        _out pushBack _fixed;
+    };
+    if (count _src != 6) then {_changed = true;};
+    if (_changed) then {
+        _patient setVariable [_name, _out, true];
+        format ["%1 shape", _name] call _mark;
+    };
+};
+private _fixIOArray = {
+    params ["_name"];
+    private _src = _patient getVariable [_name, []];
+    private _changed = !(_src isEqualType []);
+    if !(_src isEqualType []) then {_src = [];};
+    private _out = [];
+    for "_i" from 0 to 5 do {
+        private _v = _src param [_i, 1];
+        if !(_v isEqualType 0 && {finite _v}) then {_v = 1; _changed = true;};
+        _out pushBack _v;
+    };
+    if (count _src != 6) then {_changed = true;};
+    if (_changed) then {
+        _patient setVariable [_name, _out, true];
+        format ["%1 shape", _name] call _mark;
+    };
+};
+
+"ACM_circulation_FluidBagsFlow_IV" call _fixIVMatrix;
+"ACM_circulation_ActiveFluidBags_IV" call _fixIVMatrix;
+"ACM_circulation_FluidBagsFlow_IO" call _fixIOArray;
+"ACM_circulation_ActiveFluidBags_IO" call _fixIOArray;
+
+if (_hasBags && {!isNil "ACM_circulation_fnc_updateActiveFluidBags"}) then {
+    {
+        if (_y isEqualType [] && {count _y > 0}) then {
+            [_patient, _x] call ACM_circulation_fnc_updateActiveFluidBags;
+        };
+    } forEach _bags;
+};
+
+// Repair only ghost IV constriction-band state. A coherent deliberate band remains applied.
+private _siteRows = _patient getVariable ["ACME_IV_SiteState", []];
+if !(_siteRows isEqualType []) then {_siteRows = [];};
+private _parts = ["head","body","leftarm","rightarm","leftleg","rightleg"];
+for "_i" from 2 to 5 do {
+    private _flag = _patient getVariable [format ["ACME_IV_BandOnPart_%1", _i], false];
+    private _state = _patient getVariable [format ["ACME_IV_BandState_%1", _i], []];
+    private _stateOn = (_state isEqualType []) && {count _state == 4} && {_state param [1, false]};
+    private _view = if (_stateOn) then {_state param [2, ""]} else {""};
+    private _band = if (_stateOn) then {_state param [3, []]} else {[]};
+    private _stateValid = _stateOn && {_view != ""} && {_band isEqualType []}
+        && {count _band == 6} && {_band param [0, false]};
+
+    private _rowValid = false;
+    if (_stateValid) then {
+        private _key = format ["%1|%2", _parts select _i, _view];
+        private _ri = _siteRows findIf {
+            private _row = _x;
+            if !(_row isEqualType [] && {count _row == 4} && {(_row param [0, ""]) == _key}) exitWith {false};
+            private _rb = _row param [1, []];
+            (_rb isEqualType []) && {count _rb == 6} && {_rb param [0, false]}
+        };
+        _rowValid = _ri >= 0;
+    };
+
+    private _ghost = (_flag && {!(_stateValid && {_rowValid})}) || {!_flag && {_stateOn}};
+    if ([format ["ACME_reconcileGhostBand_%1", _i], _ghost, 2] call _debouncedInvalid) then {
+        if (!isNil "ACME_fnc_ivStateLocal") then {
+            [_patient, "band", [_i, false, _view, _band], [_patient] call ACME_fnc_clinicalEpoch]
+                call ACME_fnc_ivStateLocal;
+        } else {
+            _patient setVariable [format ["ACME_IV_BandOnPart_%1", _i], false, true];
+            _patient setVariable [format ["ACME_IV_BandState_%1", _i], [], true];
+        };
+        format ["Ghost IV band %1", _i] call _mark;
+    };
+};
+
+// Surgical-airway "in progress" is transient; completed airway state is untouched.
+private _surgBusy = _patient getVariable ["ACM_airway_SurgicalAirway_InProgress", false];
+private _surgSession = _patient getVariable ["ACM_airway_SurgicalAirway_InProgress_Session", []];
+private _surgInvalid = false;
+if (_surgBusy) then {
+    if !(_surgSession isEqualType [] && {count _surgSession == 2}) then {
+        _surgInvalid = true;
+    } else {
+        private _medic = _surgSession select 0;
+        _surgInvalid = isNull _medic || {!alive _medic}
+            || {_medic getVariable ["ACE_isUnconscious", false]}
+            || {!((_medic getVariable ["ACM_core_ContinuousAction_Session", []]) isEqualTo _surgSession)};
+    };
+};
+if (["ACME_reconcileInvalidSurgicalAirwayAt", _surgInvalid, 3] call _debouncedInvalid) then {
+    _patient setVariable ["ACM_airway_SurgicalAirway_InProgress", false, true];
+    _patient setVariable ["ACM_airway_SurgicalAirway_InProgress_Session", [], true];
+    "Surgical airway in-progress" call _mark;
+};
+if (!_surgBusy && {!(_surgSession isEqualTo [])}) then {
+    _patient setVariable ["ACM_airway_SurgicalAirway_InProgress_Session", [], true];
+};
+
+// Expired patient animation lease.
+private _animLock = _patient getVariable ["ACME_patientAnimLock", []];
+if ((_animLock isEqualType []) && {count _animLock >= 5}) then {
+    private _expires = _animLock param [4, -1];
+    if !(_expires isEqualType 0 && {finite _expires} && {_expires > _netNow}) then {
+        _patient setVariable ["ACME_patientAnimLock", [], true];
+        "Patient animation lease" call _mark;
+    };
+};
+
+if !(_repairs isEqualTo []) then {
+    _patient setVariable ["ACME_transientRepairCount",
+        (_patient getVariable ["ACME_transientRepairCount", 0]) + count _repairs, false];
+    _patient setVariable ["ACME_transientRepairLast", [_netNow, +_repairs], false];
+    diag_log format ["[ACME STATE RECONCILE] %1 repaired: %2", netId _patient, _repairs joinString " | "];
+};
+
+count _repairs

@@ -28,7 +28,7 @@ if (_stethoscope) then {
     GVAR(MeasureBP_HeartBeatSoundID) = -1;
     GVAR(MeasureBP_NextHeartBeat) = -1;
     GVAR(MeasureBP_NextGaugeUpdate) = -1;
-    
+
     GVAR(MeasureBP_Gauge_Target) = 0;
     GVAR(MeasureBP_Gauge) = 0;
     GVAR(MeasureBP_Gauge_DialTarget) = 0;
@@ -36,7 +36,7 @@ if (_stethoscope) then {
 
     createDialog QGVAR(MeasureBP_Dialog);
     uiNamespace setVariable [QGVAR(MeasureBP_DLG),(findDisplay IDC_MEASUREBP)];
-    
+
     ACEGVAR(hearing,volumeAttenuation) = 0.2;
     [ACELLSTRING(Volume,Lowered), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
 
@@ -261,12 +261,12 @@ if (_stethoscope) then {
         private _delay = 60 / _HR;
 
         GVAR(MeasureBP_NextHeartBeat) = (CBA_missionTime + _delay);
-        
+
         if (GVAR(MeasureBP_Gauge) <= _BPSystolic) then {
             _ctrlHeart ctrlShow true;
 
             private _pressureEffect = linearConversion [_BPSystolic, (_BPSystolic - 10), GVAR(MeasureBP_Gauge), 0.01, 1, true];
-            
+
             private _fullStrength = (linearConversion [80.1, 140, _BPSystolic, 0.8, 3, true]) * _pressureEffect;
             private _releaseStrength = (linearConversion [80.1, 140, _BPSystolic, 0.5, 2, true]) * _pressureEffect;
 

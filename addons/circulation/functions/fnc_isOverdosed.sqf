@@ -43,7 +43,7 @@ if (_lastHeartRate > ACM_TARGETVITALS_MAXHR(_patient)) then {
 
 {
     private _bodyConcentration = [_patient, _x, false] call ACEFUNC(medical_status,getMedicationCount);
-    
+
     if (_bodyConcentration == 0) then {
         continue;
     };

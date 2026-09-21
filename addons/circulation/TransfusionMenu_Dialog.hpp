@@ -11,10 +11,10 @@ class GVAR(TransfusionMenu_Dialog) {
     class ControlsBackground {
         class MenuBackground: RscText {
             idc = -1;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 4));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 4));
-            w = QUOTE(ACM_UI_CANVAS_W / 2);
-            h = QUOTE(safeZoneH / 2);
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W * 0.35));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.08));
+            w = QUOTE(ACM_UI_CANVAS_W * 0.70);
+            h = QUOTE(safeZoneH * 0.84);
             colorBackground[] = {0,0,0,0.7};
         };
         class PatientName: RscText {
@@ -22,7 +22,7 @@ class GVAR(TransfusionMenu_Dialog) {
             style = ST_CENTER;
             font = "RobotoCondensed";
             x = QUOTE(ACM_UI_CANVAS_X);
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 4.1));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.095));
             w = QUOTE(ACM_UI_CANVAS_W);
             h = QUOTE(safeZoneH / 20);
             colorText[] = {1,1,1,1};
@@ -35,24 +35,24 @@ class GVAR(TransfusionMenu_Dialog) {
         };
         class SelectedLimbText: PatientName {
             idc = IDC_TRANSFUSIONMENU_SELECTIONTEXT;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 4.2));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 4.2));
-            w = QUOTE(ACM_UI_CANVAS_W / 10);
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 3.28));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.155));
+            w = QUOTE(ACM_UI_CANVAS_W / 5.9);
             h = QUOTE(safeZoneH / 25);
             text = "";
             sizeEx = QUOTE(GUI_GRID_H * 1.1 * NORMALIZE_SIZEEX);
         };
         class SelectedInventoryText: SelectedLimbText {
             idc = IDC_TRANSFUSIONMENU_SELECTION_INV_TEXT;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 7.2));
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 7.75));
             text = __EVAL(call compile QUOTE(format [ARR_2(C_LLSTRING(Common_InventoryTarget),C_LLSTRING(Common_Self))]));
         };
         class BodyBackground: RscPictureKeepAspect {
             idc = -1;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 8));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 4.5));
-            w = QUOTE(ACM_UI_CANVAS_W / 4);
-            h = QUOTE(safeZoneH / 2);
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 6.8));
+            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 3.5));
+            w = QUOTE(ACM_UI_CANVAS_W / 3.4);
+            h = QUOTE(safeZoneH / 1.75);
             type = 0;
             size = 0;
             text = QPATHTOEF(gui,ui\body_background.paa);
@@ -142,7 +142,8 @@ class GVAR(TransfusionMenu_Dialog) {
             font = "RobotoCondensed";
             sizeEx = "0";
             tooltip = ACECSTRING(medical_gui,Torso);
-            action = QUOTE([ARR_2('body',0)] call FUNC(TransfusionMenu_SelectBodyPart));
+            enable = 0;
+            action = "";
         };
         /*class BodyPart_Head: BodyPart_Torso {
             idc = -1;
@@ -159,36 +160,36 @@ class GVAR(TransfusionMenu_Dialog) {
             w = QUOTE(ACM_UI_CANVAS_W / 37);
             h = QUOTE(safeZoneH / 13.9);
             tooltip = __EVAL(call compile BODYPART_PART(RightArm,Upper));
-            action = QUOTE([ARR_2('rightarm',0)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_RightArm_Middle: BodyPart_RightArm_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 29));
             h = QUOTE(safeZoneH / 26);
             tooltip = __EVAL(call compile BODYPART_PART(RightArm,Middle));
-            action = QUOTE([ARR_2('rightarm',1)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_RightArm_Lower: BodyPart_RightArm_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 300));
             h = QUOTE(safeZoneH / 20);
             tooltip = __EVAL(call compile BODYPART_PART(RightArm,Lower));
-            action = QUOTE([ARR_2('rightarm',2)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftArm_Upper: BodyPart_RightArm_Upper {
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 54));
             tooltip = __EVAL(call compile BODYPART_PART(LeftArm,Upper));
-            action = QUOTE([ARR_2('leftarm',0)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftArm_Middle: BodyPart_LeftArm_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 29));
             h = QUOTE(safeZoneH / 26);
             tooltip = __EVAL(call compile BODYPART_PART(LeftArm,Middle));
-            action = QUOTE([ARR_2('leftarm',1)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftArm_Lower: BodyPart_LeftArm_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 300));
             h = QUOTE(safeZoneH / 20);
             tooltip = __EVAL(call compile BODYPART_PART(LeftArm,Lower));
-            action = QUOTE([ARR_2('leftarm',2)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_RightLeg_Upper: BodyPart_Torso {
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 47));
@@ -196,40 +197,40 @@ class GVAR(TransfusionMenu_Dialog) {
             w = QUOTE(ACM_UI_CANVAS_W / 47);
             h = QUOTE(safeZoneH / 16);
             tooltip = __EVAL(call compile BODYPART_PART(RightLeg,Upper));
-            action = QUOTE([ARR_2('rightleg',0)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_RightLeg_Middle: BodyPart_RightLeg_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 11));
             tooltip = __EVAL(call compile BODYPART_PART(RightLeg,Middle));
-            action = QUOTE([ARR_2('rightleg',1)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_RightLeg_Lower: BodyPart_RightLeg_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 6.55));
             tooltip = __EVAL(call compile BODYPART_PART(RightLeg,Lower));
-            action = QUOTE([ARR_2('rightleg',2)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftLeg_Upper: BodyPart_RightLeg_Upper {
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 5000));
             tooltip = __EVAL(call compile BODYPART_PART(LeftLeg,Upper));
-            action = QUOTE([ARR_2('leftleg',0)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftLeg_Middle: BodyPart_LeftLeg_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 11));
             tooltip = __EVAL(call compile BODYPART_PART(LeftLeg,Middle));
-            action = QUOTE([ARR_2('leftleg',1)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class BodyPart_LeftLeg_Lower: BodyPart_LeftLeg_Upper {
             y = QUOTE(safeZoneY + (safeZoneH / 2) + (safeZoneH / 6.55));
             tooltip = __EVAL(call compile BODYPART_PART(LeftLeg,Lower));
-            action = QUOTE([ARR_2('leftleg',2)] call FUNC(TransfusionMenu_SelectBodyPart));
+            action = "";
         };
         class LeftPanelList: RscListBox
         {
             idc = IDC_TRANSFUSIONMENU_LEFTLISTPANEL;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 4.05));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 6));
-            w = QUOTE(ACM_UI_CANVAS_W / 8.5);
-            h = QUOTE(safeZoneH / 2.5);
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 3.28));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.22));
+            w = QUOTE(ACM_UI_CANVAS_W / 5.9);
+            h = QUOTE(safeZoneH * 0.62);
             rowHeight = QUOTE(safeZoneH / 20);
             colorText[] = {1,1,1,1};
             colorSelect[] = {0,0,0,1};
@@ -240,18 +241,18 @@ class GVAR(TransfusionMenu_Dialog) {
             sizeEx = QUOTE(GUI_GRID_H * 0.9 * NORMALIZE_SIZEEX);
             class Items {};
         };
-        class ToggleIV: RscButtonMenu {
+        class SwitchTargetInventory: RscButtonMenu {
             idc = -1;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 6.9));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 4.3));
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 7.8));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.155));
             w = QUOTE(ACM_UI_CANVAS_W / 65);
             h = QUOTE(safeZoneH / 35);
             shadow = 0;
             font = "RobotoCondensed";
             sizeEx = "0";
-            action = QUOTE(call FUNC(TransfusionMenu_ToggleIV));
-            textureNoShortcut = QPATHTOF(ui\transfusionmenu\ivtoggle_ca.paa);
-            tooltip = CSTRING(TransfusionMenu_ToggleIV);
+            action = QUOTE(call FUNC(TransfusionMenu_SwitchTargetInventory));
+            textureNoShortcut = QPATHTOF(ui\transfusionmenu\inventory_select_ca.paa);
+            tooltip = CSTRING(Common_SwitchTargetInventory);
             colorBackground[] = {1,1,1,0};
             colorBackgroundFocused[] = {1,1,1,0};
             period = 0;
@@ -276,9 +277,9 @@ class GVAR(TransfusionMenu_Dialog) {
             colorBorder[] = {0,0,0,0};
             idc = IDC_TRANSFUSIONMENU_BUTTON_STOPIV;
             style = ST_CENTER;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 4.35));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 5.1));
-            w = QUOTE(ACM_UI_CANVAS_W / 12);
+            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 3.28));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.18));
+            w = QUOTE(ACM_UI_CANVAS_W / 5.9);
             h = QUOTE(safeZoneH / 40);
             shadow = 0;
             font = "RobotoCondensed";
@@ -290,7 +291,7 @@ class GVAR(TransfusionMenu_Dialog) {
             text = CSTRING(TransfusionMenu_MoveBag_Display);
             idc = IDC_TRANSFUSIONMENU_BUTTON_MOVEBAG;
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) - (ACM_UI_CANVAS_W / 8));
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 6));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.22));
             w = QUOTE(ACM_UI_CANVAS_W / 22);
             action = QUOTE(call FUNC(TransfusionMenu_MoveBag));
             tooltip = CSTRING(TransfusionMenu_MoveBag_ToolTip);
@@ -298,7 +299,7 @@ class GVAR(TransfusionMenu_Dialog) {
         class RemoveBagButton: MoveBagButton {
             text = CSTRING(TransfusionMenu_RemoveBag_Display);
             idc = IDC_TRANSFUSIONMENU_BUTTON_REMOVEBAG;
-            y = QUOTE(safeZoneY + (safeZoneH / 2) - (safeZoneH / 7.5));
+            y = QUOTE(safeZoneY + (safeZoneH * 0.255));
             action = QUOTE(call FUNC(TransfusionMenu_RemoveBag));
             tooltip = CSTRING(TransfusionMenu_RemoveBag_ToolTip);
         };
@@ -315,16 +316,9 @@ class GVAR(TransfusionMenu_Dialog) {
             idc = IDC_TRANSFUSIONMENU_RIGHTLISTPANEL;
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 7.75));
         };
-        class SwitchTargetInventory: ToggleIV {
-            idc = -1;
-            x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 7.8));
-            action = QUOTE(call FUNC(TransfusionMenu_SwitchTargetInventory));
-            textureNoShortcut = QPATHTOF(ui\transfusionmenu\inventory_select_ca.paa);
-            tooltip = CSTRING(Common_SwitchTargetInventory);
-        };
         class AddBagButton: StopTransfusionButton {
             text = CSTRING(TransfusionMenu_AddBag_Display);
-            idc = -1;
+            idc = IDC_TRANSFUSIONMENU_BUTTON_ADDBAG;
             x = QUOTE(ACM_UI_CANVAS_X + (ACM_UI_CANVAS_W / 2) + (ACM_UI_CANVAS_W / 6.8));
             action = QUOTE(call FUNC(TransfusionMenu_AddBag));
             tooltip = CSTRING(TransfusionMenu_AddBag_ToolTip);

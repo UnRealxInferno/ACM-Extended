@@ -18,9 +18,124 @@ private _marks = if (isNull _patient) then { [] } else { _patient getVariable ["
 private _anchors = uiNamespace getVariable ["ACME_IV_FrameAnchors", createHashMap];
 private _fades = [];
 private _hubCtrls = [];
+private _trackKeys = createHashMap;
+// First-seen timestamps survive repaint/rebuilds so a newly-created mark fades once instead of restarting every redraw.
+private _visualFadeStarts = uiNamespace getVariable ["ACME_IV_VisualFadeStarts", createHashMap];
+private _applyFirstSeenFade = {
+    params ["_ctrl", "_key", "_seconds"];
+    if (isNull _ctrl || {_seconds <= 0}) exitWith {};
+    private _started = _visualFadeStarts getOrDefault [_key, -1];
+    if (_started < 0) then {
+        _started = CBA_missionTime;
+        _visualFadeStarts set [_key, _started];
+    };
+    private _age = (CBA_missionTime - _started) max 0;
+    if (_age < _seconds) then {
+        private _left = (_seconds - _age) max 0.01;
+        private _progress = (_age / _seconds) max 0 min 1;
+        _ctrl ctrlSetFade (1 - _progress);
+        _ctrl ctrlCommit 0;
+        _ctrl ctrlSetFade 0;
+        _ctrl ctrlCommit _left;
+    } else {
+        _ctrl ctrlSetFade 0;
+        _ctrl ctrlCommit 0;
+    };
+};
+
+// Scatter ACE contusions across the visible limb.  The layout is cached for the patient/view so a repaint,
+// another medic's mark update or a flip back to this side does not make the bruises jump around.
+if (!isNull _patient && {_bp in ["leftarm", "rightarm", "leftleg", "rightleg"]}) then {
+    private _trauma = [_patient, _bp] call ACME_fnc_visualBruiseState;
+    _trauma params ["_bruiseScore", "", "_bruiseSeverity"];
+    if (_bruiseScore > 0) then {
+        private _countBruises = ((ceil (_bruiseScore / 4)) max 1) min 4;
+        private _layouts = uiNamespace getVariable ["ACME_IV_TraumaLayouts", createHashMap];
+        private _layoutKey = format ["%1|%2|%3", netId _patient, _bp, _view];
+        private _sig = format ["%1:%2", round (_bruiseScore * 10), _countBruises];
+        private _cached = _layouts getOrDefault [_layoutKey, []];
+        private _points = if ((_cached param [0, ""]) == _sig) then {+(_cached param [1, []])} else {[]};
+        if ((count _points) != _countBruises) then {
+            _points = [];
+            private _eligible = [];
+            {
+                private _sd = [_bp, _x] call ACME_fnc_ivSiteData;
+                if !(_sd isEqualTo []) then {
+                    _sd params ["_sdView", "", "", "", "_vu", "_vv", "", "", ["_el", -1], ["_er", -1]];
+                    if (_sdView == _view) then {_eligible pushBack [_vu, _vv, _el, _er];};
+                };
+            } forEach ["lower", "middle", "upper"];
+            if !(_eligible isEqualTo []) then {
+                for "_i" from 0 to (_countBruises - 1) do {
+                    private _a = _eligible select (_i mod (count _eligible));
+                    _a params ["_vu", "_vv", "_el", "_er"];
+                    private _u = _vu;
+                    if (_el >= 0 && {_er > _el}) then {
+                        private _innerL = _el + ((_er - _el) * 0.18);
+                        private _innerR = _er - ((_er - _el) * 0.18);
+                        _u = _innerL + random ((_innerR - _innerL) max 0.001);
+                    } else {
+                        _u = _vu + (random 0.06) - 0.03;
+                    };
+                    private _spreadV = if (_bp in ["leftleg", "rightleg"]) then {0.12} else {0.09};
+                    private _v = (_vv + (random _spreadV) - (_spreadV * 0.5)) max 0.08 min 0.92;
+                    private _sev = ((_bruiseSeverity + floor (random 3) - 1) max 1) min 10;
+                    private _scale = (if (_bp in ["leftleg", "rightleg"]) then {0.18} else {0.16}) * (0.86 + random 0.28);
+                    _points pushBack [_u, _v, _sev, _scale];
+                };
+            };
+            _layouts set [_layoutKey, [_sig, _points]];
+            uiNamespace setVariable ["ACME_IV_TraumaLayouts", _layouts];
+        };
+        {
+            _x params ["_u", "_v", "_sev", "_scale"];
+            private _tag = if (_sev < 10) then {format ["0%1", _sev]} else {"10"};
+            private _c = _dlg ctrlCreate ["ACME_IV_Bruise", -1];
+            private _family = if (_bp in ["leftleg", "rightleg"]) then {"leg"} else {"arm"};
+            _c ctrlSetText format ["\acm_extended\ui\bruises\%1_bruises_sev%2_ca.paa", _family, _tag];
+            private _w = _bw * _scale; private _h = _bh * _scale;
+            _c ctrlSetPosition [_bx + (_bw * _u) - (_w * 0.5), _by + (_bh * _v) - (_h * 0.5), _w, _h];
+            _c ctrlSetTextColor [1,1,1,0.68];
+            _c ctrlCommit 0; _c ctrlShow true;
+            [_c, format ["trauma|%1|%2|%3|%4|%5", netId _patient, _bp, _view, _sig, _forEachIndex], missionNamespace getVariable ["ACME_iv_newBruiseFadeInSec", 2.5]] call _applyFirstSeenFade;
+            _ctrls pushBack _c;
+        } forEach _points;
+    };
+};
+
 {
     _x params ["_mbp", "_mview", "_mu", "_mv", "_mkind", ["_mtex", ""], ["_mframe", ""], ["_mgauge", 0], ["_mmiss", -1], ["_mscale", 1]];
     if (_mbp == _bp && {_mview == _view}) then {
+        // A persistent venous track mark sits below the current hub/bruise/hole.  Repeated attempts at the
+        // same tier intensify it, while the authored +/-15-degree families follow the catheter approach.
+        if (_bp in ["leftarm", "rightarm", "leftleg", "rightleg"] && {_mgauge > 0} && {_mkind in ["removed", "miss"]}) then {
+            private _mSite = toLower (_x param [10, ""]);
+            private _trackKey = format ["%1:%2:%3", _mSite, round (_mu * 1000), round (_mv * 1000)];
+            if !(_trackKey in _trackKeys) then {
+                _trackKeys set [_trackKey, true];
+                private _sameTier = {_x param [0, ""] == _bp && {_x param [1, ""] == _view} && {toLower (_x param [10, ""]) == _mSite}} count _marks;
+                private _gaugeBonus = switch (_mgauge) do {case 14: {2}; case 16: {1}; default {0};};
+                private _sev = (2 + ((_sameTier - 1) max 0) * 2 + _gaugeBonus) max 1 min 10;
+                private _ori = "0deg_vertical";
+                private _hubAngle = _x param [13, 0];
+                if (_mframe find "_15_left" >= 0 || {_hubAngle > 3}) then {_ori = "pos15deg_offset";};
+                if (_mframe find "_15_right" >= 0 || {_hubAngle < -3}) then {_ori = "neg15deg_offset";};
+                if (_mframe == "" && {abs _hubAngle <= 3}) then {
+                    private _bucket = floor ((((_x param [11, 0]) max 0) mod 360) / 120);
+                    _ori = ["neg15deg_offset", "0deg_vertical", "pos15deg_offset"] param [_bucket, "0deg_vertical"];
+                };
+                private _tag = if (_sev < 10) then {format ["0%1", _sev]} else {"10"};
+                private _tc = _dlg ctrlCreate ["ACME_IV_Bruise", -1];
+                _tc ctrlSetText format ["\acm_extended\ui\bruises\iv_venous_track_marks_%1_sev%2_ca.paa", _ori, _tag];
+                private _ts = if (_bp in ["leftleg", "rightleg"]) then {0.20} else {0.17};
+                private _tw = _bw * _ts; private _th = _bh * _ts;
+                _tc ctrlSetPosition [_bx + (_bw * _mu) - (_tw * 0.5), _by + (_bh * _mv) - (_th * 0.5), _tw, _th];
+                _tc ctrlSetTextColor [1,1,1,0.72];
+                _tc ctrlCommit 0; _tc ctrlShow true;
+                [_tc, format ["track|%1|%2|%3|%4|%5", netId _patient, _bp, _view, _trackKey, _sev], missionNamespace getVariable ["ACME_iv_newBruiseFadeInSec", 2.5]] call _applyFirstSeenFade;
+                _ctrls pushBack _tc;
+            };
+        };
         if (_mkind == "hub") then {
             private _c = _dlg ctrlCreate ["ACME_IV_HubMark", -1];
             // every iv, the ej included, builds its hub path from the frame now. the _mtex branch only fires for any legacy
@@ -76,18 +191,18 @@ private _hubCtrls = [];
                 if (!(_cap isEqualType 0) || {!finite _cap}) then { _cap = 0.90 };
                 _cap = (_cap max 0.05) min 1;
                 // A BRUISE HAS A LIFE OF ABOUT TWENTY MINUTES.
-                // it darkens over the first 15 s as blood tracks into the tissue, holds at the cap, then fades
+                // it darkens over the configured fade-in as blood tracks into the tissue, holds at the cap, then fades
                 // out over the last stretch as it resolves. a puncture HOLE has no life and stays for the body.
-                // the clock is CBA_missionTime, written by fn_ivInfiltrated, so the age is the same on every
-                // machine and a bruise does not read as older on a client that has been running longer.
+                // Bruise creation uses shared serverTime, so every observer sees the same age regardless of client uptime.
                 private _al = _cap;
                 if (_mmiss >= 0) then {
-                    private _e = CBA_missionTime - _mmiss;
+                    private _e = serverTime - _mmiss;
                     private _life = missionNamespace getVariable ["ACME_iv_bruiseLifeSec", 1200];
                     private _out  = missionNamespace getVariable ["ACME_iv_bruiseFadeOutSec", 300];
+                    private _fadeIn = (missionNamespace getVariable ["ACME_iv_bruiseFadeInSec", 5.0]) max 0.1;
                     _al = switch (true) do {
-                        case (_e < 0):                { _cap };  // a stamp from the future, so treat it as fresh.
-                        case (_e < 15):               { (_e / 15) * _cap };
+                        case (_e < 0):                { 0 };     // shared-clock skew: fresh means not visible yet, never full opacity.
+                        case (_e < _fadeIn):          { (_e / _fadeIn) * _cap };
                         case (_e < (_life - _out)):   { _cap };
                         case (_e < _life):            { _cap * (((_life - _e) / (_out max 1)) max 0) };
                         default                       { 0 };
@@ -134,6 +249,72 @@ private _hubCtrls = [];
         };
     };
 } forEach _marks;
+
+// Site-specific infiltration/extravasation overlay.  Worsening severity crossfades over ten seconds; recovery
+// can step down immediately so the picture always reflects the current injury state.
+private _exFades = [];
+private _exState = uiNamespace getVariable ["ACME_IV_ExtravasationVisualState", createHashMap];
+{
+    _x params ["_siteIdx", "_sev"];
+    private _siteName = ["upper", "middle", "lower"] param [_siteIdx, "middle"];
+    private _candidates = _marks select {
+        (_x param [0, ""]) == _bp && {(_x param [1, ""]) == _view} && {toLower (_x param [10, ""]) == _siteName}
+            && {(_x param [4, ""]) in ["hub", "miss", "removed"]}
+    };
+    if !(_candidates isEqualTo []) then {
+        private _mark = _candidates select ((count _candidates) - 1);
+        private _u = _mark param [2, 0.5]; private _v = _mark param [3, 0.5];
+        private _key = format ["%1#%2#%3", netId _patient, _bp, _siteIdx];
+        private _prior = _exState getOrDefault [_key, [0, -1, -1]];
+        _prior params ["_current", "_old", "_started"];
+        if (_sev != _current) then {
+            if (_current <= 0) then {
+                // First appearance: fade the broad injury in rather than stamping it at full opacity.
+                _old = 0; _started = CBA_missionTime;
+            } else {
+                if (_sev > _current) then {
+                    _old = _current; _started = CBA_missionTime;
+                } else {
+                    _old = -1; _started = -1;
+                };
+            };
+            _current = _sev;
+            _prior = [_current, _old, _started];
+            _exState set [_key, _prior];
+        };
+        private _cap = 0.86;
+        private _scale = if (_bp in ["leftleg", "rightleg"]) then {0.23} else {0.20};
+        private _w = _bw * _scale; private _h = _bh * _scale;
+        private _mkCtrl = {
+            params ["_level", "_alpha"];
+            private _tag = if (_level < 10) then {format ["0%1", _level]} else {"10"};
+            private _ec = _dlg ctrlCreate ["ACME_IV_Bruise", -1];
+            _ec ctrlSetText format ["\acm_extended\ui\bruises\iv_infiltration_extravasation_sev%1_ca.paa", _tag];
+            _ec ctrlSetPosition [_bx + (_bw * _u) - (_w * 0.5), _by + (_bh * _v) - (_h * 0.5), _w, _h];
+            _ec ctrlSetTextColor [1,1,1,_alpha];
+            _ec ctrlCommit 0; _ec ctrlShow (_alpha > 0.003);
+            _ctrls pushBack _ec;
+            _ec
+        };
+        private _fadeInSec = (missionNamespace getVariable ["ACME_iv_extravasationFadeInSec", 4.0]) max 0.1;
+        private _duration = if (_old == 0) then {_fadeInSec} else {10};
+        private _age = if (_started >= 0) then {CBA_missionTime - _started} else {_duration};
+        if (_old >= 0 && {_started >= 0} && {_age < _duration}) then {
+            private _t = (_age / _duration) max 0 min 1;
+            private _oc = controlNull;
+            if (_old > 0) then {_oc = [_old, _cap * (1 - _t)] call _mkCtrl;};
+            private _nc = [_current, _cap * _t] call _mkCtrl;
+            _exFades pushBack [_oc, _nc, _started, _cap, _key, _current, _duration];
+        } else {
+            [_current, _cap] call _mkCtrl;
+            if (_old >= 0) then {_exState set [_key, [_current, -1, -1]];};
+        };
+    };
+} forEach ([_patient, _bp] call ACME_fnc_ivExtravasationState);
+uiNamespace setVariable ["ACME_IV_ExtravasationVisualState", _exState];
+uiNamespace setVariable ["ACME_IV_ExtravasationFades", _exFades];
+uiNamespace setVariable ["ACME_IV_VisualFadeStarts", _visualFadeStarts];
+
 { [_x] call ACME_fnc_ivMinigameHookCtrl; } forEach _ctrls;
 uiNamespace setVariable ["ACME_IV_MarkCtrls", _ctrls];
 uiNamespace setVariable ["ACME_IV_HubCtrls", _hubCtrls];

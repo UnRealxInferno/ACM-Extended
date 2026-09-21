@@ -14,7 +14,9 @@ private _route = uiNamespace getVariable ["ACME_SK_Route", "vascular"];
 private _flush = uiNamespace getVariable ["ACME_SK_SelFlush", ""];
 if (_flush != "") then {_route = "vascular"; uiNamespace setVariable ["ACME_SK_Route", _route];};
 private _syringeStore = [ACE_player] call ACME_fnc_skStoreEnsureIds;
-private _syringeIndex = [_syringeStore, false] call ACME_fnc_skSelectedIndex;
+// Resolve the same fallback selection the carousel uses. Requiring a pre-existing stable ID here could leave
+// the route visually selected while every site stayed hidden until the carousel happened to repaint first.
+private _syringeIndex = [_syringeStore] call ACME_fnc_skSelectedIndex;
 private _deliveryReady = (_flush != "") || {_syringeIndex >= 0};
 private _routeChanged = (_display getVariable ["ACME_SK_LastRoute", ""]) != _route;
 _display setVariable ["ACME_SK_LastRoute", _route];
@@ -70,15 +72,25 @@ private _vascularColor = [0.20, 0.65, 0.20, 0.42];
     _x params ["_part", "_imageID", "_inputID", "_uv"];
     private _image = _group controlsGroupCtrl _imageID;
     private _input = _display displayCtrl _inputID;
-    private _show = _body && {!_tagEditMode} && {!_carouselBusy} && {_layoutReady} && {_deliveryReady} && {_route == "im"};
-    _input ctrlShow _show;
-    _input ctrlEnable _show;
-    if (!_show) then {_input setVariable ["ACME_SK_Hover", false];};
+    // IM is an anatomical route, not an existing-access route. Selecting IM should always reveal its valid
+    // muscle targets. The actual administration path still verifies that a prepared syringe exists before staging.
+    private _show = _body && {!_tagEditMode} && {!_carouselBusy} && {_layoutReady} && {_route == "im"};
+    if (!isNull _input) then {
+        _input ctrlShow _show;
+        _input ctrlEnable _show;
+        if (!_show) then {_input setVariable ["ACME_SK_Hover", false];};
+    };
     private _tint = +_imColor;
-    _tint set [3, if (_input getVariable ["ACME_SK_Hover", false]) then {1} else {0.42}];
-    if (_show) then {_image ctrlSetTextColor _tint;};
+    _tint set [3, if (!isNull _input && {_input getVariable ["ACME_SK_Hover", false]}) then {1} else {0.42}];
+    if (_show && {!isNull _image}) then {
+        // updateBodyImage repaints the native limb colors every refresh. Reassert the IM blue after that repaint.
+        _image ctrlShow true;
+        _image ctrlSetTextColor _tint;
+    };
     _uv params ["_u", "_v", "_w", "_h"];
-    _input ctrlSetPosition [_bx + _u * _bw, _by + _v * _bh, _w * _bw, _h * _bh];
-    _input ctrlCommit 0;
-    _input ctrlSetTooltip format ["%1 (IM)", [_part, "short"] call ACME_fnc_bodyPartName];
+    if (!isNull _input) then {
+        _input ctrlSetPosition [_bx + _u * _bw, _by + _v * _bh, _w * _bw, _h * _bh];
+        _input ctrlCommit 0;
+        _input ctrlSetTooltip format ["%1 (IM)", [_part, "short"] call ACME_fnc_bodyPartName];
+    };
 } forEach (call ACME_fnc_skIMGeometry);

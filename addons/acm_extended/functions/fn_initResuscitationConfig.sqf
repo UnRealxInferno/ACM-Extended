@@ -6,10 +6,10 @@
  */
 
 // calcium and citrate. a massive transfusion causes hypocalcemia, a lethal-triad leg.
-ACME_ca_citrateThreshold = 1.0;  // l of blood transfused before citrate bites
-ACME_ca_citratePerLiter = 0.18;  // ionized-ca deficit per l over threshold (normalized)
+ACME_ca_citrateThreshold = 2.0;  // existing standard baseline, formerly set by applyHardcore
+ACME_ca_citratePerLiter = 0.22;  // ionized-ca deficit per l over threshold (normalized)
 ACME_ca_creditPerGram = 0.12;  // ionized-ca restored per 1 g CaCl2 pushed
-ACME_ca_floor = 0.55;  // lowest normalized ionized ca (1.0 = normal)
+ACME_ca_floor = 0.45;  // lowest normalized ionized ca (1.0 = normal)
 ACME_ca_mapDropPerUnit = 40;  // mmhg MAP drop at zero ionized ca (contractility)
 ACME_ca_coagMaxMult = 1.4;  // bleed-rate multiplier at the ionized-ca floor
 ACME_ca_gramsPerDose = 1;  // CaCl2 grams per push action

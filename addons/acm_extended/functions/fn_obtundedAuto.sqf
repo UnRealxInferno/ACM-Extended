@@ -84,7 +84,7 @@ private _dwellRe    = missionNamespace getVariable ["ACME_obtunded_dwellReEnter"
             // wakes medically unconscious patients when vitals are stable. Obtundation is deliberately
             // awake/semi-conscious, so native ACM would otherwise never clear it. A NEW ammonia use
             // while recovery-compatible vitals are present rapidly terminates obtundation, restores all
-            // PP/ACRE/motor state through the normal setter cleanup, and grants the existing wake-stimulus
+            // PP/voice/motor state through the normal setter cleanup, and grants the existing wake-stimulus
             // grace so the auto evaluator cannot immediately knock them back down. It does not repair
             // persistent hypoxia/shock; if vitals are not stable, the stimulus cannot cure the cause.
             private _ammLast = _u getVariable ["ACM_circulation_AmmoniaInhalant_LastUse", -1];

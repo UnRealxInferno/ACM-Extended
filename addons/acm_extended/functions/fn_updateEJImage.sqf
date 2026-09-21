@@ -55,6 +55,6 @@ if (!isNull _target) then {
     };
     _c ctrlShow _show;
 } forEach [
-    [7290020, "\acm_extended\ui\iv\iv_ej_left_ca.paa",  _leftEJ],
-    [7290021, "\acm_extended\ui\iv\iv_ej_right_ca.paa", _rightEJ]
+    [7290020, [0] call ACME_fnc_ejTexturePath, _leftEJ],
+    [7290021, [1] call ACME_fnc_ejTexturePath, _rightEJ]
 ];

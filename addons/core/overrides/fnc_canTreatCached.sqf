@@ -65,6 +65,45 @@ if (!isNull _caller && {!isNull _target} && {!alive _target} && {_target isKindO
     };
 };
 
+// Persisted equipment must remain manageable after death.  These actions do not restart physiology; they only
+// inspect, maintain, expose or recover equipment that is already physically on the casualty.  Keeping the same
+// state-driven buttons on a corpse also prevents the medical menu from becoming an unintended death detector.
+private _deadEquipmentActions = [
+    "ACME_VentOpenPatient", "ACME_DisconnectETVent", "ACME_SwapVentBattery",
+    "ACME_RemoveNRB",
+    "ACME_UnwrapHPMK", "ACME_ExposeChestHPMK", "ACME_CoverChestHPMK", "ACME_RemoveHPMK"
+];
+if (
+    !isNull _caller
+    && {!isNull _target}
+    && {!alive _target}
+    && {_target isKindOf "CAManBase"}
+    && {_className in _deadEquipmentActions}
+) exitWith {
+    private _hpmkState = _target getVariable ["ACME_hpmk_state", ""];
+    switch (_className) do {
+        case "ACME_VentOpenPatient": {
+            (_target getVariable ["ACME_vent_onPatient", false])
+                && {!(_target getVariable ["ACME_vent_recovering", false])}
+                && {(_target getVariable ["ACME_vent_circuit", false]) || {_target getVariable ["ACME_vent_configured", false]}}
+        };
+        case "ACME_DisconnectETVent": {
+            (_target getVariable ["ACME_vent_onPatient", false])
+                && {!(_target getVariable ["ACME_vent_recovering", false])}
+        };
+        case "ACME_SwapVentBattery": {
+            [_target] call ACME_fnc_canSwapVentBattery
+                && {([_caller, "ACME_VentBattery"] call ace_common_fnc_getCountOfItem) > 0}
+        };
+        case "ACME_RemoveNRB": {_target getVariable ["ACME_nrb_on", false]};
+        case "ACME_UnwrapHPMK": {_caller isNotEqualTo _target && {_hpmkState in ["wrapped", "exposed"]}};
+        case "ACME_ExposeChestHPMK": {_caller isNotEqualTo _target && {_hpmkState == "wrapped"}};
+        case "ACME_CoverChestHPMK": {_caller isNotEqualTo _target && {_hpmkState == "exposed"}};
+        case "ACME_RemoveHPMK": {_caller isNotEqualTo _target && {_hpmkState == "prepped"}};
+        default {false};
+    };
+};
+
 private _deadThoracicActions = [
     "ACME_ApplyChestSeal",
     "ACME_PerformNARSPEAR",

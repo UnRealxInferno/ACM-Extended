@@ -111,14 +111,14 @@ ACME_coolerBoxScale      = 0.65;  // visual and geometry scale applied to a depl
 // loose.
 ACME_clotPop_enabled     = true;
 ACME_clotPop_bvThreshold = 5.1;  // blood volume in l below which the patient is unstable. normal is 6, so this is about a 15 percent loss.
-ACME_clotPop_chance      = 0.30;  // base per-pass reopen chance while qualifying. the load and the shock depth scale it.
-ACME_clotPop_fraction    = 0.5;  // fraction of a bandaged wound that tears back open per pop
-ACME_clotPop_dt          = 8;  // s between clot-pop passes
-ACME_clotPop_maxChance   = 0.45;  // ceiling per pass. the four factors multiply and could exceed 1.0, which
-                                  // turned a risk into a guaranteed reopen on every pass.
+ACME_clotPop_chance      = 0.08;  // B120: low base per-pass risk; coagulopathy can reopen a clot occasionally rather than every few seconds.
+ACME_clotPop_fraction    = 0.20;  // fraction of one selected bandaged wound that tears back open per event
+ACME_clotPop_dt          = 30;  // s between clot-pop risk evaluations
+ACME_clotPop_maxChance   = 0.15;  // ceiling per pass after load/shock/MAP scaling.
 ACME_ca_mapEasePerSec    = 0.2;  // mmhg/s that the calcium MAP suppression is walked off. 18 mmhg across about 90 s,
                                   // rather than vanishing on the tick after the syringe goes in.
 ACME_clotPop_fluidTypes  = ["Saline", "PlasmaLyte"];  // dilutional fluids that pop clots. add "HTS" or "Plasma" to include them.
+ACME_clotPop_cooldown    = 120; // seconds after a successful clot-pop before that casualty can suffer another custom reopen.
 if (isServer) then {
     [{ [] call ACME_fnc_bloodColdChainTick }, ACME_bloodScanInterval, []] call CBA_fnc_addPerFrameHandler;
     [{ [] call ACME_fnc_clotPopTick }, ACME_clotPop_dt, []] call CBA_fnc_addPerFrameHandler;

@@ -1,18 +1,24 @@
-// toggle grabbing the plunger during the flush waste and draw flow.
-// it mirrors ACM_circulation_fnc_Syringe_Draw_Move, and is gated on our waste stage rather than on a selected
-// medication, because a flush has no drug selected while wasting.
-// clicking the plunger grabs it, and the per-frame loop then tracks the mouse, and clicking again releases it.
-// call ACME_fnc_skWasteToggleMove.
+// toggle grabbing the plunger during flush/compound draw flow.
+// Preserve ACM's sticky cursor behavior: click once to grab, the cursor stays centered on the moving plunger,
+// and click the same plunger again to release.
 private _stage = uiNamespace getVariable ["ACME_SK_WasteStage", ""];
 if (_stage == "") exitWith {};
-
-private _moving = !(uiNamespace getVariable ["ACME_SK_WasteMoving", false]);
-uiNamespace setVariable ["ACME_SK_WasteMoving", _moving];
 
 disableSerialization;
 private _dlg = findDisplay 84000;
 if (isNull _dlg) exitWith {};
+
+private _moving = !(uiNamespace getVariable ["ACME_SK_WasteMoving", false]);
+uiNamespace setVariable ["ACME_SK_WasteMoving", _moving];
+
 private _plunger = _dlg displayCtrl 84009;
 if (!isNull _plunger) then {
-    _plunger ctrlSetTooltip (["Click to grab the plunger", ""] select _moving);
+    if (_moving) then {
+        // Snap to the real control center once at grab time. The PFH then keeps X sticky and lets Y follow the hand.
+        (ctrlPosition _plunger) params ["_px", "_py", "_pw", "_ph"];
+        setMousePosition [_px + (_pw / 2), _py + (_ph / 2)];
+        _plunger ctrlSetTooltip "Click again to release the plunger";
+    } else {
+        _plunger ctrlSetTooltip "Click to grab the plunger";
+    };
 };

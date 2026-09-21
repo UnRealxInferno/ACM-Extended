@@ -131,8 +131,13 @@ if (_mode isEqualTo "power") exitWith {
         // and the self test is already running, exactly as it would be on the real unit.
         uiNamespace setVariable ["ACME_vent_powered", true];
         uiNamespace setVariable ["ACME_vent_booted", false];
-        _pwrH setVariable ["ACME_vent_powerOn", true, true];
-        _pwrH setVariable ["ACME_vent_hasBooted", true, true];  // this press is the boot.
+        if (local _pwrH) then {
+            _pwrH setVariable ["ACME_vent_powerOn", true, true];
+            _pwrH setVariable ["ACME_vent_hasBooted", true, true];  // this press is the boot.
+        } else {
+            private _custody = _pwrH getVariable ["ACME_vent_custodyId", ""];
+            [_pwrH, "ventPowerState", [ACE_player, true, true, _custody]] call ACME_fnc_ownerDispatch;
+        };
         ACE_player setVariable ["ACME_vent_booted", true];
         // the real boot chain, not just a flag. acme_vent_boott was being set here and nothing reads it, because the
         // tick times boot from ACME_vent_bootT0, which only fn_ventpanelinit was ever setting. that is why pressing
@@ -200,13 +205,22 @@ if (_mode isEqualTo "tick") exitWith {
     if (_until > 0 && {diag_tickTime >= _until}) then {
         uiNamespace setVariable ["ACME_vent_swapUntil", -1];
 
-        // an exchange, not a reset. what was fitted becomes the spare at whatever charge it had left.
+        // An exchange, not a reset. If the device is on another casualty, the casualty owner atomically swaps the
+        // fitted charge and returns the old charge to this provider. This also serializes simultaneous viewers.
         private _holder = if (isNull _tgt) then { ACE_player } else { _tgt };
-        private _fitted = _holder getVariable ["ACME_vent_battery", 100];
         private _spare  = ACE_player getVariable ["ACME_vent_spareBattery", 100];
-        _holder setVariable ["ACME_vent_battery", _spare, true];
-        _holder setVariable ["ACME_vent_battWarned", 0, true];
-        ACE_player setVariable ["ACME_vent_spareBattery", _fitted, true];
+        if (local _holder) then {
+            private _fitted = _holder getVariable ["ACME_vent_battery", 100];
+            _holder setVariable ["ACME_vent_battery", _spare, true];
+            _holder setVariable ["ACME_vent_battWarned", 0, true];
+            ACE_player setVariable ["ACME_vent_spareBattery", _fitted, true];
+        } else {
+            private _seq = 1 + (uiNamespace getVariable ["ACME_vent_batterySwapSeq", 0]);
+            uiNamespace setVariable ["ACME_vent_batterySwapSeq", _seq];
+            private _requestId = format ["%1:%2:%3", clientOwner, _seq, diag_frameNo];
+            uiNamespace setVariable ["ACME_vent_batterySwapRequest", _requestId];
+            [_holder, "ventBatteryExchange", [ACE_player, _requestId, _spare, serverTime]] call ACME_fnc_ownerDispatch;
+        };
 
         // the fresh battery does not start the machine. the machine died when the old one came out, at the hatch
         // press above, and it stays dark until a medic presses power.
@@ -219,9 +233,15 @@ if (_mode isEqualTo "tick") exitWith {
         // OFF reports the new state, because the fresh battery no longer starts the machine.
         // the banner is a fixed sizeex control on a fixed box, and the tick never resizes its font, so the string is
         // held to 16 characters. NO SPARE BATTERY above is 16 and is known to fit.
-        _ban ctrlSetText format ["BATTERY %1%2 OFF", round _spare, "%"];
-        _ban ctrlShow true;
-        uiNamespace setVariable ["ACME_vent_swapMsgUntil", diag_tickTime + 2.5];
+        if (local _holder) then {
+            _ban ctrlSetText format ["BATTERY %1%2 OFF", round _spare, "%"];
+            _ban ctrlShow true;
+            uiNamespace setVariable ["ACME_vent_swapMsgUntil", diag_tickTime + 2.5];
+        } else {
+            _ban ctrlSetText "VERIFYING SWAP";
+            _ban ctrlShow true;
+            uiNamespace setVariable ["ACME_vent_swapMsgUntil", diag_tickTime + 6];
+        };
     };
 
     private _msgUntil = uiNamespace getVariable ["ACME_vent_swapMsgUntil", -1];

@@ -7,9 +7,17 @@
 params ["_which"];
 private _held = uiNamespace getVariable ["ACME_laryngo_held", ""];
 
-// B52: once an ET tube has entered the mouth, its tray icon is inert. Adjustment is performed on the placed tube
-// itself with the existing click/grip + wheel controls; the tray must never re-spawn or re-grab an inserted tube.
-if (_which == "tube" && {(uiNamespace getVariable ["ACME_laryngo_tubeDepth", 0]) > 0.001}) exitWith {};
+// B115: once an ET tube is in the airway, the tray icon can never re-spawn, re-grab or reposition it. Use both
+// the UI depth and authoritative patient state so a reopened airway view is protected even before its local depth
+// reconstruction finishes. If the cuff is up, explain why the tube cannot be manipulated.
+private _tubePatient = uiNamespace getVariable ["ACME_laryngo_patient", objNull];
+private _tubePlaced = (uiNamespace getVariable ["ACME_laryngo_tubeDepth", 0]) > 0.001
+    || {!isNull _tubePatient && {_tubePatient getVariable ["ACME_ETT_Inserted", false]}};
+if (_which == "tube" && {_tubePlaced}) exitWith {
+    if (!isNull _tubePatient && {_tubePatient getVariable ["ACME_ETT_CuffInflated", false]}) then {
+        ["Deflate the ET tube cuff before adjusting or extubating the tube.", 2.5] call ace_common_fnc_displayTextStructured;
+    };
+};
 
 // a secured airway is not touched. once the tube is in and the collar is on, the tray stops handing anything out
 // and stops taking anything back: the tube cannot be lifted off, the collar cannot be unclipped, and the blade

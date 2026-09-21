@@ -15,13 +15,25 @@ private _holder = switch (_selection) do {
     default {_medic};
 };
 
-// Mirror ACM's own inventory-switch fail-safe.  A stale patient/vehicle source is not a valid reason
-// to make a medic's own carried vials disappear.
+// A selected patient remains a valid source after death, but not after the provider walks away. Do not use alive as
+// an inventory gate: that would both destroy corpse interaction and leak the patient's death state through the UI.
+if (_selection == 1 && {!isNull _holder} && {_holder isNotEqualTo _medic}) then {
+    private _sameVehicle = !isNull (objectParent _medic) && {(objectParent _medic) isEqualTo (objectParent _holder)};
+    if (!_sameVehicle && {_medic distance _holder > 5}) then {_holder = objNull;};
+};
+
+// Mirror ACM's own inventory-switch fail-safe. A genuinely stale patient/vehicle source is not a valid reason
+// to make a medic's own carried vials disappear. A live shared source, however, must first be owner-leased; while
+// that acknowledgement is pending we deliberately return objNull instead of silently debiting Self.
 if (isNull _holder) then {
     _holder = _medic;
     if (_selection != 0) then {
+        [ _medic ] call ACME_fnc_vialLeaseRelease;
         [["syringeDrawInventorySelection", 0]] call ACM_circulation_fnc_setLocalUiState;
     };
+};
+if (_selection in [1,2] && {_holder isNotEqualTo _medic}) exitWith {
+    if ([_medic,_holder] call ACME_fnc_vialLeaseEnsure) then {_holder} else {objNull}
 };
 
 _holder

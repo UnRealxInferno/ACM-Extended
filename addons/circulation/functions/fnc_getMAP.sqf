@@ -17,6 +17,6 @@
 
 params ["_patient"];
 
-GET_BLOOD_PRESSURE(_patient) params ["_BPDiastolic", "_BPSystolic"]; 
+GET_BLOOD_PRESSURE(_patient) params ["_BPDiastolic", "_BPSystolic"];
 
 GET_MAP(_BPSystolic,_BPDiastolic);

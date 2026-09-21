@@ -87,7 +87,7 @@ if (isNumber (_config >> "ACM_cancelRecovery")) then {
 };
 
 // play patient animation
-if (alive _patient) then { 
+if (alive _patient) then {
     private _animationStatePatient = animationState _patient;
 
     if (_animationStatePatient != "acm_recoveryposition" || (_animationStatePatient == "acm_recoveryposition" && _cancelsRecoveryPosition)) then {
@@ -139,14 +139,43 @@ if (_medic isNotEqualTo player || {!_isInZeus}) then {
     // progress bar, item use, callbacks and patient state, but it must not enqueue its generic medic animation or
     // its matching end pose. That generic queue was what overwrote the authored chest/head bandage, NCD and
     // breathing-check motions a frame after ACME started them.
-    if (_medic getVariable ["ACME_suppressNativeTreatmentAnim", false]) then {
+    private _suppressNativeAnim = (_medic getVariable ["ACME_suppressNativeTreatmentAnim", false])
+        || {(isNumber (_config >> "ACME_suppressNativeTreatmentAnim")) && {(getNumber (_config >> "ACME_suppressNativeTreatmentAnim")) > 0}};
+    if (_suppressNativeAnim) then {
         _medicAnim = "";
     };
 
     _medic setVariable [QACEGVAR(medical_treatment,selectedWeaponOnTreatment), weaponState _medic];
 
-    // Adjust animation based on the current weapon of the medic
-    private _wpn = ["non", "rfl", "lnr", "pst"] param [["", primaryWeapon _medic, secondaryWeapon _medic, handgunWeapon _medic] find currentWeapon _medic, "non"];
+    // Direct Pressure is already an authored empty-hands hold. currentWeapon still reports the player's selected
+    // rifle while that Wnon pose is visible, which previously made the next bandage pick a rifle animation/end pose.
+    // Treat the provider as visually unarmed for the duration of treatments on the same casualty. This changes only
+    // animation selection; it never changes the player's selected weapon and therefore never creates a holster/draw loop.
+    private _dpSamePatient = (_medic getVariable ["ACME_DP_Active", false])
+        && {(_medic getVariable ["ACME_DP_Patient", objNull]) isEqualTo _patient};
+
+    // B112: animation state is the visual truth. Arma can keep currentWeapon pointed at the rifle for a short time
+    // after ACME has already transitioned into a Wnon/Snon medical pose. If native treatment uses that stale weapon
+    // value, its generated end pose redraws the rifle as soon as the treatment finishes. An explicitly Wnon treatment
+    // (AAJT-S is one example) is also unambiguously an empty-hands treatment even if currentWeapon has not settled.
+    private _providerAnimState = toLowerANSI animationState _medic;
+    private _visuallyUnarmed = ((_providerAnimState find "wnon") >= 0) && {((_providerAnimState find "snon") >= 0)};
+    private _requestedAnimState = toLowerANSI _medicAnim;
+    private _treatmentExplicitUnarmed = (_medicAnim != "") && {(_requestedAnimState find "wnon") >= 0};
+
+    private _wpn = if (_dpSamePatient || {_visuallyUnarmed} || {_treatmentExplicitUnarmed}) then {
+        "non"
+    } else {
+        ["non", "rfl", "lnr", "pst"] param [["", primaryWeapon _medic, secondaryWeapon _medic, handgunWeapon _medic] find currentWeapon _medic, "non"]
+    };
+
+    // Keep the engine's selected-weapon state consistent with the authored Wnon theatre. This happens only after the
+    // provider is already visually unarmed / the treatment explicitly requests Wnon, so it adds no second holster
+    // animation. It simply prevents the engine from restoring the stale rifle selection at the end of the move.
+    if (_wpn == "non" && {local _medic} && {currentWeapon _medic != ""}) then {
+        _medic selectWeapon "";
+    };
+
     _medicAnim = [_medicAnim, "[wpn]", _wpn] call CBA_fnc_replace;
 
     // This animation is missing, use alternative
@@ -166,7 +195,7 @@ if (_medic isNotEqualTo player || {!_isInZeus}) then {
         _animDuration = _animDuration + 0.5;
 
         // Fix problems with lowered weapon transitions by raising the weapon first
-        if (currentWeapon _medic != "" && {_medicAnim != ""}) then {
+        if (_wpn != "non" && {!_dpSamePatient} && {currentWeapon _medic != ""} && {_medicAnim != ""}) then {
             _medic action ["WeaponInHand", _medic];
         };
     };
@@ -236,6 +265,26 @@ if (_isInZeus) then {
 
 GET_FUNCTION(_callbackStart,_config >> "callbackStart");
 GET_FUNCTION(_callbackProgress,_config >> "callbackProgress");
+
+// B107: every true wound-bandage treatment begins temporary progressive hemostasis.  Do not key this from the
+// generic "bandage" category because splints, tourniquets and several ACME maneuvers intentionally share that
+// menu category without being wound dressings.
+private _progressiveBandageClasses = [
+    "BasicBandage",
+    "FieldDressing",
+    "PackingBandage",
+    "ElasticBandage",
+    "QuikClot",
+    "PressureBandage",
+    "EmergencyTraumaDressing",
+    "ACME_PackJunctional",
+    "ACME_WrapJunctional"
+];
+if (_classname in _progressiveBandageClasses) then {
+    private _bandageToken = format ["%1:%2:%3", owner _medic, netId _medic, round (CBA_missionTime * 1000)];
+    _medic setVariable ["ACME_BandageProgressToken", _bandageToken];
+    [QEGVAR(damage,bandageProgressStart), [_patient, _bodyPart, _classname, _treatmentTime, _bandageToken], _patient] call CBA_fnc_targetEvent;
+};
 
 if (_callbackProgress isEqualTo {}) then {
     _callbackProgress = {true};

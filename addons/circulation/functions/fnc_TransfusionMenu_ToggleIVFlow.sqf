@@ -16,36 +16,12 @@
  * Public: No
  */
 
-private _partIndex = ALL_BODY_PARTS find GVAR(TransfusionMenu_Selected_BodyPart);
-
-if (GVAR(TransfusionMenu_SelectIV)) then {
-    private _flowArray = GET_IV_FLOW(GVAR(TransfusionMenu_Target));
-    private _flowArrayBodyPart = +(_flowArray select _partIndex);
-
-    private _newFlow = _flowArrayBodyPart select GVAR(TransfusionMenu_Selected_AccessSite);
-
-    if (_newFlow > 0) then {
-        _newFlow = 0;
-    } else {
-        _newFlow = 1;
-    };
-
-    _flowArrayBodyPart set [GVAR(TransfusionMenu_Selected_AccessSite), _newFlow];
-    _flowArray set [_partIndex, _flowArrayBodyPart];
-
-    GVAR(TransfusionMenu_Target) setVariable [VAR_FLUIDBAG_FLOW_IV, _flowArray, true];
-} else {
-    private _flowArray = GET_IO_FLOW(GVAR(TransfusionMenu_Target));
-
-    private _newFlow = (_flowArray select _partIndex);
-
-    if (_newFlow > 0) then {
-        _newFlow = 0;
-    } else {
-        _newFlow = 1;
-    };
-
-    _flowArray set [_partIndex, _newFlow];
-
-    GVAR(TransfusionMenu_Target) setVariable [VAR_FLUIDBAG_FLOW_IO, _flowArray, true];
+private _patient = GVAR(TransfusionMenu_Target);
+private _part = GVAR(TransfusionMenu_Selected_BodyPart);
+private _site = GVAR(TransfusionMenu_Selected_AccessSite);
+private _iv = GVAR(TransfusionMenu_SelectIV);
+private _validAccess = [_patient, _part, _iv, _site] call ACME_fnc_transfusionAccessValid;
+if (!_validAccess) exitWith {
+    ["No established IV/IO is selected.",2,ACE_player,13] call ACEFUNC(common,displayTextStructured);
 };
+[_patient, "transfusionFlowToggle", [_patient, _part, _iv, _site, [_patient] call ACME_fnc_clinicalEpoch, ACE_player]] call ACME_fnc_ownerDispatch;

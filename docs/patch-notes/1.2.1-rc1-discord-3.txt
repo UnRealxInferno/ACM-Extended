@@ -1,0 +1,36 @@
+**ACM Extended 1.2.1-rc1 | Cumulative hotfixes | 3/3**
+
+18–19 September 2026. Combined current behavior, including the latest corrections.
+
+**Finger thoracostomy and chest seals**
+
+- Added removal and burping of a seal over a finger-thoracostomy tract. After removing the seal, the existing tract can be swept again without consuming another kit, then used for a chest tube.
+- In Adjust Thoracostomy, put down the held tool. Right-click the surgical seal to remove it; scroll five notches to lift and burp a corner, and reverse the wheel to lay it flat. Select the finger and click the open tract to repeat the sweep.
+- Traumatic and surgical chest-seal burps share a 10-second cooldown per patient, including between providers. Rejected repeats do not repeat the treatment, activity-log entry or animation. The lifted corner can still be laid flat during cooldown.
+- Accepted burps request the corresponding chest-seal treatment animation on the provider.
+- Chest-seal Flip waits for the actual provider roll animation before physically rolling the patient. Entry transitions no longer trigger the flip; closing, cancelling or timing out the panel cancels a pending roll.
+- Aftercare acts on the selected side and preserves unrelated seals and an opposite-side chest tube.
+- Current gameplay behavior: an open finger tract vents air, while sealing it can allow pressure to recur if an internal leak remains. There is no added time-open penalty or spontaneous tract-closure timer. Continuous passive blood drainage belongs to chest tubes; inadequate preparation can flag the incision for infection.
+
+**Auscultation controls, sound and posterior view**
+
+- The bell opens at the cursor and is 19% larger. Hold left mouse to listen and move it with drag resistance; it shrinks by 12% while pressed. Releasing lifts it and stops contact sound.
+- Left lung, right lung and cardiac sounds mix continuously as the bell moves, without restarting their phase at each listening point.
+- Reduced all 21 stethoscope sound variants by another 6 dB, including cardiac, normal, shallow, dull and crackling sounds.
+- Added a Front/Back listening-view button using the existing body textures at matching scale. Anatomical left/right mapping follows the selected view. Switching views lifts the bell and changes the diagram without physically rolling the patient.
+- Added basal crackles on the affected lung when hemothorax fluid exceeds 0.3 L, increasing to full contribution at 1.1 L. Draining fluid reduces the finding; upper and opposite-lung findings remain.
+- Hemothorax listening uses ACM's pooled pleural fluid and affected-lung finding, rather than introducing separate left/right fluid volumes.
+- Lung sounds fade out at the diaphragm. Below it, the front view retains only a narrow centerline cardiac field, fading sideways and downward; lower lateral areas are silent. The back view uses lung fields without anterior cardiac listening points.
+- Closing or replacing the scope panel removes its sound objects and restores hearing attenuation; release and focus loss clear held contact.
+
+**Visual effects, descriptors and icons**
+
+- Reduced ketamine water-distortion amplitudes by another 25% across dose and debug tiers, preserving wave timing, easing, blur and chromatic response.
+- Clinical descriptor mode now uses Severe Ecchymosis for extensive bruising in chest inspection and injury-list rows.
+- Dress Junctional Wound now uses the same medical-menu icon as Pressure Bandage.
+
+**Validation**
+
+The initial ACE config correction passed its focused check and the existing 20 RC1 checks. Later patches received source/numerical checks, but the complete cumulative build still needs pytest, HEMTT and in-game verification because the command runner was unavailable.
+
+Full notes: https://github.com/hesherson/ACM-Extended/blob/dev/CHANGELOG.md

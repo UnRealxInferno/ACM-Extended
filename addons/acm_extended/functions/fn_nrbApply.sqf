@@ -12,6 +12,12 @@ if (_patient getVariable ["ACME_nrb_on", false]) exitWith {
     ["NRB is already on this patient.", 2, _medic] call ace_common_fnc_displayTextStructured;
 };
 
+// Hard runtime gate as well as the medical-menu condition. This closes the race where an advanced airway can be
+// placed after the action becomes visible but before callbackSuccess executes.
+if !([_patient] call ACME_fnc_nrbAirwayCompatible) exitWith {
+    ["Cannot apply NRB with an i-gel, ET tube, or surgical airway in place. Use BVM or ventilator support.", 3, _medic] call ace_common_fnc_displayTextStructured;
+};
+
 // does the provider have an oxygen tank with reserve? it mirrors ACM's own tank lookup: an ACM_OxygenTank_425
 // magazine in any worn container with ammo above 0.
 private _hasO2 = false;

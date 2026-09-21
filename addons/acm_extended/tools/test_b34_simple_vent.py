@@ -117,8 +117,11 @@ class SimpleVentContracts(unittest.TestCase):
 
     def test_manual_request_is_epoch_timed_and_idempotent(self):
         s=source('ventSimpleManualBreath')
-        for token in ('ACME_fnc_clinicalEpoch','_age > 3','_episodeId !=','_id in _receipts','count _receipts > 64'):
+        for token in ('ACME_fnc_clinicalEpoch','_episodeId !=','_id in _receipts','count _receipts > 64'):
             self.assertIn(token,s)
+        # _issued is a provider-client timestamp and must never be compared to the casualty owner's CBA clock.
+        self.assertNotIn('_age > 3',s)
+        self.assertIn('ACME_vent_simpleManualReceipts", _receipts, false',s)
         request=source('ventManualBreath')
         simple=request[request.index('if (missionNamespace getVariable ["ACME_vent_simpleMode"'):request.index('private _configured =')]
         self.assertNotIn('ACME_vent_manualGaugeT',simple)

@@ -108,6 +108,7 @@ private _getMedEffect = {
     [_patient] call ACME_fnc_ettAirwayProtect;
     [_patient] call ACME_fnc_sugammadexTick;
     [_patient] call ACME_fnc_rocuroniumTick;
+    [_patient] call ACME_fnc_laryngoIrritationTick;
 
     // running ventilator. if this patient is intubated, configured and connected to a running vent, the vent
     // breathes for them and keeps ACM's BVM oxygenation alive at the set rate and FiO2. that matters most for a
@@ -242,7 +243,7 @@ private _getMedEffect = {
     } else {
         _caMAPdrop = (_caMAPdrop - _caStep) max _caMAPtarget;  // repleted calcium. the pressure comes back gradually.
     };
-    [_patient, "ACME_ca_mapDropEased", _caMAPdrop] call ACME_fnc_setVarNet;
+    [_patient,"ACME_ca_mapDropEased",_caMAPdrop,0.02,2] call ACME_fnc_setVarNetApprox;
     _state set ["caMAPdrop", _caMAPdrop];
     private _coagMult = linearConversion [1, _caFloor, _ionizedCa, 1, (missionNamespace getVariable ["ACME_ca_coagMaxMult", 1.4]), true];
 
@@ -293,7 +294,7 @@ private _getMedEffect = {
     _state set ["acidCoagMult", _acidCoag];
     // the combined coagulopathy is calcium times hypothermia times acidosis. the native circulation drainer
     // reads it.
-    [_patient, "ACME_ca_coagMult", (_coagMult * _hypoCoag * _acidCoag)] call ACME_fnc_setVarNet;
+    [_patient,"ACME_ca_coagMult",(_coagMult * _hypoCoag * _acidCoag),0.005,2] call ACME_fnc_setVarNetApprox;
     _state set ["coagMult", (_coagMult * _hypoCoag * _acidCoag)];
 
     // Route observations do not synthesize drug dose or turn norepinephrine into epinephrine.
@@ -395,7 +396,7 @@ private _getMedEffect = {
     private _caSteady = _caElemMgMin / _caClear;  // the mg/dl plateau for the current elemental drive.
     private _caK = 0.693 / _caHalfMin;  // the per-minute elimination rate constant.
     _caSerum = (_caSerum + (_caK * (_caSteady - _caSerum) * (_dt / 60))) max 0;
-    [_patient, "ACME_ca_serumLevel", _caSerum] call ACME_fnc_setVarNet;
+    [_patient,"ACME_ca_serumLevel",_caSerum,0.002,3] call ACME_fnc_setVarNetApprox;
     private _caSerumOd = linearConversion [
         (missionNamespace getVariable ["ACME_ca_serumTherapeuticHigh", 1.0]),
         (missionNamespace getVariable ["ACME_ca_serumOverdoseArrest", 4.0]),
@@ -414,7 +415,7 @@ private _getMedEffect = {
     private _amioSteady = _amioRateMgMin / _amioClear;
     private _amioK = 0.693 / _amioHalfMin;
     _amioSerum = (_amioSerum + (_amioK * (_amioSteady - _amioSerum) * (_dt / 60))) max 0;
-    [_patient, "ACME_amio_serumLevel", _amioSerum] call ACME_fnc_setVarNet;
+    [_patient,"ACME_amio_serumLevel",_amioSerum,0.005,3] call ACME_fnc_setVarNetApprox;
 
     // amiodarone and magnesium vasodilate, which drops resistance and lowers bp, and they ride their fast
     // fractions. calcium is handled separately below, because acute hypercalcemia does the opposite early on.
@@ -495,7 +496,7 @@ private _getMedEffect = {
     private _lidoDecay = exp (-_lidoKSec * _dt);
     _lidoLevel = (_lidoLevel * _lidoDecay + ((_lidoDrive / 60) / _lidoVd)
         * (1 - _lidoDecay) / _lidoKSec) max 0;
-    [_patient, "ACME_lido_serumLevel", _lidoLevel] call ACME_fnc_setVarNet;
+    [_patient,"ACME_lido_serumLevel",_lidoLevel,0.005,3] call ACME_fnc_setVarNetApprox;
 
     // lidocaine toxicity arc, the seizure. it reads the level just computed, drives apnea through the dedicated
     // seizure rr channel, and sets ACME_lido_seizureState, which the hr drive block and the debug line below
@@ -520,7 +521,7 @@ private _getMedEffect = {
     private _esmDecay = exp (-_esmK * _dt);
     private _esmInput = _deliveredRates getOrDefault ["Esmolol",0];
     private _esmSerum = (_esmOld * _esmDecay + (_esmInput / 60 / _esmVd) * (1 - _esmDecay) / _esmK) max 0;
-    [_patient, "ACME_esmolol_serumLevel", _esmSerum] call ACME_fnc_setVarNet;
+    [_patient,"ACME_esmolol_serumLevel",_esmSerum,0.005,3] call ACME_fnc_setVarNetApprox;
     // esmolol overdose band. past the therapeutic ceiling, where the serum exceeds
     // ACME_esmolol_serumTherapeuticHigh, the beta-blockade stops being rate control and becomes toxicity: a
     // high-grade av block, which is a severe bradycardia applied in the sinus drive below, plus hypotension. the
@@ -546,7 +547,14 @@ private _getMedEffect = {
         && {CBA_missionTime >= (_patient getVariable ["ACME_rhythm_magNextAttempt", -1])}
     ) then {
         [_patient, "ACME_rhythm_magNextAttempt", CBA_missionTime + 1] call ACME_fnc_setVarNet;
-        if ([_patient, [_patient] call ACME_fnc_clinicalEpoch] call ACME_fnc_shockROSC) then {
+        private _converted = false;
+        if (_patient getVariable ["ace_medical_inCardiacArrest",false]) then {
+            _converted = [_patient, [_patient] call ACME_fnc_clinicalEpoch] call ACME_fnc_shockROSC;
+        } else {
+            [_patient,0,[_patient] call ACME_fnc_clinicalEpoch] call ACME_fnc_rhythmSet;
+            _converted = ([_patient] call ACME_fnc_rhythmGet) != 102;
+        };
+        if (_converted) then {
             [_patient, "ACME_rhythm_torsadesRefractoryUntil", CBA_missionTime + (missionNamespace getVariable ["ACME_rhythm_magRefractorySec", 20])] call ACME_fnc_setVarNet;
             private _ceil = missionNamespace getVariable ["ACME_rhythm_amioCeilingMg", 2200];
             [_patient, "ACME_rhythm_amioCum", (_patient getVariable ["ACME_rhythm_amioCum", 0]) min (_ceil * 0.75)] call ACME_fnc_setVarNet;
@@ -1102,8 +1110,8 @@ private _getMedEffect = {
     };
 
     // Diagnostic mirror only; the common getter is the source, never a consumer of this cache.
-    [_patient, "ACME_vent_etco2Adj", _etco2Observed] call ACME_fnc_setVarNet;
-    [_patient, "ACME_vent_etco2AdjAt", CBA_missionTime] call ACME_fnc_setVarNet;
+    [_patient,"ACME_vent_etco2Adj",_etco2Observed,0.10,2] call ACME_fnc_setVarNetApprox;
+    _patient setVariable ["ACME_vent_etco2AdjAt",CBA_missionTime,false];
 
     _state set ["paCO2", _paCO2];
     _state set ["paCO2Burden", linearConversion [_paCO2Normal, _paCO2Max, _paCO2, 0, 1, true]];
@@ -1133,11 +1141,11 @@ private _getMedEffect = {
     private _hypoBluntFrac = (_hypoBlunt max 0) min 0.95;
     private _support = _rawSupport * (1 - _acidBluntFrac) * (1 - _hypoBluntFrac);
     private _supportLoss = (_rawSupport - _support) max 0;
-    [_patient, "ACME_pressorResistAdd", ((_resistAdd max 0) * (1 - _acidBluntFrac) * (1 - _hypoBluntFrac))] call ACME_fnc_setVarNet;
+    [_patient,"ACME_pressorResistAdd",((_resistAdd max 0) * (1 - _acidBluntFrac) * (1 - _hypoBluntFrac)),0.10,2] call ACME_fnc_setVarNetApprox;
     // Distributive shock and hypocalcemia change tone, not a second final-pressure offset.
     private _nativeR = _patient getVariable ["ACME_nativeResistance", 100];
     private _toneDelta = -(_shockDrop + _caMAPdrop) * (_nativeR / (_nativeMAPforAcid max 1));
-    [_patient, "ACME_circ_resistDelta", _toneDelta] call ACME_fnc_setVarNet;
+    [_patient,"ACME_circ_resistDelta",_toneDelta,0.10,2] call ACME_fnc_setVarNetApprox;
     _state set ["rawPressorSupport", _rawSupport];
     _state set ["effectivePressorSupport", _support];
     _state set ["pressorSupportLoss", _supportLoss];
@@ -1330,7 +1338,7 @@ private _getMedEffect = {
         _hrDrive = if (_hrDrive < 0) then { _ventRelief } else { _hrDrive min _ventRelief };
     };
 
-    [_patient, "ACME_hrTarget_circ", _hrDrive] call ACME_fnc_setVarNet;
+    [_patient,"ACME_hrTarget_circ",_hrDrive,0.25,2] call ACME_fnc_setVarNetApprox;
 
     // NA3: native HR integration consumes source-separated targets. Never overwrite its resting baseline here.
     // ICH risk from an epi-equivalent MAP overshoot.
@@ -1353,7 +1361,11 @@ private _getMedEffect = {
             // injury into severity only, and fn_tbihandle then converts that into ICP through the normal capped,
             // time-gated pathway.
             private _ichSeverityAdd = 0.05 * _ichRate * (_overshoot / 20) * _dt;
-            _tbi set ["severity", ((_tbi getOrDefault ["severity", 0]) + _ichSeverityAdd) min 1];
+            private _newTbiSeverity = ((_tbi getOrDefault ["severity", 0]) + _ichSeverityAdd) min 1;
+            _tbi set ["severity", _newTbiSeverity];
+            // This is a new intracranial structural insult, not merely a transient physiology penalty. Preserve it
+            // in the high-water structural grade while still allowing the acute burden itself to recover later.
+            _tbi set ["structuralSeverity", (_tbi getOrDefault ["structuralSeverity", _newTbiSeverity]) max _newTbiSeverity];
             _tbi set ["ichSecondarySeverityAdd", _ichSeverityAdd];
             [_patient, _tbi] call ACME_fnc_tbiStateCommit;
         };
@@ -1387,6 +1399,14 @@ private _getMedEffect = {
 
     // a tube past the carina ventilates one lung. it builds a shunt and halves the compliance.
     [_patient] call ACME_fnc_ettMainstemTick;
+
+    // B125 airway wake reconciliation. Collapse is the unconscious soft-tissue/tongue-collapse ladder, not a
+    // durable anatomical obstruction. If an old ACM worker or locality edge leaves a nonzero collapse value on a
+    // conscious casualty, clear only that collapse field. Vomit, blood, adjuncts and every other airway state stay.
+    if (!(_patient getVariable ["ACE_isUnconscious", false])
+        && {(_patient getVariable ["ACM_airway_AirwayCollapse_State", 0]) > 0}) then {
+        [_patient, [["collapse", 0]], true] call ACM_airway_fnc_setAirwayState;
+    };
 
     // nobody wakes up with a tube in, and vomiting with an OPA in ejects it.
     [_patient] call ACME_fnc_ettWakeGuard;

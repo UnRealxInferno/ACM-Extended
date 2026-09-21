@@ -121,9 +121,9 @@ if (_driving && {_autoP >= (missionNamespace getVariable ["ACME_vent_alarmAutoPe
 // mandatory mode that is not actually delivering. this is the alarm that should get someone killed if ignored,
 // and it is precisely the case the manual breath button exists for.
 private _rrNow = _patient getVariable ["ACM_breathing_RespirationRate", 0];
-private _manualLast = _patient getVariable ["ACME_vent_manualBreathT", -999];
+private _manualLast = _patient getVariable ["ACME_vent_manualBreathServer", -999];
 private _manualWindow = missionNamespace getVariable ["ACME_vent_manualBreathWindow", 12];
-private _handBreathing = (_now - _manualLast) <= _manualWindow;
+private _handBreathing = ((serverTime - _manualLast) max 0) <= _manualWindow;
 if (_rrNow < 4 && {!_handBreathing}) then {
     _alarms pushBack "APNEA";
 };

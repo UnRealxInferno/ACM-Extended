@@ -26,7 +26,7 @@ private _syringeList = (ACM_SYRINGES_10 + ACM_SYRINGES_5 + ACM_SYRINGES_3 + ACM_
 private _actions = [];
 
 {
-    _targetItems append ((magazinesAmmoCargo _x) select {(_x select 0) in _syringeList});       
+    _targetItems append ((magazinesAmmoCargo _x) select {(_x select 0) in _syringeList});
 } forEach _containers;
 
 {

@@ -31,16 +31,14 @@ private _mgauge = _mark param [7, 16];
 if !(_mgauge in [14, 16, 18, 20]) then { _mgauge = 16; };
 private _dir = if (_mframe == "") then { "base" } else { _mframe select [1] };
 
-// the connected line art carries the hub and the tubing in one picture. it is authored on the same insertion
-// plane as the hub, so it drops straight onto the existing anchor.
-_mark set [5, format [
+// The connected line art carries the hub and tubing in one picture. Commit against this hub's stable signature
+// on the casualty owner instead of replacing a possibly stale whole mark array from this medic client.
+private _texture = format [
     "\acm_extended\ui\iv\iv_line\connected\%1g\%2\iv_line_connected_%1g_%2_ca.paa",
     _mgauge, _dir
-]];
-// broadcast and version it, the same as fn_ivminigameaddmark. see the note there.
-_patient setVariable ["ACME_IV_Marks", _marks, true];
-_patient setVariable ["ACME_IV_MarkVer", (_patient getVariable ["ACME_IV_MarkVer", 0]) + 1, true];
-uiNamespace setVariable ["ACME_IV_MarkVerSeen", (_patient getVariable ["ACME_IV_MarkVer", 0])];
+];
+private _sig = [_mark param [0,""], _mark param [1,""], _mark param [2,0], _mark param [3,0], _mark param [10,""], _mgauge];
+[_patient, "ivMarks", ["connect", [_sig, _texture], [_patient] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
 
 uiNamespace setVariable ["ACME_IV_Held", "none"];
 uiNamespace setVariable ["ACME_IV_InsStage", ""];

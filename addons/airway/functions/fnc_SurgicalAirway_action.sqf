@@ -94,5 +94,5 @@ if (_progress > 0) then {
         _ctrlPlacedHook ctrlCommit 0;
     };
 };
- 
+
 [] call FUNC(SurgicalAirway_updateActions);

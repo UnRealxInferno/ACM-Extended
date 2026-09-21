@@ -13,7 +13,7 @@ if (isNull _display) exitWith {};
 private _flagCount = missionNamespace getVariable ["ACME_sync_flagCount", 16];
 private _flagRows  = missionNamespace getVariable ["ACME_sync_flagRows", 6];
 private _tgt = missionNamespace getVariable ["ACM_circulation_AED_Monitor_Target", objNull];
-private _armed = (!isNull _tgt) && {_tgt getVariable ["ACME_sync_armed", false]};
+private _armed = (!isNull _tgt) && {uiNamespace getVariable ["ACME_sync_localArmed", _tgt getVariable ["ACME_sync_armed", false]]};
 
 private _fnc_hideAll = {
     for "_i" from 0 to (_flagCount * _flagRows - 1) do {

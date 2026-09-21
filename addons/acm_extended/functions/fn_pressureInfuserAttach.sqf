@@ -1,6 +1,7 @@
 params [["_pane", "transfusion"]];
-/* NA5. Select the physical bag with fn_getSelectedActiveBagContext.sqf's full layout.
-   Inventory stays on the medic; the patient owner validates and commits the cuff. */
+/* Select the physical bag with fn_getSelectedActiveBagContext.sqf's full layout.
+   The pressure infuser is reusable: possession is required for a new cuff application, but the item is never consumed.
+   The patient owner validates and commits the per-bag cuff state. */
 if (!hasInterface) exitWith {};
 private _display = findDisplay 86000;
 if (isNull _display || {(_display getVariable ["ACME_txActivePane", "transfusion"]) != _pane}) exitWith {};
@@ -24,15 +25,14 @@ if (_bagId == "") exitWith {
 };
 private _pending = missionNamespace getVariable ["ACME_piPending", createHashMap];
 if (((values _pending) findIf { !(_x select 3) && {(_x select 0) isEqualTo _patient} && {((_x select 1) select 2) == _bagId} }) >= 0) exitWith {};
-private _spent = !(_bagId in (_patient getVariable ["ACME_piCuffs", createHashMap]));
-if (_spent && {([ACE_player, "ACME_PressureInfuser"] call ace_common_fnc_getCountOfItem) < 1}) exitWith {
+private _isNewCuff = !(_bagId in (_patient getVariable ["ACME_piCuffs", createHashMap]));
+if (_isNewCuff && {([ACE_player, "ACME_PressureInfuser"] call ace_common_fnc_getCountOfItem) < 1}) exitWith {
     ["No pressure infuser carried.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
 };
-if (_spent && {!([ACE_player, "ACME_PressureInfuser"] call CBA_fnc_removeItem)}) exitWith {};
 private _seq = (missionNamespace getVariable ["ACME_piSequence", 0]) + 1;
 missionNamespace setVariable ["ACME_piSequence", _seq];
 private _id = format ["cuff:%1:%2:%3", clientOwner, netId ACE_player, _seq];
-private _args = [_patient, ACE_player, _bagId, [_patient] call ACME_fnc_clinicalEpoch, _id, CBA_missionTime, _spent, _pane == "infusion"];
+private _args = [_patient, ACE_player, _bagId, [_patient] call ACME_fnc_clinicalEpoch, _id, CBA_missionTime, _isNewCuff, _pane == "infusion"];
 _pending set [_id, [_patient, _args, CBA_missionTime, false]];
 missionNamespace setVariable ["ACME_piPending", _pending];
 [_patient, "pressureCuff", _args] call ACME_fnc_ownerDispatch;

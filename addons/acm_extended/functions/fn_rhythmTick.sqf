@@ -19,20 +19,74 @@ private _fnc_release = {params ["_u"]; [_u] call ACME_fnc_rhythmRelease;};
     private _dt = [_u, "rhythm", 0.5, 5] call ACME_fnc_clinicalTickDelta;
     private _hrNow = _u getVariable ["ace_medical_heartRate", 80];
 
-    // Torsades uses the native pulseless-VT contract. Every other custom perfusing rhythm yields immediately at
-    // ACM's own fatal-rate boundaries. This prevents an AFib/SVT overlay from masking the native >220 VT/PVT or
-    // <40 VF/asystole transition that handleUnitVitals has already selected.
-    private _isTorsades = (_code == 102);
-    private _hrReleases = !_isTorsades && {
-        (_hrNow < (missionNamespace getVariable ["ACME_rhythmACMFatalLowHR", 40]))
-        || {_hrNow > (missionNamespace getVariable ["ACME_rhythmACMFatalHighHR", 220])}
+    // Torsades is a conversion into a nonperfusing ventricular rhythm, not a permanently perfusing tachycardia.
+    // Use the exact same time window as the monitor morph and continuously publish the remaining mechanical
+    // perfusion fraction. Manual pulse assessment reads that fraction so the pulse becomes weaker/slower throughout
+    // the entry strip and is completely absent when the waveform is fully converted.
+    private _torsadesNonPerf = _code == 102 && {_u getVariable ["ACME_rhythm_torsadesNonPerfusing", false]};
+    private _torsadesPerfusion = if (_code == 102) then {_u getVariable ["ACME_rhythm_torsadesPerfusion",1]} else {1};
+    if (_code == 102) then {
+        private _startAt = _u getVariable ["ACME_rhythm_torsadesStart", -1];
+        private _entryMinSec = missionNamespace getVariable ["ACME_rhythm_torsadesEntryMinSec", 6];
+        private _entrySweeps = missionNamespace getVariable ["ACME_rhythm_torsadesEntrySweeps", 3];
+        private _entryWindow = _entryMinSec max (_entrySweeps * 176 * 0.03);
+        private _elapsed = if (_startAt >= 0) then {(CBA_missionTime - _startAt) max 0} else {0};
+        private _rawProgress = (_elapsed / (_entryWindow max 0.1)) max 0 min 1;
+        private _progress = _rawProgress * _rawProgress * (3 - (2 * _rawProgress));
+        _torsadesPerfusion = (1 - _progress) max 0 min 1;
+        if (abs ((_u getVariable ["ACME_rhythm_torsadesPerfusion",1]) - _torsadesPerfusion) >= 0.015 || {_rawProgress >= 1}) then {
+            [_u, "ACME_rhythm_torsadesPerfusion", _torsadesPerfusion] call ACME_fnc_setVarNet;
+        };
+
+        if (_rawProgress >= 1) then {
+            if (!_torsadesNonPerf) then {
+                [_u, "ACME_rhythm_torsadesNonPerfusing", true] call ACME_fnc_setVarNet;
+                _torsadesNonPerf = true;
+            };
+
+            // Keep requesting the native arrest transition until ACE confirms it. The old code made one request and
+            // then latched NonPerfusing=true; if that one state-machine event was missed/delayed, torsades could stay
+            // electrically mature while still having a pulse forever.
+            if !(_u getVariable ["ace_medical_inCardiacArrest", false]) then {
+                private _lastReq = _u getVariable ["ACME_rhythm_torsadesArrestRequestAt", -1];
+                if (_lastReq < 0 || {(CBA_missionTime - _lastReq) >= 0.75}) then {
+                    _u setVariable ["ACME_rhythm_torsadesArrestRequestAt", CBA_missionTime, false];
+                    [_u, 3, [_u] call ACME_fnc_clinicalEpoch] call ACME_fnc_arrestLocal;
+                };
+            };
+
+            if (_u getVariable ["ace_medical_inCardiacArrest", false]) then {
+                // Mature torsades is native PVT mechanically. If ACM initially routes a low-output arrest through its
+                // reversible/PEA worker, explicitly hand it back to the normal PVT arrest worker.  This gives mature
+                // torsades the same no-pulse/deterioration/AED lifecycle as native pulseless VT while 102 remains only
+                // the monitor morphology.
+                if (([_u] call ACME_fnc_rhythmNative) != 3) then {
+                    _u setVariable ["ACME_nativeRequestedRhythm",3,false];
+                    [_u,3] call ACM_circulation_fnc_setCardiacArrestTargetRhythm;
+                    [_u] call ACM_circulation_fnc_handleCardiacArrest;
+                    _u setVariable ["ACME_nativeRequestedRhythm",nil,false];
+                    if (([_u] call ACME_fnc_rhythmNative) != 3) then {
+                        [_u, [["cardiacRhythmState", 3]], true] call ACM_circulation_fnc_setRuntimeState;
+                    };
+                };
+                _curRhythm = 3;
+            };
+        };
     };
-    // for torsades, its own PVT proxy, 3, is expected and must not count as having moved to an arrest rhythm. exclude
-    // 3 from the arrest-list trigger while in torsades, and every other arrest and CPR code still releases it.
-    private _arrestList = if (_isTorsades) then { [-1, 1, 2, 4, 5] } else { [-1, 1, 2, 3, 4, 5] };
-    private _physiologyTookOver = ((_u getVariable ["ace_medical_inCardiacArrest", false]) != _isTorsades)
-        || {_curRhythm in _arrestList}
-        || _hrReleases;
+
+    // Every other perfusing custom rhythm yields immediately when native ACM enters a true critical/arrest rhythm.
+    // Mature torsades is the intentional exception: native PVT owns physiology while 102 owns morphology.
+    private _torsadesOwnsPVT = _code == 102
+        && {_torsadesNonPerf}
+        && {_u getVariable ["ace_medical_inCardiacArrest", false]}
+        && {_curRhythm == 3};
+    private _hrReleases = (_hrNow < (missionNamespace getVariable ["ACME_rhythmACMFatalLowHR", 40]))
+        || {_hrNow > (missionNamespace getVariable ["ACME_rhythmACMFatalHighHR", 220])};
+    private _physiologyTookOver = !(_torsadesOwnsPVT) && {
+        (_u getVariable ["ace_medical_inCardiacArrest", false])
+        || {_curRhythm in [-1,1,2,3,4,5]}
+        || _hrReleases
+    };
 
     if (_physiologyTookOver) then {
         [_u, false] call _fnc_release;
@@ -42,19 +96,24 @@ private _fnc_release = {params ["_u"]; [_u] call ACME_fnc_rhythmRelease;};
         // because ACM's crt is a function of MAP and blood volume, the obtunded auto-band, and a low CPP on a TBI brain.
         // a poorly perfusing rhythm therefore reads as one without us touching each vital by hand. spo2floor adds
         // peripheral desaturation for the unstable rhythms, and it is skipped while an NRB is feeding o2.
-        private _bpOff = switch (_code) do {
+        private _bpOff = if (_torsadesOwnsPVT) then {0} else {switch (_code) do {
             case 100: { missionNamespace getVariable ["ACME_rhythm_bpDropRVR", -28] };  // AFib-RVR: unstable and poorly perfusing.
             case 101: { missionNamespace getVariable ["ACME_rhythm_bpDropAtrialTach", -12] };  // atrial tach: mild instability.
-            case 102: { missionNamespace getVariable ["ACME_rhythm_bpDropTorsades", -30] };  // torsades: near-arrest.
+            case 102: {
+                // Mechanical output collapses in step with the visible torsades conversion. Start symptomatic but
+                // still perfusing, then drive toward profound hypotension as the pulse fraction approaches zero.
+                private _baseDrop = missionNamespace getVariable ["ACME_rhythm_bpDropTorsades", -30];
+                linearConversion [0,1,(1 - _torsadesPerfusion),(_baseDrop * 0.35),(_baseDrop * 1.65),true]
+            };
             case 103: { missionNamespace getVariable ["ACME_rhythm_bpDropAFib", 0] };  // controlled AFib: it perfuses fine.
             case 104: { missionNamespace getVariable ["ACME_rhythm_bpDropSVT", -18] };  // SVT: symptomatic and cardiovertible.
             default  { 0 };
-        };
+        }};
         if ((_u getVariable ["ACME_rhythm_bpOffset", 0]) != _bpOff) then { [_u, "ACME_rhythm_bpOffset", _bpOff] call ACME_fnc_setVarNet; };
 
-        private _spo2Floor = switch (_code) do {
+        private _spo2Floor = if (_torsadesOwnsPVT) then {100} else {switch (_code) do {
             case 100: { 90 }; case 102: { 88 }; case 104: { 93 }; case 101: { 95 }; default { 100 };
-        };
+        }};
         if (_spo2Floor < 100 && {!(_u getVariable ["ACME_nrb_delivering", false])}) then {
             private _spo2 = _u getVariable ["ace_medical_spo2", 97];
             if (_spo2 > _spo2Floor) then { [_u, [["spo2", ((_spo2 - (1.2 * _dt)) max _spo2Floor), true, true]]] call ACM_core_fnc_setAceMedicalState; };

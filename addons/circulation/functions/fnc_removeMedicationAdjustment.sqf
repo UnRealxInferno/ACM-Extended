@@ -25,7 +25,7 @@ private _found = 0;
 
 {
     _x params ["_medicationClassname", "_injectTime", "_timeToMaxEffect", "_maxTimeInSystem", "_hrAdjust", "_painAdjust", "_flowAdjust", "_administrationType", "_maxEffectTime", "_rrAdjust", "_coSensitivityAdjust", "_breathingEffectivenessAdjust", "_concentration", "_medicationType"];
-    
+
     if (_medicationClassname == _targetMedication) then {
         _returnedMedication pushBack (+_medicationArray select _forEachIndex);
         _medicationArray deleteAt _forEachIndex;

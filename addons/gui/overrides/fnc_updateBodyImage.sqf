@@ -77,7 +77,7 @@ private _bodyPartBloodLoss = [0, 0, 0, 0, 0, 0];
         [_bloodLoss] call ACEFUNC(medical_gui,bloodLossToRGBA);
     } else {
         private _damage = _bodyPartDamage select _forEachIndex;
-        
+
         if (EGVAR(damage,enable)) then {
             switch (true) do {
                 case (_forEachIndex > 3): { // legs: index 4 & 5

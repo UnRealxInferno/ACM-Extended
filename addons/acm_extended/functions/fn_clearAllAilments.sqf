@@ -5,6 +5,7 @@ private _patient = if (_this isEqualType []) then { _this param [0, objNull] } e
 if (isNull _patient) exitWith {};
 if (!local _patient) exitWith {};
 private _preserveDeathInterventions = false;  // Full heal/respawn are real resets; death uses fn_deathFreeze instead.
+
 if (!alive _patient && {
     (_patient getVariable ["ACME_headElevated", false])
     || {_patient getVariable ["ACME_headElev_vestRemoved", false]}
@@ -36,6 +37,8 @@ if (_patient getVariable ["ACME_headElevated", false]) then {
 // same guarantees independently: the carrier back on the body, the prop gone, the helper gone and the flags
 // gone.
 [_patient] call ACME_fnc_headElevVestRestore;
+[_patient, true] call ACME_fnc_chestAccessVestRestore;
+_patient setVariable ["ACME_chestAccess_leases", createHashMap, true];
 private _hePropObj = _patient getVariable ["ACME_headElev_propObj", objNull];
 if (!isNull _hePropObj) then { detach _hePropObj; deleteVehicle _hePropObj; };
 private _heHelper = _patient getVariable ["ACME_headElev_helper", objNull];
@@ -228,10 +231,15 @@ if (alive _patient) then {
 } forEach [
     "ACME_rhythm_active", "ACME_rhythm_targetHR", "ACME_rhythm_bpOffset", "ACME_rhythm_savedTargetHR", "ACME_peaElectricalHR", "ACME_peaElectricalState",
     "ACM_circulation_AED_RhythmTransition",
-    "ACME_rhythm_amioCum", "ACME_rhythm_obtundUntil", "ACME_rhythm_torsadesRefractoryUntil",
+    "ACME_rhythm_amioCum", "ACME_rhythm_obtundUntil", "ACME_rhythm_torsadesRefractoryUntil", "ACME_rhythm_torsadesNonPerfusing", "ACME_rhythm_torsadesPerfusion", "ACME_rhythm_torsadesArrestRequestAt",
     "ACME_rhythm_epiDripEarliest", "ACME_rhythm_magTerminatedLogged", "ACME_rhythm_magSuppressUntil",
     "ACME_rhythm_magLevel", "ACME_rhythm_lidoLastTherapeutic", "ACME_rhythm_lidoEffectiveness", "ACME_lido_serumLevel",
     "ACME_lido_seizureState", "ACME_lido_seizurePhaseEnd", "ACME_seizure_rrDrive",
+    "ACME_sarinSeizureCause", "ACME_debugSeizureUntil",
+    "ACME_seizure_motionActive", "ACME_seizure_motionGestureEH", "ACME_seizure_motionCurrentGesture",
+    "ACME_seizure_motionRetryPending", "ACME_seizure_motionAdvancePending",
+    "ACME_seizure_motionSession", "ACME_seizure_motionReadyAt", "ACME_stethNextLungUpdate",
+    // Legacy motion fields remain in the scrub list so a hot-reloaded casualty can never keep the old jitter worker.
     "ACME_seizure_motionPFH", "ACME_seizure_motionBaseDir", "ACME_seizure_motionAnimIdx",
     "ACME_seizure_motionPhase", "ACME_seizure_motionPhaseEnd",
     "ACME_lidoTox_hrTarget", "ACME_lidoTox_resistDelta", "ACME_lidoTox_arrestFired",
@@ -285,7 +293,12 @@ _patient setVariable ["ACME_vesicant_painApplied", nil, true];
 // safely.
 {
     private _cbp = _x;
-    { _patient setVariable [format ["ACME_ivCompromised_%1_%2", _cbp, _x], nil, true]; } forEach [0, 1, 2];
+    {
+        _patient setVariable [format ["ACME_ivCompromised_%1_%2", _cbp, _x], nil, true];
+        if (_cbp != "head") then {
+            _patient setVariable [format ["ACME_ivInfiltrationVisual_%1_%2", _cbp, _x], nil, true];
+        };
+    } forEach [0, 1, 2];
 } forEach ["leftarm", "rightarm", "leftleg", "rightleg", "head"];
 
 // shock, plus the circulation chemistry and state, which fn_circhandle rebuilds fresh.

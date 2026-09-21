@@ -14,6 +14,7 @@ private _dpPauseClass = _medic getVariable ["ACME_DP_PauseTreatmentClass", ""];
 if ((_medic getVariable ["ACME_DP_Active", false]) && {_dpPauseClass in ["acme_elevatehead", "acme_lowerhead"]}) then {
     _medic setVariable ["ACME_DP_Paused", false, false];
     _medic setVariable ["ACME_DP_PauseTreatmentClass", "", false];
+    _medic setVariable ["ACME_DP_TreatmentBusy", false, false];
     _medic setVariable ["ACME_DP_IdleStart", CBA_missionTime, false];
     _medic setVariable ["ACME_DP_LastPoseAssert", 0, false];
 };
@@ -36,6 +37,7 @@ if (alive _medic && {isNull objectParent _medic}) then {
         params ["_m"];
         if (isNull _m || {!local _m} || {!alive _m} || {!isNull objectParent _m}) exitWith {};
         if (_m getVariable ["ACME_headElev_seqActive", false]) exitWith {};
+        if ([_m] call ACME_fnc_providerStanceOwned) exitWith {};
         _m setUnitPos "AUTO";
     }, [_medic], 0.25] call CBA_fnc_waitAndExecute;
 };

@@ -10,6 +10,8 @@ private _duration = 0;
 // Client-performance rule: render state is immediate. Interpolating dozens of carousel controls caused frame hitches.
 private _d = findDisplay 84000;
 if (isNull _d) exitWith {};
+// Establish the duration row before any carousel hit area is measured.
+call ACME_fnc_skBodyActionRender;
 
 private _body = (uiNamespace getVariable ["ACME_SK_View","syringe"]) == "body";
 private _editMode = uiNamespace getVariable ["ACME_SK_TagEditMode",false];
@@ -20,6 +22,10 @@ if (!_body) exitWith {
 
 private _expanded = (uiNamespace getVariable ["ACME_SK_CarouselExpanded",false]) || {_editMode};
 private _injectBusy = uiNamespace getVariable ["ACME_SK_InjectionBusy",false];
+// Only the legacy/display-bound normal push owns the center plunger directly. Hardcore push drains the
+// authoritative syringe row over time and therefore NEEDS carousel renders to follow the changing volume.
+private _pushAnimPFH = uiNamespace getVariable ["ACME_SK_PushAnimPFH",-1];
+private _normalPushAnimActive = _pushAnimPFH isEqualType 0 && {_pushAnimPFH >= 0};
 private _carouselBusy = uiNamespace getVariable ["ACME_SK_CarouselBusy",false];
 private _hover = (uiNamespace getVariable ["ACME_SK_CarouselHover",false]) && {!_editMode};
 private _hoverOffset = uiNamespace getVariable ["ACME_SK_CarouselHoverOffset", 99];
@@ -141,13 +147,22 @@ private _dx = _rw * (if (_expanded) then {0.185} else {0.155});
 private _editBodyRect = +(_d getVariable ["ACME_SK_EditTagBodyRect",[0,0,0,0]]);
 private _drawForBounds = ctrlPosition (_d displayCtrl 84150);
 private _actionCtrl = _d displayCtrl 84820;
-private _actionForBounds = if (!isNull _actionCtrl) then {ctrlPosition _actionCtrl} else {_drawForBounds};
+private _durationCtrl = _d displayCtrl 84830;
+private _boundCtrl = if (!isNull _durationCtrl && {ctrlShown _durationCtrl}) then {_durationCtrl} else {_actionCtrl};
+private _actionForBounds = if (!isNull _boundCtrl) then {ctrlPosition _boundCtrl} else {_drawForBounds};
 private _hoverTop = if ((_editBodyRect select 3) > 0) then {
     (_editBodyRect select 1) + (_editBodyRect select 3) + safeZoneH*0.007
 } else {
     (_ry max (safeZoneY + safeZoneH*0.50))
 };
 private _hoverBottom = (_actionForBounds select 1) - safeZoneH*0.012;
+if (!isNull _zone) then {
+    private _zoneH = (_hoverBottom - _hoverTop) max 0;
+    _zone ctrlSetPosition [_rx,_hoverTop,_rw,_zoneH];
+    private _zoneUsable = !_editMode && {!_carouselBusy} && {_zoneH > 4*pixelH};
+    _zone ctrlShow _zoneUsable; _zone ctrlEnable _zoneUsable;
+    _zone ctrlCommit 0;
+};
 
 // Dedicated stored-tag editor remains native ACM size and is raised so the bottom cannot be cut off.
 // B68: tag editing uses the exact native Draw Syringe rectangle for the STORED syringe's own size.
@@ -201,7 +216,11 @@ for "_slot" from 0 to 4 do {
         private _frac = (((_amt + _nsMl) / (_size max 0.01)) max 0) min 1;
         private _sizeRatio = switch (_size) do {case 1:{10.2/10.5};case 3:{9.83/10.5};case 5:{10.3/10.5};default{1};};
         private _py = _y + (_travel10 * _sizeRatio * _frac * (_h / ((_native select 3) max 0.001)));
-        _pl ctrlSetPosition [_x,_py,_w,_h]; _pl ctrlSetTextColor [1,1,1,_alpha];
+        // During an ordinary display-bound push, fn_skConfirmInjection owns the center plunger frame by frame.
+        // Hardcore pushes do not use that animator: they mutate the stored syringe volume continuously, so the
+        // carousel must follow that live fraction instead of freezing the plunger in its starting position.
+        if !(_normalPushAnimActive && {_slot == 2}) then {_pl ctrlSetPosition [_x,_py,_w,_h];};
+        _pl ctrlSetTextColor [1,1,1,_alpha];
 
         private _color = _e param [7,"none",[""]];
         private _hasTag = !(_color in ["","none"]);
@@ -430,5 +449,3 @@ _rightKey ctrlSetPosition [_rightKeyX,_hintY,_keyW,_keyH];
 (_d displayCtrl 84001) ctrlSetText "";
 private _p = _d getVariable ["ACME_SK_ReturnPatient",objNull]; if (isNull _p) then {_p=uiNamespace getVariable ["ACME_SK_Patient",objNull];};
 (_d displayCtrl 84002) ctrlSetText (if (isNull _p) then {"Patient"} else {name _p});
-
-call ACME_fnc_skBodyActionRender;

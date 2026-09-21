@@ -20,6 +20,9 @@ if (isNull GVAR(SyringeDraw_Target)) exitWith {};
 
 private _targetInventory = GVAR(SyringeDraw_InventorySelection);
 
+// Shared patient/vehicle vial stock is protected by a short owner-authoritative lease. Release the previous
+// holder before switching panes so another medic is never blocked by a source this client is no longer using.
+if (!isNil "ACME_fnc_vialLeaseRelease") then {[ACE_player] call ACME_fnc_vialLeaseRelease;};
 _targetInventory = _targetInventory + 1;
 
 private _vehicle = objectParent ACE_player;
@@ -56,4 +59,6 @@ private _target = [ACE_player, GVAR(SyringeDraw_Target), _vehicle] select GVAR(S
 
 _ctrlInventorySelectText ctrlSetText (format [LLSTRING(Common_InventoryTarget), _text]);
 
+// Prime the lease immediately; fn_vialHolder will keep it renewed while this inventory remains selected.
+if (!isNil "ACME_fnc_vialHolder") then {[ACE_player] call ACME_fnc_vialHolder;};
 [] call FUNC(Syringe_UpdateMedicationList);

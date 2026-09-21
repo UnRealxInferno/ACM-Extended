@@ -28,6 +28,7 @@ if (isNil "ACME_hcBase_captured") then {
     ACME_hcBase_nrb_flowLPM   = ACME_nrb_flowLPM;
     ACME_hcBase_CS_exitFactor = ACME_CS_exitFactor;
     ACME_hcBase_DP_treatTimeMult = ACME_DP_treatTimeMult;
+    ACME_hcBase_DP_limbBleedMult = ACME_DP_limbBleedMult;
     // the newer systems.
     ACME_hcBase_vesicant_severeFloorStage = missionNamespace getVariable ["ACME_vesicant_severeFloorStage", 2];
     ACME_hcBase_vesicant_recoverPerMin    = missionNamespace getVariable ["ACME_vesicant_recoverPerMin", 0.5];
@@ -49,32 +50,12 @@ ACME_hcEff_tbi    = missionNamespace getVariable ["ACME_hc_tbi", false];
 ACME_hcEff_rhythm = missionNamespace getVariable ["ACME_hc_rhythm", false];
 ACME_hcEff_circ   = missionNamespace getVariable ["ACME_hc_circ", false];
 ACME_hcEff_nrb    = missionNamespace getVariable ["ACME_hc_nrb", false];
-ACME_hcEff_transfusion = missionNamespace getVariable ["ACME_hc_transfusion", false];
+ACME_hcEff_medications = missionNamespace getVariable ["ACME_hc_medications", false];
 private _juncBleedMult = missionNamespace getVariable ["ACME_junctionalBleedMult", 1.0];
 private _juncFreqMult  = missionNamespace getVariable ["ACME_junctionalFreqMult", 1.0];
 
-// transfusion.
-// the citrate and calcium model already exists in fn_circhandle: the citrate load per liter, a threshold before it
-// bites, the ionised calcium that falls out of it, and the coagulation multiplier that follows. hardcore tunes
-// that model rather than running a second one beside it.
-// a previous build did run a second one, on three variable names that did not exist anywhere in the addon, and its
-// only real effect was to write a corrupted value into ACME_hypo_temp, which twenty-five other places read. that
-// function is deleted.
-if (ACME_hcEff_transfusion) then {
-    ACME_ca_citrateThreshold = 1;  // citrate starts binding after one unit rather than later.
-    ACME_ca_citratePerLiter  = 0.30;  // and it binds harder per liter.
-    ACME_ca_coagMaxMult      = 1.9;  // uncorrected calcium costs more clotting.
-    ACME_ca_floor            = 0.30;  // and it can fall further before it bottoms out.
-    ACME_hypo_coagStartTemp  = 36;  // cold blood starts costing clotting sooner.
-    ACME_hypo_coagMaxMult    = 2.1;  // and it costs more of it.
-} else {
-    ACME_ca_citrateThreshold = 2;
-    ACME_ca_citratePerLiter  = 0.22;
-    ACME_ca_coagMaxMult      = 1.4;
-    ACME_ca_floor            = 0.45;
-    ACME_hypo_coagStartTemp  = 35;
-    ACME_hypo_coagMaxMult    = 1.6;
-};
+// Transfusion uses the standard circulation/resuscitation defaults for every mission.
+// Old exports of the retired transfusion setting do not alter physiology or bag access.
 // Clinical wording reads ACME_hc_descriptors directly. It has no difficulty cache.
 // Other Hardcore systems retain their effective values below.
 ACME_hcEff_vesicant  = missionNamespace getVariable ["ACME_hc_vesicant", false];
@@ -86,9 +67,9 @@ ACME_hcEff_vent     = missionNamespace getVariable ["ACME_hc_vent", false];
 // apply, or restore the baseline.
 if (ACME_hcEff_junc) then {
     ACME_junctionalBleedNorm      = (missionNamespace getVariable ["ACME_junctionalBleedHardcoreNorm", 0.15]) * _juncBleedMult;
-    ACME_junctionalDPControl      = 0.35;  // pressure controls about 65 percent against about 85 percent.
+    ACME_junctionalDPControl      = 0.30;  // B102: about 70 percent control, slightly stronger than the old 65 percent.
     ACME_junctionalGauzeControl   = 0.65;  // gauze alone controls only about 35 percent, so dp on top matters more.
-    ACME_junctionalGauzeDPControl = 0.15;  // gauze plus dp held controls about 85 percent rather than a perfect 100, so a wrap is still needed.
+    ACME_junctionalGauzeDPControl = 0.10;  // B102: gauze plus pressure controls about 90 percent; the wrap is still definitive.
     ACME_junctionalChanceVelocity = (0.85 * _juncFreqMult) min 1.0;
     ACME_junctionalChanceAvulsion = (0.30 * _juncFreqMult) min 1.0;
 } else {
@@ -118,6 +99,7 @@ ACME_nrb_flowLPM      = if (ACME_hcEff_nrb) then { 25 } else { ACME_hcBase_nrb_f
 // compounded 1.15x on every re-apply.
 ACME_CS_exitFactor    = if (ACME_hcEff_cs) then { ACME_hcBase_CS_exitFactor * 1.15 } else { ACME_hcBase_CS_exitFactor };
 ACME_DP_treatTimeMult = if (ACME_hcEff_dp) then { 2.0 } else { ACME_hcBase_DP_treatTimeMult };
+ACME_DP_limbBleedMult = if (ACME_hcEff_dp) then { missionNamespace getVariable ["ACME_DP_limbBleedMultHardcore", 0.80] } else { ACME_hcBase_DP_limbBleedMult };
 
 // the newer systems, following ACM's hardcore philosophy that the field cannot fully fix it.
 // extravasation: severe leaks leave a worse permanent floor and recover more slowly, so the matched antidote and

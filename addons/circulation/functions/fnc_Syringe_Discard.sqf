@@ -28,7 +28,7 @@ private _containers = [uniformContainer _medic, vestContainer _medic, backpackCo
     private _exit = false;
     private _container = _x;
 
-    private _containerItems = ((magazinesAmmoCargo _container) select {(((_x select 0) splitString "_") select 3) == _medication});  
+    private _containerItems = ((magazinesAmmoCargo _container) select {(((_x select 0) splitString "_") select 3) == _medication});
 
     if (count _containerItems < 1) then {
         continue;
@@ -42,7 +42,7 @@ private _containers = [uniformContainer _medic, vestContainer _medic, backpackCo
             _exit = true;
             break;
         };
-        
+
     } forEach _containerItems;
 
     if (_exit) then {

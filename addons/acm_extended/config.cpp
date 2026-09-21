@@ -13,10 +13,26 @@ class Extended_PostInit_EventHandlers {
     };
 };
 
+// Pause-menu bridge for ACME's patient-focused diagnostic dump. CBA opens this empty display, the onLoad
+// handler writes the snapshot, then closes immediately, mirroring ACE's own Debug To Clipboard option.
+class RscDisplayEmpty;
+class ACME_MainMenuHelperDumpDebug: RscDisplayEmpty {
+    onLoad = "[] call ACME_fnc_debugDumpToClipboard; (_this select 0) closeDisplay 0;";
+};
+
 // the hang bag uses a dedicated copy of the crew-aid loop with forced freelook.
 // ACE uses the same cfgmoves flags for its seated states. the body stays fixed and the head and camera stay
 // free.
-class CfgMovesBasic;
+// Dedicated seizure gesture actions. These are separate aliases rather than global edits of BI's GestureSpasm
+// states, so ACME gets the faster convulsion cadence without changing hit reactions or gestures used by other mods.
+class CfgMovesBasic {
+    class ManActions {
+        ACME_SeizureSpasm3[] = {"ACME_SeizureSpasm3", "Gesture"};
+        ACME_SeizureSpasm4[] = {"ACME_SeizureSpasm4", "Gesture"};
+        ACME_SeizureSpasm5[] = {"ACME_SeizureSpasm5", "Gesture"};
+        ACME_SeizureSpasm6[] = {"ACME_SeizureSpasm6", "Gesture"};
+    };
+};
 class CfgMovesMaleSdr: CfgMovesBasic {
     class States {
         // B47 provider-treatment theatre. Each wrapper inherits the exact requested BI motion but disables
@@ -50,6 +66,34 @@ class CfgMovesMaleSdr: CfgMovesBasic {
             connectTo[] = {};
             interpolateFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.15};
             interpolateTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15, "Unconscious", 0.02};
+        };
+
+        // Chest-seal workspace hold. The runtime freezes this exact medic3 motion at the configured hands-on-chest
+        // sample for the lifetime of the minigame. A Flip may interpolate into medic4 and then return here directly.
+        class AinvPknlMstpSnonWnonDnon_medic3;
+        class ACME_ChestSealWorkspace: AinvPknlMstpSnonWnonDnon_medic3 {
+            looped = 0;
+            disableWeapons = 1;
+            disableWeaponsLong = 1;
+            disableWeaponsShort = 1;
+            disableReload = 1;
+            canPullTrigger = 0;
+            enableOptics = 0;
+            enableBinocular = 0;
+            connectFrom[] = {
+                "AmovPknlMstpSnonWnonDnon", 0.15,
+                "AinvPknlMstpSnonWnonDnon_medic4", 0.10
+            };
+            connectTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15};
+            interpolateFrom[] = {
+                "AmovPknlMstpSnonWnonDnon", 0.15,
+                "AinvPknlMstpSnonWnonDnon_medic4", 0.10
+            };
+            interpolateTo[] = {
+                "AmovPknlMstpSnonWnonDnon", 0.15,
+                "AinvPknlMstpSnonWnonDnon_medic4", 0.10,
+                "Unconscious", 0.02
+            };
         };
 
         // Semi-Fowler states.
@@ -145,17 +189,25 @@ class CfgMovesMaleSdr: CfgMovesBasic {
             disableWeaponsLong = 1;
             canPullTrigger = 0;
             connectFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.15};
-            connectTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15};
+            // B128: chest-seal Flip can take ownership directly from the pressure hold instead of waiting for a
+            // neutral crouch round-trip. This is the literal medic4 Flip/Inspect-Chest motion requested by ACME.
+            connectTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15, "AinvPknlMstpSnonWnonDnon_medic4", 0.08};
             interpolateFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.15, "AinvPknlMstpSnonWnonDnon_AinvPknlMstpSnonWnonDnon_medic", 0.10};
-            interpolateTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15, "Unconscious", 0.02};
+            interpolateTo[] = {"AmovPknlMstpSnonWnonDnon", 0.15, "AinvPknlMstpSnonWnonDnon_medic4", 0.08, "Unconscious", 0.02};
         };
         class UnconsciousReviveMedic_B;
         class ACME_StethoscopeWork: UnconsciousReviveMedic_B {
             looped = 1;
             disableWeapons = 1;
             disableWeaponsLong = 1;
+            disableWeaponsShort = 1;
+            disableReload = 1;
             canPullTrigger = 0;
-            connectTo[] = {};
+            enableOptics = 0;
+            enableBinocular = 0;
+            // The frozen frame is controlled by treatmentPoseStart, not by trapping the state in the move graph.
+            // Give treatmentPoseStop an authored route back to the normal unarmed crouch.
+            connectTo[] = {"AmovPknlMstpSnonWnonDnon", 0.2};
             interpolateFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.2};
             interpolateTo[] = {"AmovPknlMstpSnonWnonDnon", 0.2, "Unconscious", 0.02};
         };
@@ -181,6 +233,9 @@ class CfgMovesMaleSdr: CfgMovesBasic {
             canPullTrigger = 0;
             enableOptics = 0;
             enableBinocular = 0;
+            // The inherited Jets crew-aid state carries movement sound events. ACME uses this animation only as
+            // silent medical theatre, so disable inherited animation sounds and prevent jump_sfx lookups.
+            soundEnabled = 0;
             looped = 0;
             connectFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.20, "ACM_GenericContinuous", 0.15};
             interpolateFrom[] = {"AmovPknlMstpSnonWnonDnon", 0.20, "ACM_GenericContinuous", 0.15};
@@ -230,6 +285,9 @@ class CfgMovesMaleSdr: CfgMovesBasic {
             canPullTrigger = 0;
             enableOptics = 0;
             enableBinocular = 0;
+            // The parent cinematic loop also carries sound edges intended for deck crew movement. The frozen
+            // medical hold must be silent or Arma can repeatedly request the inherited jump_sfx class.
+            soundEnabled = 0;
             // The stock cinematic loop carries RTM movement. Running it at its authored speed is what makes a player
             // drift across the terrain while simply holding the bag. Keep the first raised-bag frame effectively
             // stationary on every client, while still leaving an explicit interrupt path into the authored lower-bag
@@ -259,6 +317,8 @@ class CfgMovesMaleSdr: CfgMovesBasic {
             canPullTrigger = 0;
             enableOptics = 0;
             enableBinocular = 0;
+            // Do not inherit the Jets deck-crew foot/jump sound edge on the lower-bag animation.
+            soundEnabled = 0;
             looped = 0;
             // A non-looping exit with no ConnectTo can be skipped by the move graph. Give the hold a real route into
             // this state and let this state finish naturally into the normal empty-handed crouch.
@@ -299,6 +359,8 @@ class CfgPatches {
             "A3_Anims_F",
             "cba_main",
             "ace_main",
+            "ace_fastroping",
+            "ace_interact_menu",
             "ace_map",
             "ace_medical_status",
             "ace_medical_treatment",
@@ -312,7 +374,12 @@ class CfgPatches {
             "ACM_disability"
         };
         author = "mavis";
-        version = "1.2.0-r0";
+        // Public release identity is stored in CfgPatches.version because every debug-overlay page reads this
+        // exact value. It lets testers prove which PBO Arma actually loaded instead of guessing from a workshop
+        // timestamp or repository state.
+        version = "1.2.2.1";
+        // Only HEMTT dev/launch output enables experimental development actions.
+        acme_developmentBuild = 0;
     };
 };
 
@@ -1178,16 +1245,14 @@ class ACM_Vial_Fentanyl: ACE_ItemCore {
         };
     };
 
-    // y-type blood tubing set, for hardcore transfusion.
-    // this is a blood administration set with two spikes, for blood and saline, that share a single drip chamber
-    // and patient line. with hardcore transfusion enabled, a spike of a blood bag consumes one of these instead of
-    // a plain iv line, and the line must be primed or flushed with 250 ml or more of saline between units.
+    // Standard blood administration set with blood and saline spikes sharing one patient line.
+    // Any supported saline bag can be paired; the line consumes only the configured flush volume.
     class ACME_YTubing: ACE_ItemCore {
         dlc = "ACM_Extended";
         scope = 2;
         author = "mavis";
         displayName = "Y-Type Blood Tubing Set (QTTS)";
-        descriptionShort = "Blood administration set (dual-spike, in-line filter). Required to spike blood under Hardcore: transfusion. Flush the line with >=250mL saline between units.";
+        descriptionShort = "Blood administration set (dual-spike, in-line filter). Pair blood with a compatible saline bag. Flush the line when prompted; no 250mL bag minimum.";
         picture = "\acm_extended\ui\items\y_tubing_qtts_ca.paa";
         ACE_isMedicalItem = 1;
         class ItemInfo: CBA_MiscItem_ItemInfo {
@@ -1646,6 +1711,11 @@ class CfgGesturesMale {
     class Default;
     class States {
         class GestureFreezeStand;  // vanilla upper-body arm gesture base. it inherits the movement-friendly mask.
+        class GestureSpasm3;
+        class GestureSpasm4;
+        class GestureSpasm5;
+        class GestureSpasm6;
+
         class ACME_IV_Gesture: GestureFreezeStand {
             file = "\acm_extended\animations\acm_iv_stand_lh.rtm";
             looped = 1;
@@ -1654,6 +1724,15 @@ class CfgGesturesMale {
             canPullTrigger = 0;
             enableOptics = 0;
         };
+
+        // BI's four best whole-body-looking spasm gestures, isolated under ACME action names and played at 1.05x.
+        // They retain the original RTMs, masks and interpolation data. Only playback speed changes.
+        // Positive speed is clip cycles/second, not a playback multiplier.
+        // BI Spasm3-6: 0.238, 0.2325, 0.2069, 0.1287, each multiplied by 1.05.
+        class ACME_SeizureSpasm3: GestureSpasm3 { speed = 0.2499; };
+        class ACME_SeizureSpasm4: GestureSpasm4 { speed = 0.244125; };
+        class ACME_SeizureSpasm5: GestureSpasm5 { speed = 0.217245; };
+        class ACME_SeizureSpasm6: GestureSpasm6 { speed = 0.135135; };
     };
 };
 
@@ -1701,7 +1780,6 @@ class CfgFunctions {
             class initNrbRuntime {};
             class initHangBagRuntime {};
             class initHpmkCoreRuntime {};
-            class initAcreBabbleRuntime {};
             class initProcedureEnvironmentConfig {};
             class registerHpmkVisualRuntime {};
             class registerChestSealPresenceRuntime {};
@@ -1735,6 +1813,12 @@ class CfgFunctions {
             class initHardcoreRuntime {};
             class registerTreatmentRollRuntime {};
             class registerHeadElevationTreatmentRuntime {};
+            class registerChestAccessVestRuntime {};
+            class chestAccessVestEvent {};
+            class chestAccessVestAcquire {};
+            class chestAccessVestProvider {};
+            class chestAccessVestPark {};
+            class chestAccessVestRestore {};
             class registerMegacodeInteractionRuntime {};
             class registerVentilatorKeybindRuntime {};
             class initMinigameInteractionRuntime {};
@@ -1742,7 +1826,22 @@ class CfgFunctions {
             class registerEcgJostleRuntime {};
             class registerSyringeLifecycleRuntime {};
             class initForkStartupRuntime {};
+
+            // Cumulative physiology / Megacode systems introduced after Batch 1.
+            class preoxygenationTick {};
+            class shockPhenotypeTick {};
+            class shockSetPhenotype {};
+            class coagulationTick {};
+            class aspirationTick {};
+            class pulsePerfusionProfile {};
+            class expansionBootstrap {};
+            class expansionRegisterRuntime {};
+            class megacodeAARRecord {};
+            class megacodeAARReset {};
+            class megacodeAARShow {};
+            class megacodeAARTick {};
             class registerDebugWatchdogRuntime {};
+            class registerDebugPageKeybindRuntime {};
             class registerThoracicMenuPresentationRuntime {};
             class registerMedicalMenuOpenRuntime {};
             class registerClinicalMenuPresentationRuntime {};
@@ -1781,6 +1880,7 @@ class CfgFunctions {
             class medicationInteractions {};
             class medicationDriveAdd {};
             class medicationDriveTick {};
+            class hardcoreMedicationRateEffect {};
             class ecgJostleLocal {};
             class ecgJostleRequest {};
             class ecgArtifactStrength {};
@@ -1810,6 +1910,8 @@ class CfgFunctions {
             class preparedAttachRequest {};
             class preparedAttachLocal {};
             class preparedAttachAck {};
+            class preparedHangCommit {};
+            class preparedHangResult {};
             class bagIdentity {};
             class infusionRegisterLocal {};
             class infusionRegisterCore {};
@@ -1837,6 +1939,7 @@ class CfgFunctions {
             class clinicalRestore {};
             class clinicalReset {};
             class deathFreeze {};
+            class deadPhysiologyFreeze {};
             class fluidCommit {};
             class infusionDeliver {};
             class injuryEvent {};
@@ -1846,6 +1949,8 @@ class CfgFunctions {
             class netNotice {};
             class ownerRegister {};
             class ownerInit {};
+            class transientStateReconcile {};
+            class providerStateReconcile {};
             class nrbStateLocal {};
             class nrbStateCommit {};
             class nrbSoundServer {};
@@ -1853,6 +1958,7 @@ class CfgFunctions {
             class nrbOxygenAck {};
             class chestSealKey {};
             class chestSealActualSide {};
+            class chestSealCanPhysicalRoll {};
             class chestSealReset {};
             class chestSealSession {};
             class chestSealRequest {};
@@ -1882,6 +1988,14 @@ class CfgFunctions {
             class transfusionYTubing {};
             class transfusionFlushLine {};
             class transfusionPullBag {};
+            class transfusionPullCommit {};
+            class transfusionPullResult {};
+            class rehangUsedBagCommit {};
+            class rehangUsedBagResult {};
+            class yRefillCommit {};
+            class yRefillResult {};
+            class discardYTubingCommit {};
+            class discardYTubingResult {};
             class discardYTubing {};
             class resumeSiteFlow {};
             class togglePreparedSets {};
@@ -1987,9 +2101,13 @@ class CfgFunctions {
             class ivMinigameCleanDone {};
             class ivMinigameRelease {};
             class ivMinigameRenderMarks {};
+            class ivExtravasationState {};
+            class visualBruiseState {};
             class ivMinigameAddMark {};
+            class ivMarkCommit {};
             class ivMinigameClick {};
             class ivMinigameRefreshBandSlot {};
+            class ivTrayHover {};
             class ivMinigameRemoveBand {};
             class ivMinigameStickSuccess {};
             class ivMinigameFlip {};
@@ -2032,6 +2150,12 @@ class CfgFunctions {
             class getSalineVolumeFromItem {};
             class handleInfusions {};
             class updateTransfusionControls {};
+            class updateTransfusionAccessHotspots {};
+            class selectTransfusionAccess {};
+            class transfusionAccessValid {};
+            class transfusionRemoveBagCommit {};
+            class transfusionRemoveBagResult {};
+            class transfusionFlowToggleCommit {};
             class updateEJTransfusionMenu {};
             class selectEJTransfusionSite {};
             class adjustDripRate {};
@@ -2086,6 +2210,8 @@ class CfgFunctions {
             class skUiTick {};
 
             class skPickSize {};
+            class skApplySize {};
+            class skPageNavigate {};
             class skPickFlush {};
             class skWasteBegin {};
             class skWasteToggleMove {};
@@ -2149,6 +2275,17 @@ class CfgFunctions {
             class skInjectSite {};
             class skBeginInjection {};
             class skConfirmInjection {};
+            class medicationSuggestedPushSec {};
+            class hardcorePushStart {};
+            class hardcorePushTick {};
+            class hardcorePushSendBatch {};
+            class hardcorePushStop {};
+            class hardcorePushFinalize {};
+            class hardcorePushAck {};
+            class hardcorePushRestoreDelta {};
+            class hardcorePushOverlay {};
+            class hardcorePushReopen {};
+            class hardcorePushRestoreUi {};
             class skBodyActionRender {};
             class skBodyActionClick {};
             class skDiscardSelected {};
@@ -2212,11 +2349,15 @@ class CfgFunctions {
             class ccApply {};
             class assessBleeding {};
             class chestSealOpen {};
+            class chestSealPatientBegin {};
+            class chestSealPatientEnd {};
+            class chestSealParkCarrier {};
             class chestSealInit {};
             class chestSealGenHoles {};
             class chestSealBumpVer {};
             class chestSealPeel {};
             class chestSealBurp {};
+            class chestSealBurpReady {};
             class chestSealOcclusionTick {};
             class hcCircTick {};
             class hcVentTick {};
@@ -2232,14 +2373,20 @@ class CfgFunctions {
             class chestSealSealAt {};
             class chestSealSnd {};
             class chestSealFlip {};
+            class chestSealFlipTick {};
             class thoraOpen {};
             class thoraInit {};
             class thoraClose {};
             class thoraRender {};
+            class thoraRenderBruises {};
             class thoraFlip {};
             class thoraTick {};
             class thoraBumpVer {};
             class thoraMouseDown {};
+            class thoraAftercareLocal {};
+            class thoraCanSweep {};
+            class thoraSealAt {};
+            class thoraSealScroll {};
             class thoraSideStateCommit {};
             class thoraMouseUp {};
             class thoraSelectTool {};
@@ -2290,6 +2437,7 @@ class CfgFunctions {
             class headElevAnimGuard {};
             class doAnimHeld {};
             class setVarNet {};
+            class setVarNetApprox {};
             class headElevDeathRelease {};
             class headElevVestRestore {};
             class headElevWatch {};
@@ -2304,6 +2452,7 @@ class CfgFunctions {
             class headElevTryResume {};
             class headElevTuneOpen {};
             class headElevPropApply {};
+            class propEaseTo {};
             class headElevTuneLoad {};
             class headElevTuneUpdate {};
             class headElevTuneReport {};
@@ -2319,9 +2468,6 @@ class CfgFunctions {
             class obtundedTick {};
             class obtundedInputLock {};
             class obtundedVoice {};
-            class acreBabbleInit {};
-            class acreBabbleSet {};
-            class acreBabbleTick {};
             class obtundedApply {};
             class obtundedTransition {};
             class obtundedSet {};
@@ -2331,6 +2477,7 @@ class CfgFunctions {
             class consciousnessBudget {};
             class toggleHypothermia {};
             class readCoreTemp {};
+            class nrbAirwayCompatible {};
             class nrbApply {};
             class nrbRemove {};
             class hpmkWrap {};
@@ -2380,6 +2527,7 @@ class CfgFunctions {
             class minigameReopen {};
             class aceCursorRestore {};
             class rhythmGet {};
+            class peaIsWide {};
             class rhythmSet {};
             class rhythmActiveCommit {};
             class rhythmNativeHoldCommit {};
@@ -2396,6 +2544,10 @@ class CfgFunctions {
             class remove18g {};
             class syncPremixedBags {};
             class debugMenu {};
+            class debugMenuClinical {};
+            class debugMenuNetwork {};
+            class ejTexturePath {};
+            class debugDumpToClipboard {};
             class debugEnabled {};
             class autoBPCondition {};
             class toggleAutoBP {};
@@ -2407,7 +2559,9 @@ class CfgFunctions {
             class rhythmThresholdTick {};
             class lidoEffectiveness {};
             class lidoToxTick {};
+            class debugInduceSeizure {};
             class seizureMotion {};
+            class seizureGestureAdvance {};
             class clearAllAilments {};
             class syncToggle {};
             class syncCardiovert {};
@@ -2436,8 +2590,10 @@ class CfgFunctions {
             class hangBagPrepStop {};
             class hangBagFluidType {};
             class hangBagStart {};
+            class hangBagVisualSync {};
             class hangBagTick {};
             class hangBagStop {};
+            class hangBagRestoreWeapons {};
             class hangBagInputLock {};
             class hangBagHint {};
             class hangBagTuneOpen {};
@@ -2450,7 +2606,20 @@ class CfgFunctions {
             class treatmentGesture {};
             class treatmentPoseStop {};
             class treatmentPoseSync {};
+            class chestSealProviderHoldStart {};
+            class providerStanceOwned {};  // Batch 07
             class beginStethoscopeAction {};
+            class stethoscopeInit {};
+            class stethoscopeSetView {};
+            class stethoscopeEntryFlip {};
+            class stethoscopeEntryFlipTick {};
+            class stethoscopeFlip {};
+            class stethoscopeFlipTick {};
+            class stethoscopeTick {};
+            class stethoscopeWeights {};
+            class stethoscopeClose {};
+            class rollProviderCancel {};
+            class patientRollCancel {};
             class ivLineCreate {};
             class ivLineDestroy {};
             // megacode kelly, the zeus training manikin and its control panel.
@@ -2540,6 +2709,7 @@ class CfgFunctions {
             class ventEffectiveSettings {};
             class ventSimpleManualBreath {};
             class ventManualBreath {};
+            class ventManualBreathCommit {};
             class ventAlarmTick {};
             class ventHoldClear {};
             class ventMmbUp {};
@@ -2547,6 +2717,7 @@ class CfgFunctions {
             class ventPowerOff {};
             class ventPowerDown {};
             class ventStopHard {};
+            class ventHardStopCommit {};
             class ventAlarmSilence {};
             class ventAlarmWindow {};
             class ventAlarmSeverity {};
@@ -2561,6 +2732,10 @@ class CfgFunctions {
             class installLightKey {};
             class flashlightDiag {};
             class debugForceShake {};
+            class initVisualEffectsConfig {};
+            class visualFxTick {};
+            class visualFxDebugCycle {};
+            class visualFxDebugClear {};
             class compatCheck {};
             class altitudeTick {};
             class altitudeDatum {};
@@ -2636,11 +2811,16 @@ class CfgFunctions {
             class vialTake {};
             class openVialStoreCommit {};
             class vialRefund {};
+            class vialLeaseCommit {};
+            class vialLeaseEnsure {};
+            class vialLeaseRelease {};
+            class vialLeaseResult {};
             class infusionVialVolume {};
             class infusionTakeSupplies {};
             class infusionRefundSupplies {};
             class queueInfusionClamp {};
             class infusionDrawStock {};
+            class syringeDrawSetAmount {};
             class sedationComponents {};
             class proceduralAnalgesiaOnBoard {};
             class proceduralAnesthetized {};
@@ -2650,6 +2830,7 @@ class CfgFunctions {
             class laryngoConsequence {};
             class laryngoConsequenceLocal {};
             class laryngoReflexChance {};
+            class laryngoIrritationTick {};
             class infusionClampLocal {};
 
             class propofolOnBoard {};
@@ -2860,7 +3041,7 @@ class ACME_EJTransfusionHotspot: RscButton {
     colorBorder[] = {0,0,0,0};
     soundEnter[] = {};
     soundPush[] = {};
-    soundClick[] = {};
+    soundClick[] = {"\a3\ui_f\data\sound\rscbutton\soundClick", 0.09, 1};
     soundEscape[] = {};
     shadow = 0;
     sizeEx = 0;
@@ -2889,6 +3070,9 @@ class ACME_CoolerHotspot: RscButton {
 // onload wins. everything else on the dialog is inherited from ACM untouched.
 class ACM_circulation_Lifepak_Monitor_Dialog {
     onLoad = "_this call ACME_fnc_aedSyncSetup";
+    // Local operator/SYNC intent belongs to this display only. Clear it on close so an out-of-dialog
+    // AdministerShock call cannot reuse a stale local SYNC choice from an older patient/session.
+    onUnload = "uiNamespace setVariable ['ACM_circulation_AEDMonitor_DLG', nil]; uiNamespace setVariable ['ACME_sync_localArmed', nil]; missionNamespace setVariable ['ACM_circulation_AED_Monitor_Medic', objNull]";
 };
 
 class ACME_RollerClamp_Dialog {
@@ -2897,7 +3081,7 @@ class ACME_RollerClamp_Dialog {
     enableSimulation = 1;
     onLoad = "[_this select 0] call ACME_fnc_minigameInputInstall; call ACME_fnc_onClampLoad";
     onMouseZChanged = "_this call ACME_fnc_scrollClamp";
-    onUnload = "uiNamespace setVariable ['ACME_RollerClamp_DLG', displayNull]; uiNamespace setVariable ['ACME_RollerClamp_InitDisplay', displayNull]; uiNamespace setVariable ['ACME_RollerClamp_Dragging', false]; uiNamespace setVariable ['ACME_RollerClamp_ReleaseOnUp', false]; uiNamespace setVariable ['ACME_RollerClamp_Track', []];";
+    onUnload = "[uiNamespace getVariable ['ACME_RollerClamp_Position',1], true, false] call ACME_fnc_setClampPosition; uiNamespace setVariable ['ACME_RollerClamp_DLG', displayNull]; uiNamespace setVariable ['ACME_RollerClamp_InitDisplay', displayNull]; uiNamespace setVariable ['ACME_RollerClamp_Dragging', false]; uiNamespace setVariable ['ACME_RollerClamp_ReleaseOnUp', false]; uiNamespace setVariable ['ACME_RollerClamp_Track', []];";
 
     class ControlsBackground {
         class ACME_Backdrop: RscText {
@@ -3050,6 +3234,14 @@ class ACME_SK_NameEdit: RscEdit {
     sizeEx = "safeZoneH / 44";
     autocomplete = "";
 };
+// Explicit native edit semantics for the medication push duration.
+class ACME_SK_PushDurationEdit: ACME_SK_NameEdit {
+    type = 2;
+    style = 0;
+    canModify = 1;
+    maxChars = 3;
+    text = "";
+};
 class ACME_SK_TagEdit: RscEdit {
     // B64: ST_NO_RECT preserves a clickable caret/text surface but suppresses the default black RscEdit frame.
     style = 0x200;
@@ -3104,6 +3296,16 @@ class ACME_SK_PulseButton: ACME_SK_StyledButton {
     colorBackgroundDisabled[] = {0,0,0,0};
     colorFocused[] = {0,0,0,0};
 };
+// Transfusion page navigation uses the exact same transparent button-over-pulsing-backing construction as
+// Narc Box / Body Map. Runtime owns the blue pulse, so hover/focus/press can never replace it with a darker
+// RscButton state.
+class ACME_TX_PageButton: ACME_SK_PulseButton {
+    colorText[] = {0.94,0.91,0.82,1};
+    colorDisabled[] = {0.94,0.91,0.82,0.45};
+    font = "RobotoCondensed";
+    sizeEx = "safeZoneH / 46";
+    shadow = 0;
+};
 // injection hotspots over the body image. each is a faint blue clickable zone that brightens on hover.
 // they are invisible by default. this used to paint a solid 50 percent blue rectangle over every site, which
 // is the giant blue box: a hit-test region drawn as though it were the artwork. the site itself is shown by
@@ -3140,7 +3342,7 @@ class ACME_ChestSeal_Dialog {
     idd = 86400;
     movingEnable = 0;
     onLoad = "[_this select 0] call ACME_fnc_minigameInputInstall; _this call ACME_fnc_chestSealInit";
-    onUnload = "[] call ACME_fnc_chestSealClose";
+    onUnload = "_this call ACME_fnc_chestSealClose";
     class ControlsBackground {
         class CS_Dim: RscText {
             idc = -1;
@@ -4904,7 +5106,7 @@ class ACME_Ventilator_Dialog {
     movingEnable = 0;
     enableSimulation = 1;
     onLoad = "[_this select 0] call ACME_fnc_minigameInputInstall; uiNamespace setVariable ['ACME_vent_dlg', _this select 0]; [] call ACME_fnc_ventPanelInit;";
-    onUnload = "[] call ACME_fnc_ventPanelClose;";
+    onUnload = "_this call ACME_fnc_ventPanelClose;";
     class controlsBackground {
         class Dim: ACME_VentText {
             idc = 87709;
@@ -6176,17 +6378,17 @@ class CfgSounds {
     };
     class ACM_Stethoscope_Breath_Normal_Crackles {
         name = "ACM_Stethoscope_Breath_Normal_Crackles";
-        sound[] = {"acm_extended\sound\breathing_normal_crackles.ogg", "db+16", 1};
+        sound[] = {"acm_extended\sound\breathing_normal_crackles.ogg", "db+10", 1};
         titles[] = {};
     };
     class ACM_Stethoscope_Breath_Fast_Crackles {
         name = "ACM_Stethoscope_Breath_Fast_Crackles";
-        sound[] = {"acm_extended\sound\breathing_fast_crackles.ogg", "db+16", 1};
+        sound[] = {"acm_extended\sound\breathing_fast_crackles.ogg", "db+10", 1};
         titles[] = {};
     };
     class ACM_Stethoscope_Breath_Slow_Crackles {
         name = "ACM_Stethoscope_Breath_Slow_Crackles";
-        sound[] = {"acm_extended\sound\breathing_slow_crackles.ogg", "db+16", 1};
+        sound[] = {"acm_extended\sound\breathing_slow_crackles.ogg", "db+10", 1};
         titles[] = {};
     };
     // HPMK deploy, one-shot. it is the foil and shell rustle when a medic wraps the blanket.
@@ -6773,10 +6975,10 @@ class CfgVehicles {
                 };
             };
         };
-        // block a provider's "Get Up" on a patient who is obtunded. ACM_LyingState_GetUp already hides for player
-        // targets through !isplayer. this covers ai as well and is the explicit guard.
         class ACE_Actions {
             class ACE_MainActions {
+                // block a provider's "Get Up" on a patient who is obtunded. ACM_LyingState_GetUp already hides for player
+                // targets through !isplayer. this covers ai as well and is the explicit guard.
                 class ACM_LyingState_GetUp {
                     condition = "!(isPlayer _target) && {(_target getVariable ['ACM_core_Lying_State', false]) && {alive _target} && {!(_target getVariable ['ACE_isUnconscious', false])} && {!(_target getVariable ['ace_evacuation_casualtyTicketClaimed', false])} && {!(_target getVariable ['ACME_obtunded', false])}}";
                     statement = "[_target, true] call ACM_core_fnc_getUp";
@@ -7339,6 +7541,11 @@ ACME_LBTN(ACME_Ventilator);
 #undef ACME_LBTN
 
 class ace_medical_treatment_actions {
+    // PARALLEL PROVIDER RULE:
+    // Active BVM, CPR and other continuous roles reserve only that same role. They do not globally
+    // disable unrelated treatment actions for another provider. The provider actually performing a
+    // continuous action remains occupied locally, while BVM canUseBVM, CPR canCPR and procedure-specific
+    // in-progress state preserve one-provider-per-role / one-procedure-at-a-time behavior.
     // only CheckPulse is forward declared, because it is the only one of these we do not go on to define.
     // declaring a class and then defining it in the same scope gives "Member already defined". the definition
     // below is the reference, and other classes inherit from it perfectly well with no separate declaration.
@@ -7377,10 +7584,26 @@ class ace_medical_treatment_actions {
         animationMedicProne = "";
         animationMedicSelf = "";
         animationMedicSelfProne = "";
+        // Dead engine corpses retain intervention/inspection access where explicitly supported, but a live airway
+        // assessment is not one of those actions. Keep this gate local to Check Airway rather than globally hiding
+        // dead-patient medical actions.
+        condition = "alive _patient && {ACM_airway_enable} && {!(_patient call ace_common_fnc_isAwake)}";
         callbackStart = "_this call ACME_fnc_airwayMedicPose";
         callbackSuccess = "_this call ACM_airway_fnc_checkAirway; [_medic, 'airway'] call ACME_fnc_treatmentPoseStop";
         callbackFailure = "[_medic, 'airway'] call ACME_fnc_treatmentPoseStop";
     };
+    class RecoveryPosition: CheckAirway {
+        displayName = "$STR_ACM_Airway_EstablishRecoveryPosition";
+        displayNameProgress = "$STR_ACM_Airway_EstablishRecoveryPosition_Progress";
+        icon = "";
+        medicRequired = 0;
+        treatmentTime = 3;
+        allowedSelections[] = {"Body"};
+        condition = "alive _patient && {ACM_airway_enable} && {!(_patient call ace_common_fnc_isAwake)} && {(_patient getVariable ['ACM_airway_AirwayItem_Oral','']) != 'SGA'} && {!(_patient getVariable ['ACME_ETT_Inserted',false])} && {!(_patient getVariable ['ACME_vent_driving',false])} && {!(_patient getVariable ['ACM_airway_RecoveryPosition_State',false])} && {isNull objectParent _patient}";
+        callbackSuccess = "[_medic,_patient,true] call ACM_airway_fnc_setRecoveryPosition";
+        ACM_rollToBack = 0;
+    };
+
     class CheckResponse: CheckPulse {
         // Five seconds is intentional: the complete medic3_old assessment motion lives inside the progress window
         // instead of being clipped by a three-second action.  ACME owns entry/exit so ACM never raises a rifle first.
@@ -7403,9 +7626,23 @@ class ace_medical_treatment_actions {
     class CheckDogTags: CheckResponse {
         condition = "ACME_fnc_canCheckPatientDogtags";
     };
+    // Two-second physical stimulus. Keep ACM's native eligibility/callback/animation contract; only the duration changes.
+    class ShakeAwake;
+    class SlapAwake: ShakeAwake {
+        displayName = "$STR_ACM_Disability_SlapAwake";
+        displayNameProgress = "$STR_ACM_Disability_SlapAwake_Progress";
+        allowedSelections[] = {"Head"};
+        treatmentTime = 2;
+        condition = "!([_patient] call ace_common_fnc_isAwake)";
+        callbackSuccess = "ACM_disability_fnc_slapAwake";
+        animationMedic = "AinvPknlMstpSnonWnonDr_medic3";
+        ACM_rollToBack = 1;
+        ACM_ignoreAnimCoef = 1;
+    };
     class CheckBreathing {
         animationMedic = "AmovPknlMstpSrasWpstDnon_AmovPknlMstpSrasWpstDnon_gear";
         animationMedicProne = "AmovPknlMstpSrasWpstDnon_AmovPknlMstpSrasWpstDnon_gear";
+        condition = "alive _patient";
     };
     class UseStethoscope {
         // Auscultation owns a clean supine chest-access pose. Do not inherit CheckBreathing's generic roll-to-back:
@@ -7417,7 +7654,9 @@ class ace_medical_treatment_actions {
         animationMedicProne = "";
         animationMedicSelf = "";
         animationMedicSelfProne = "";
-        callbackStart = "if (toLower (_this param [3, '']) == 'usestethoscope') then {[(_this param [0, objNull])] call ACME_fnc_medicAnimationPrep}";
+        // Generic treatment preflight already owns the single empty-hands transition. A second stethoscope-specific
+        // put-away request could queue another sidearm/primary/launcher holster chain.
+        callbackStart = "";
         callbackSuccess = "private _a = +_this; private _p = _a param [1,objNull]; private _ready = if (isNull _p) then {-1} else {_p getVariable ['ACME_headElev_suspendReadyAt',-1]}; if (!isNull _p && {_p getVariable ['ACME_headElev_Suspended',false]} && {_ready > CBA_missionTime}) then {[{_this call ACM_breathing_fnc_useStethoscope},_a,((_ready - CBA_missionTime) max 0.05) + 0.05] call CBA_fnc_waitAndExecute} else {_a call ACM_breathing_fnc_useStethoscope}";
     };
     // CheckPulse is deliberately not touched. it is the base class for more than fifty actions in this addon
@@ -7460,7 +7699,7 @@ class ace_medical_treatment_actions {
         treatmentTime = "ACM_airway_treatmentTimeOPA";
         items[] = {"ACM_OPA"};
         consumeItem = 1;
-        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Oral','']) == '' && !(alive (_patient getVariable ['ACM_breathing_BVM_Medic',objNull])) && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])";
+        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Oral','']) == '' && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])";
         callbackSuccess = "[_medic, _patient, 'OPA'] call ACM_airway_fnc_insertAirwayItem";
         ACM_cancelRecovery = 1;
         ACM_menuIcon = "ACM_OPA";
@@ -7472,7 +7711,7 @@ class ace_medical_treatment_actions {
         medicRequired = "ACM_airway_allowNPA";
         treatmentTime = "ACM_airway_treatmentTimeNPA";
         items[] = {"ACM_NPA"};
-        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Nasal','']) == '' && !(alive (_patient getVariable ['ACM_breathing_BVM_Medic',objNull])) && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])";
+        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Nasal','']) == '' && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])";
         callbackSuccess = "[_medic, _patient, 'NPA'] call ACM_airway_fnc_insertAirwayItem";
         ACM_menuIcon = "ACM_NPA";
     };
@@ -7483,7 +7722,7 @@ class ace_medical_treatment_actions {
         medicRequired = "ACM_airway_allowSGA";
         treatmentTime = "ACM_airway_treatmentTimeSGA";
         items[] = {"ACM_IGel"};
-        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Oral','']) == '' && !(alive (_patient getVariable ['ACM_breathing_BVM_Medic',objNull])) && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])";
+        condition = "ACM_airway_enable && !(_patient call ace_common_fnc_isAwake) && (_patient getVariable ['ACM_airway_AirwayItem_Oral','']) == '' && !(_patient getVariable ['ACME_ETT_Inserted', false]) && !(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false]) && !(_patient getVariable ['ACME_nrb_on', false])";
         callbackSuccess = "[_medic, _patient, 'SGA'] call ACM_airway_fnc_insertAirwayItem";
         ACM_menuIcon = "ACM_IGel";
     };
@@ -7561,6 +7800,38 @@ class ace_medical_treatment_actions {
     class RemoveIV_14_Upper { condition = "false"; };
     class RemoveIV_14_Middle { condition = "false"; };
     class RemoveIV_14_Lower { condition = "false"; };
+
+    // IO removal is kept independent from the native peripheral-IV removal hierarchy.  The IV rows above are
+    // intentionally hidden because peripheral catheters come out through the IV minigame.  IOs have no draggable
+    // hub, so they need their own medical-menu removal actions.  Using ACME-owned classes here prevents a later
+    // change to RemoveIV_16_Upper from suppressing IO removal through config inheritance/load-order merging.
+    class RemoveIO_FAST1 { condition = "false"; };
+    class RemoveIO_EZ { condition = "false"; };
+    class ACME_RemoveIO_FAST1 {
+        displayName = "$STR_ACM_Circulation_RemoveIO_FAST1";
+        displayNameProgress = "$STR_ACM_Circulation_RemoveIO_FAST1_Progress";
+        icon = "";
+        category = "advanced";
+        treatmentLocations = 0;
+        medicRequired = 0;
+        treatmentTime = 3.5;
+        allowedSelections[] = {"Body"};
+        allowSelfTreatment = 0;
+        items[] = {};
+        consumeItem = 0;
+        condition = "[_patient, _bodyPart, 4] call ACM_circulation_fnc_hasIO";
+        callbackSuccess = "[_medic, _patient, _bodyPart, 4, false, false] call ACM_circulation_fnc_setIV";
+        ACM_menuIcon = "ACM_IO_FAST";
+    };
+    class ACME_RemoveIO_EZ: ACME_RemoveIO_FAST1 {
+        displayName = "$STR_ACM_Circulation_RemoveIO_EZ";
+        displayNameProgress = "$STR_ACM_Circulation_RemoveIO_EZ_Progress";
+        allowedSelections[] = {"LeftArm", "RightArm", "LeftLeg", "RightLeg"};
+        condition = "[_patient, _bodyPart, 3] call ACM_circulation_fnc_hasIO";
+        callbackSuccess = "[_medic, _patient, _bodyPart, 3, false, false] call ACM_circulation_fnc_setIV";
+        ACM_menuIcon = "ACM_IO_EZ";
+    };
+
     class InsertIO_FAST1: InsertIV_16_Upper {
         // B45 keeps ACM's insertion mechanics, then an owner-local setIVLocal handler guarantees a moderate-pain
         // floor. Fluid through the IO invokes ACME_fnc_ioPainResponse for max pain and delayed syncope.
@@ -7583,7 +7854,7 @@ class ace_medical_treatment_actions {
         items[] = {"ACME_Spray_Esketamine"};
         treatmentTime = 4;
         medicRequired = 0;
-        condition = "!(alive (_patient getVariable ['ACM_breathing_BVM_Medic', objNull]))";
+        condition = "true";
         callbackSuccess = "['ace_medical_treatment_medicationLocal', [_patient, _bodyPart, 'Esketamine', 1, false], _patient] call CBA_fnc_targetEvent";
         ACM_rollToBack = "false";  // a conscious pain patient. do not force them supine.
         sounds[] = {};
@@ -7721,7 +7992,7 @@ class ace_medical_treatment_actions {
         displayNameProgress = "Opening thoracostomy...";
         items[] = {"ACM_ChestTubeKit"};
         consumeItem = 0;
-        condition = "([_medic, 'ACME_InsertChestTube'] call ACME_fnc_procedureActionAllowed) && {!isNull _patient && {(_patient getVariable ['ACM_breathing_Thoracostomy_State', 0]) == 1}}";
+        condition = "([_medic, 'ACME_InsertChestTube'] call ACME_fnc_procedureActionAllowed) && {!isNull _patient && {(_patient getVariable ['ACM_breathing_Thoracostomy_State', 0]) == 1} && {(((_patient getVariable ['ACME_thora_open_left', '']) == 'finger') && {!(_patient getVariable ['ACME_thora_closed_left', false])} && {!(_patient getVariable ['ACME_thora_sealed_left', false])}) || (((_patient getVariable ['ACME_thora_open_right', '']) == 'finger') && {!(_patient getVariable ['ACME_thora_closed_right', false])} && {!(_patient getVariable ['ACME_thora_sealed_right', false])})}}";
         // re-opens the thoracostomy mini-game so the medic can place the tube, or continue, with the saved state.
         callbackSuccess = "[_this select 0, _this select 1, _this select 2] call ACME_fnc_thoraOpen";
         ACM_menuIcon = "ACM_ChestTubeKit";
@@ -7756,7 +8027,7 @@ class ace_medical_treatment_actions {
     class ACME_CloseIncision: ACME_PerformThoracostomy {
         displayName = "Close Incision (Suture)";
         displayNameProgress = "Suturing incision closed...";
-        condition = "([_medic, 'ACME_CloseIncision'] call ACME_fnc_procedureActionAllowed) && {!isNull _patient && {(([_medic, _patient, ['ACE_surgicalKit']] call ace_medical_treatment_fnc_hasItem) || {_patient getVariable ['ACM_breathing_Thoracostomy_UsedKit', false]})} && {(_patient getVariable ['ACM_breathing_Thoracostomy_State', 0]) > 0} && {!(_patient getVariable ['ACME_thora_tube_left', false])} && {!(_patient getVariable ['ACME_thora_tube_right', false])}}";
+        condition = "([_medic, 'ACME_CloseIncision'] call ACME_fnc_procedureActionAllowed) && {!isNull _patient && {(([_medic, _patient, ['ACE_surgicalKit']] call ace_medical_treatment_fnc_hasItem) || {_patient getVariable ['ACM_breathing_Thoracostomy_UsedKit', false]})} && {(_patient getVariable ['ACM_breathing_Thoracostomy_State', 0]) > 0} && {!(_patient getVariable ['ACME_thora_tube_left', false])} && {!(_patient getVariable ['ACME_thora_tube_right', false])} && {!(_patient getVariable ['ACME_thora_closed_left', false])} && {!(_patient getVariable ['ACME_thora_closed_right', false])}}";
         callbackSuccess = "[_this select 0, _this select 1, 'close'] call ACME_fnc_thoraAftercare";
         ACM_menuIcon = "ACE_surgicalKit";
             medicRequired = "ACM_breathing_allowThoracostomy";
@@ -8025,6 +8296,7 @@ class ace_medical_treatment_actions {
     };
     class ACME_WrapJunctional: CheckPulse {
         displayName = "Dress Junctional Wound";
+        ACM_menuIcon = "ACM_PressureBandage";
         displayNameProgress = "Dressing junctional wound...";
         category = "bandage";
         treatmentLocations[] = {"All"};
@@ -8153,10 +8425,9 @@ class ace_medical_treatment_actions {
         treatmentTime = 0.1;
         allowedSelections[] = {"Head"};
         items[] = {};
-        // B71: Orotracheal intubation is not offered to an awake/perfusing casualty. The action appears only once
-        // the patient is medically unconscious (or in cardiac arrest), with the required laryngoscope/tube and no
-        // conflicting ventilatable airway already in place.
-        condition = "([_medic, 'ACME_IntubateStart'] call ACME_fnc_procedureActionAllowed) && {(_patient getVariable ['ACE_isUnconscious', false]) || {(_patient getVariable ['ace_medical_unconscious', false])} || {(_patient getVariable ['ace_medical_inCardiacArrest', false])}} && {([_medic, 'ACME_Laryngoscope'] call ace_common_fnc_getCountOfItem) > 0} && {([_medic, 'ACME_ETTube'] call ace_common_fnc_getCountOfItem) > 0} && {!(_patient getVariable ['ACME_ETT_Inserted', false])} && {(_patient getVariable ['ACM_airway_AirwayItem_Oral', '']) isEqualTo ''} && {!(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])}";
+        // B120: Orotracheal intubation may be attempted on a perfusing casualty. Airway reflex, sedation and
+        // paralysis are handled inside the procedure rather than hiding the action from the menu.
+        condition = "([_medic, 'ACME_IntubateStart'] call ACME_fnc_procedureActionAllowed) && {([_medic, 'ACME_Laryngoscope'] call ace_common_fnc_getCountOfItem) > 0} && {([_medic, 'ACME_ETTube'] call ace_common_fnc_getCountOfItem) > 0} && {!(_patient getVariable ['ACME_ETT_Inserted', false])} && {!(_patient getVariable ['ACM_airway_RecoveryPosition_State', false])} && {(_patient getVariable ['ACM_airway_AirwayItem_Oral', '']) isEqualTo ''} && {!(_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false])} && {!(_patient getVariable ['ACME_nrb_on', false])}";
         callbackSuccess = "[_medic, _patient, toLower _bodyPart] call ACME_fnc_laryngoOpen";
         callbackFailure = "";
         callbackProgress = "";
@@ -8183,7 +8454,9 @@ class ace_medical_treatment_actions {
         treatmentTime = 4;
         allowedSelections[] = {"Head"};
         items[] = {};
-        condition = "([_medic, 'ACME_Extubate'] call ACME_fnc_procedureActionAllowed) && {(_patient getVariable ['ACME_ETT_Inserted', false]) && {!(_patient getVariable ['ACME_ETT_Secured', false])} && {!(_patient getVariable ['ACME_ETT_CuffInflated', false])}}";
+        // B120: Extubate is the deliberate removal workflow and remains visible for any inserted ET tube.
+        // Its treatment includes releasing securement and cuff state before withdrawing the tube.
+        condition = "([_medic, 'ACME_Extubate'] call ACME_fnc_procedureActionAllowed) && {(_patient getVariable ['ACME_ETT_Inserted', false])}";
         callbackSuccess = "[_medic, _patient] call ACME_fnc_laryngoExtubate";
         callbackFailure = "";
         callbackProgress = "";
@@ -8228,7 +8501,7 @@ class ace_medical_treatment_actions {
         consumeItem = 0;
         allowedSelections[] = {"Head"};
         items[] = {};
-        condition = "([_medic, 'ACME_ConnectETVent'] call ACME_fnc_procedureActionAllowed) && {((_patient getVariable ['ACME_ETT_Inserted', false]) || {(_patient getVariable ['ACM_airway_AirwayItem_Oral', '']) isEqualTo 'SGA'} || {_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false]}) && {!(_patient getVariable ['ACME_vent_circuit', false])} && {!(_patient getVariable ['ACME_vent_onPatient', false])} && {(_patient getVariable ['ACME_vent_custodyId', '']) == ''} && {([_medic, 'ACME_Ventilator'] call ace_common_fnc_getCountOfItem) > 0}}";
+        condition = "([_medic, 'ACME_ConnectETVent'] call ACME_fnc_procedureActionAllowed) && {!(_patient getVariable ['ACM_airway_RecoveryPosition_State', false])} && {((_patient getVariable ['ACME_ETT_Inserted', false]) || {(_patient getVariable ['ACM_airway_AirwayItem_Oral', '']) isEqualTo 'SGA'} || {_patient getVariable ['ACM_airway_SurgicalAirway_TubeInserted', false]}) && {!(_patient getVariable ['ACME_vent_circuit', false])} && {!(_patient getVariable ['ACME_vent_onPatient', false])} && {(_patient getVariable ['ACME_vent_custodyId', '']) == ''} && {([_medic, 'ACME_Ventilator'] call ace_common_fnc_getCountOfItem) > 0}}";
         callbackSuccess = "[_medic, _patient] call ACME_fnc_ventConnectPatient";
         ACM_menuIcon = "ACME_Ventilator";
         callbackFailure = "";
@@ -8265,9 +8538,9 @@ class ace_medical_treatment_actions {
     // each level feels like.
     class ACME_DebugForceShake: CheckPulse {
         displayName = "Force Shake (debug)";
-        displayNameProgress = "...";
-        treatmentTime = 0.1;  // not 0. ACE never fires callbacksuccess on a zero-duration treatment, so this
-                               // the debug action has never done anything either.
+        displayNameProgress = "";
+        treatmentTime = 0.01;  // ACE requires a non-zero duration to fire callbackSuccess; 0.01 is visually instant.
+        allowedSelections[] = {"Head"};
         condition = "missionNamespace getVariable ['ACME_debug_enabled', false]";
         callbackSuccess = "[] call ACME_fnc_debugForceShake";
         items[] = {};
@@ -8347,9 +8620,9 @@ class ace_medical_treatment_actions {
         treatmentTime = 20;
         allowedSelections[] = {"LeftLeg","RightLeg"};
         condition = "!(_patient getVariable ['ACME_AAJT_inguinal', false])";
-        callbackStart = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [time, toLowerANSI (_this select 2)], true]";
+        callbackStart = "[_this select 1, 'aajtApplying', [toLowerANSI (_this select 2), true]] call ACME_fnc_ownerDispatch";
         callbackSuccess = "_this call ACME_fnc_aajtApply";
-        callbackFailure = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [], true]";
+        callbackFailure = "[_this select 1, 'aajtApplying', ['', false]] call ACME_fnc_ownerDispatch";
         callbackProgress = "";
         animationMedic = "AinvPknlMstpSnonWnonDr_medic4";
         items[] = {"ACME_AAJT_S"};
@@ -8383,9 +8656,9 @@ class ace_medical_treatment_actions {
         treatmentTime = 20;
         allowedSelections[] = {"LeftArm","RightArm"};
         condition = "((toLowerANSI _bodyPart) == 'leftarm' && {!(_patient getVariable ['ACME_AAJT_axillaleft', false])}) || {(toLowerANSI _bodyPart) == 'rightarm' && {!(_patient getVariable ['ACME_AAJT_axillaright', false])}}";
-        callbackStart = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [time, toLowerANSI (_this select 2)], true]";
+        callbackStart = "[_this select 1, 'aajtApplying', [toLowerANSI (_this select 2), true]] call ACME_fnc_ownerDispatch";
         callbackSuccess = "_this call ACME_fnc_aajtApply";
-        callbackFailure = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [], true]";
+        callbackFailure = "[_this select 1, 'aajtApplying', ['', false]] call ACME_fnc_ownerDispatch";
         callbackProgress = "";
         animationMedic = "AinvPknlMstpSnonWnonDr_medic4";
         items[] = {"ACME_AAJT_S"};
@@ -8419,9 +8692,9 @@ class ace_medical_treatment_actions {
         treatmentTime = 20;
         allowedSelections[] = {"Body"};
         condition = "!(_patient getVariable ['ACME_AAJT_zone3', false])";
-        callbackStart = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [time, 'body'], true]";
+        callbackStart = "[_this select 1, 'aajtApplying', ['body', true]] call ACME_fnc_ownerDispatch";
         callbackSuccess = "_this call ACME_fnc_aajtApply";
-        callbackFailure = "(_this select 1) setVariable ['ACME_Junc_AAJTApplying', [], true]";
+        callbackFailure = "[_this select 1, 'aajtApplying', ['', false]] call ACME_fnc_ownerDispatch";
         callbackProgress = "";
         animationMedic = "AinvPknlMstpSnonWnonDr_medic4";
         items[] = {"ACME_AAJT_S"};
@@ -8512,7 +8785,7 @@ class ace_medical_treatment_actions {
         medicRequired = 0;
         treatmentTime = 1;
         allowedSelections[] = {"Head"};
-        condition = "(missionNamespace getVariable ['ACME_sys_nrb', true]) && {!(_patient getVariable ['ACME_nrb_on', false]) && {([_medic, 'ACM_NRBMask'] call ace_common_fnc_getCountOfItem) > 0}}";
+        condition = "(missionNamespace getVariable ['ACME_sys_nrb', true]) && {[_patient] call ACME_fnc_nrbAirwayCompatible} && {!(_patient getVariable ['ACME_nrb_on', false]) && {([_medic, 'ACM_NRBMask'] call ace_common_fnc_getCountOfItem) > 0}}";
         callbackSuccess = "_this call ACME_fnc_nrbApply";
         callbackFailure = "";
         callbackProgress = "";
@@ -8947,8 +9220,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_toggleShock";
         callbackFailure = "";
@@ -8962,8 +9235,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_toggleOverResus";
         callbackFailure = "";
@@ -8976,8 +9249,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Head", "Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_setObtunded";
         callbackFailure = "";
@@ -8998,8 +9271,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_toggleHypothermia";
         callbackFailure = "";
@@ -9012,8 +9285,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_rhythmAFibRVR";
         callbackFailure = "";
@@ -9026,8 +9299,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_rhythmAFib";
         callbackFailure = "";
@@ -9040,8 +9313,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_rhythmAtrialTach";
         callbackFailure = "";
@@ -9054,8 +9327,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_rhythmTorsades";
         callbackFailure = "";
@@ -9068,14 +9341,22 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_rhythmSVT";
         callbackFailure = "";
         callbackProgress = "";
         items[] = {};
     };
+    class ACME_DebugVFXHypoxia: CheckPulse {
+        displayName = "Visual FX: Hypoxia cycle (debug)"; displayNameProgress = ""; category = "advanced"; treatmentLocations[] = {"All"}; medicRequired = 1; treatmentTime = 0.01; allowedSelections[] = {"Head"}; condition = "[] call ACME_fnc_debugEnabled"; callbackSuccess = "[_this select 0,_this select 1,'hypoxia'] call ACME_fnc_visualFxDebugCycle"; callbackFailure = ""; callbackProgress = ""; items[] = {};
+    };
+    class ACME_DebugVFXHypotension: ACME_DebugVFXHypoxia {displayName = "Visual FX: Hypotension / shock cycle (debug)"; callbackSuccess = "[_this select 0,_this select 1,'hypotension'] call ACME_fnc_visualFxDebugCycle";};
+    class ACME_DebugVFXHypercapnia: ACME_DebugVFXHypoxia {displayName = "Visual FX: Hypercapnia cycle (debug)"; callbackSuccess = "[_this select 0,_this select 1,'hypercapnia'] call ACME_fnc_visualFxDebugCycle";};
+    class ACME_DebugVFXKetamine: ACME_DebugVFXHypoxia {displayName = "Visual FX: Ketamine / dissociation cycle (debug)"; callbackSuccess = "[_this select 0,_this select 1,'ketamine'] call ACME_fnc_visualFxDebugCycle";};
+    class ACME_DebugVFXSyncope: ACME_DebugVFXHypoxia {displayName = "Visual FX: Near-syncope cycle (debug)"; callbackSuccess = "[_this select 0,_this select 1,'syncope'] call ACME_fnc_visualFxDebugCycle";};
+    class ACME_DebugVFXClear: ACME_DebugVFXHypoxia {displayName = "Visual FX: Clear debug overrides"; callbackSuccess = "[_this select 0,_this select 1] call ACME_fnc_visualFxDebugClear";};
     // cheyne-stokes respirations, on and off, for debug. it drives a proper crescendo and decrescendo breathing
     // cycle with an apneic pause, independent of the TBI, so it can be demonstrated and tested on any casualty. a
     // medic's check breathing reads the live rate, and the capnography EtCO2 waxes and wanes with it.
@@ -9086,8 +9367,8 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_descriptorSelfTest";
         callbackFailure = "";
@@ -9100,12 +9381,31 @@ class ace_medical_treatment_actions {
         category = "advanced";
         treatmentLocations[] = {"All"};
         medicRequired = 1;
-        treatmentTime = 1;
-        allowedSelections[] = {"Body"};
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
         condition = "[] call ACME_fnc_debugEnabled";
         callbackSuccess = "_this call ACME_fnc_debugCheyneStokes";
         callbackFailure = "";
         callbackProgress = "";
+        items[] = {};
+    };
+
+    // Head-only seizure test. This enters the real ACME seizure physiology rather than playing gestures alone.
+    // It is invisible unless the provider has the ACME Debug Menu setting enabled.
+    class ACME_DebugInduceSeizure: CheckPulse {
+        displayName = "Induce Seizure (debug)";
+        displayNameProgress = "";
+        category = "advanced";
+        treatmentLocations[] = {"All"};
+        medicRequired = 0;
+        treatmentTime = 0.01;
+        allowedSelections[] = {"Head"};
+        condition = "([] call ACME_fnc_debugEnabled) && {alive _patient} && {!(_patient getVariable ['ace_medical_inCardiacArrest', false])}";
+        callbackSuccess = "_this call ACME_fnc_debugInduceSeizure";
+        callbackFailure = "";
+        callbackProgress = "";
+        animationMedic = "";
+        animationMedicProne = "";
         items[] = {};
     };
     // field shortcut. an empty flush drawn from a hung dirty-epi bag is one 10 mcg push.
@@ -9708,6 +10008,49 @@ class RscTitles {
                 y = "safezoneY + safezoneH/2 - 0.025";
                 w = 0.05;
                 h = 0.05;
+            };
+        };
+    };
+    // B125 one-handed medication push HUD. Static picture controls are intentional: dynamically-created
+    // picture controls were surviving as text/panel controls on some ultrawide clients while the PAA layers
+    // disappeared. The RscTitles resource keeps the syringe visual independent from ACE dialog rebuilds.
+    class ACME_HCPush_Display {
+        idd = 71520;
+        movingEnable = 0;
+        enableSimulation = 1;
+        duration = 1e11;
+        fadeIn = 0;
+        fadeOut = 0;
+        onLoad = "uiNamespace setVariable ['ACME_HCPush_DLG', (_this select 0)];";
+        onUnload = "uiNamespace setVariable ['ACME_HCPush_DLG', displayNull];";
+        class Controls {
+            class ACME_HCPush_Backbit: RscPicture {
+                idc = 71521;
+                text = "\acm_extended\ui\syringe\hud\syringe_10_backbit_ca.paa";
+                colorText[] = {1,1,1,1};
+                x = 0; y = 0; w = 0.1; h = 0.1;
+            };
+            class ACME_HCPush_Plunger: ACME_HCPush_Backbit {
+                idc = 71522;
+                text = "\acm_extended\ui\syringe\hud\syringe_10_plunger_ca.paa";
+            };
+            class ACME_HCPush_Barrel: ACME_HCPush_Backbit {
+                idc = 71523;
+                text = "\acm_extended\ui\syringe\hud\syringe_10_barrel_ca.paa";
+            };
+            class ACME_HCPush_Panel: RscText {
+                idc = 71524;
+                text = "";
+                colorText[] = {1,1,1,0};
+                colorBackground[] = {0.02,0.03,0.06,0.90};
+                x = 0; y = 0; w = 0.2; h = 0.05;
+            };
+            class ACME_HCPush_Text: RscStructuredText {
+                idc = 71525;
+                text = "";
+                colorText[] = {0.94,0.91,0.82,1};
+                colorBackground[] = {0,0,0,0};
+                x = 0; y = 0; w = 0.2; h = 0.05;
             };
         };
     };

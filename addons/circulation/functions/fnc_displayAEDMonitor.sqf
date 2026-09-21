@@ -33,6 +33,7 @@ GVAR(EKG_Tick) = CBA_missionTime;
 _patient setVariable ["ACME_AED_MonitorCursorTime", GVAR(EKG_Tick), false];
 
 GVAR(AED_Monitor_Target) = _patient;
+GVAR(AED_Monitor_Medic) = _medic;  // local operator; AED_Provider is a legacy patient sentinel in base ACM.
 
 uiNamespace setVariable [QGVAR(AEDMonitor_DLG),(findDisplay IDC_LIFEPAK_MONITOR)];
 
@@ -55,6 +56,8 @@ if !(alive _patient) then {
 };
 
 _patient setVariable [QGVAR(AED_EKGRhythm), _rhythm];
+// Re-evaluate reused trace buffers on opening, including calcium given while this panel was closed.
+_patient setVariable ["ACME_AED_Monitor_PEAForm",nil,false];
 
 private _recentShock = [_patient, true] call FUNC(recentAEDShock);
 
@@ -83,7 +86,7 @@ if (count (_patient getVariable [QGVAR(AED_EKGDisplay), []]) < AED_MONITOR_WIDTH
             };
         };
     };
-}; 
+};
 
 if (count (_patient getVariable [QGVAR(AED_PODisplay), []]) < AED_MONITOR_WIDTH || !(_patient getVariable [QGVAR(AED_Monitor_PulseOximeter_State), false])) then { // Initial
     if (_pulseOximeterState) then {
@@ -172,14 +175,14 @@ private _PFH = [{
 
         _patient setVariable [QGVAR(AED_UpdateStep), nil];
         _patient setVariable [QGVAR(AED_Offset), 0];
-        
+
         _patient setVariable [QGVAR(AEDMonitorDisplay_PFH), -1];
 
         if (GVAR(AED_ReOpenMenu)) then {
             GVAR(AED_ReOpenMenu) = false;
             [QEGVAR(core,openMedicalMenu), _patient] call CBA_fnc_localEvent;
         };
-        
+
         [_idPFH] call CBA_fnc_removePerFrameHandler;
     };
 
@@ -319,7 +322,12 @@ private _PFH = [{
     private _oldEKGRhythm = _patient getVariable [QGVAR(AED_EKGRhythm), -2];
     private _oldPORhythm = _patient getVariable [QGVAR(AED_PORhythm), -2];
     private _oldCORhythm = _patient getVariable [QGVAR(AED_CORhythm), -2];
-    private _rhythmChangeEKG = _EKGRhythm != _oldEKGRhythm;
+    // Calcium can change PEA morphology while the native rhythm stays 5. Feed that change through
+    // the existing between-complex splice, without resetting the electrical clock or restarting the sweep.
+    private _peaWide = _EKGRhythm == ACM_Rhythm_PEA && {[_patient] call ACME_fnc_peaIsWide};
+    private _peaFormChanged = isNil {_patient getVariable "ACME_AED_Monitor_PEAForm"}
+        || {_peaWide != (_patient getVariable ["ACME_AED_Monitor_PEAForm",false])};
+    private _rhythmChangeEKG = _EKGRhythm != _oldEKGRhythm || {_peaFormChanged};
     private _rhythmChangePO = _PORhythm != _oldPORhythm;
     private _rhythmChangeCO = _CORhythm != _oldCORhythm;
     private _rhythmChangeCondition = _rhythmChangeEKG || _rhythmChangePO || _rhythmChangeCO;
@@ -342,6 +350,7 @@ private _PFH = [{
 
     if (_stepCondition || {_rrChanged || {_vitalsCondition || {_rhythmChangeCondition || {_connectedCondition || {_listCondition}}}}}) then {
         _patient setVariable [QGVAR(AED_EKGRhythm), _EKGRhythm];
+        _patient setVariable ["ACME_AED_Monitor_PEAForm",_peaWide,false];
         _patient setVariable [QGVAR(AED_PORhythm), _PORhythm];
         _patient setVariable [QGVAR(AED_CORhythm), _CORhythm];
 
@@ -497,7 +506,7 @@ private _PFH = [{
             // to this value, so PFH/render jitter cannot move a scheduled R wave relative to its audible beat.
             _patient setVariable ["ACME_AED_MonitorCursorTime", GVAR(EKG_Tick), false];
         };
-        
+
         // Update vitals displays
         private _displayedHR = _patient getVariable [QGVAR(AED_Pads_Display), 0];
         private _displayedSPO2 = _patient getVariable [QGVAR(AED_PulseOximeter_Display), 0];

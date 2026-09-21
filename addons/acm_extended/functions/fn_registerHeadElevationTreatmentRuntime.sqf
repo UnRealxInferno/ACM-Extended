@@ -6,6 +6,13 @@
 ["ace_treatmentStarted", {
     params ["_medic", "_patient", "_bodyPart", ["_classname", ""]];
     if (isNull _patient || {!local _medic} || {!(_patient getVariable ["ACME_headElevated", false])}) exitWith {};
+    private _classLC = toLowerANSI _classname;
+    // Recovery position replaces Semi-Fowler rather than borrowing a temporary flat-treatment lease.
+    // Begin lowering during the three-second treatment window so success lands directly in the authored
+    // recovery pose instead of re-elevating the casualty after the native callback.
+    if (_classLC == "recoveryposition") exitWith {
+        [_medic, _patient, true] call ACME_fnc_headElevateStop;
+    };
     private _cfg = configFile >> "ace_medical_treatment_actions" >> _classname;
     private _roll = (getNumber (_cfg >> "ACM_rollToBack")) > 0;
     private _isBody = if (_bodyPart isEqualType "") then {toLower _bodyPart == "body"} else {_bodyPart == 1};
@@ -14,7 +21,9 @@
     missionNamespace setVariable ["ACME_headElev_treatmentSerial", _serial];
     private _id = format ["%1:%2:%3", clientOwner, netId _medic, _serial];
     private _token = _patient getVariable ["ACME_headElev_poseToken", ""];
-    private _keepVestOut = toLowerANSI _classname == "usestethoscope";
+    // Gear ownership is independent now. Every temporary flat maneuver preserves the Semi-Fowler support carrier
+    // out of the way, while exact chest-access classes use the separate backpack-vest lease runtime.
+    private _keepVestOut = false;
     _medic setVariable ["ACME_headElev_treatment", [_patient, _classname, _id, _token, _keepVestOut]];
     [_patient, _medic, _id, true, _token, _keepVestOut] call ACME_fnc_headElevTreatmentEvent;
 }] call CBA_fnc_addEventHandler;

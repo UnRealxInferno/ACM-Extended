@@ -26,7 +26,13 @@ private _hintLogArrayAdditional = [];
 private _hintLogFormat = "%1 %2: %3";
 private _hintLogFormatAdditional = "%1 %2: %3";
 
-private _airwayCollapseState = _patient getVariable [QGVAR(AirwayCollapse_State), 0];
+// B125: collapse is an unconscious soft-tissue state. Ignore a stale collapse latch for a conscious casualty;
+// the owner-side wake reconciliation clears the stored field as well.
+private _airwayCollapseState = if (IS_UNCONSCIOUS(_patient)) then {
+    _patient getVariable [QGVAR(AirwayCollapse_State), 0]
+} else {
+    0
+};
 private _obstructionVomitState = _patient getVariable [QGVAR(AirwayObstructionVomit_State), 0];
 private _obstructionBloodState = _patient getVariable [QGVAR(AirwayObstructionBlood_State), 0];
 
@@ -95,7 +101,7 @@ if (_obstructionVomitState > 0 || _obstructionBloodState > 0) then {
     _showObstruction = true;
     _obstructionState = LSTRING(CheckAirway_Obstruction_Light);
     _obstructionStateLog = LSTRING(CheckAirway_Obstruction_Light_Short);
-    
+
     if (_obstructionVomitState > 1 || _obstructionBloodState > 1) then {
         _obstructionState = LSTRING(CheckAirway_Obstruction);
         _obstructionStateLog = LSTRING(CheckAirway_Obstruction_Short);
@@ -303,4 +309,4 @@ if (_doubleSpace) then {
     [_patient, "quick_view", _hintLogFormat, (_logArray + _hintLogArray)] call ACEFUNC(medical_treatment,addToLog);
 };
 
-_patient setVariable [QGVAR(AirwayChecked_Time), CBA_missionTime, true];
+[QGVAR(setAirwayCheckedTime), [_patient], _patient] call CBA_fnc_targetEvent;

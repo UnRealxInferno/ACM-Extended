@@ -5,7 +5,7 @@ params ["_medic", "_patient", "_bodyPart"];
 
 _medic setVariable ["ACME_DP_Active", true, true];
 _medic setVariable ["ACME_DP_Patient", _medic, true];
-_medic setVariable ["ACME_DP_Part", _bodyPart];
+_medic setVariable ["ACME_DP_Part", _bodyPart, true];
 _medic setVariable ["ACME_DP_Mode", "self"];
 _medic setVariable ["ACME_DP_Start", CBA_missionTime];
 _medic setVariable ["ACME_DP_NextClot", CBA_missionTime + 15];
@@ -17,12 +17,16 @@ _medic setVariable ["ACME_DP_OwnsContinuous", false];
 
 private _ids = [];
 _ids pushBack ([0x01, [false,false,false], { [false, ACE_player, false] call ACME_fnc_directPressureStop; false }, "keydown", "", false, 0] call CBA_fnc_addKeyHandler);
+_ids pushBack ([0x23, [false,false,false], { [false, ACE_player, false] call ACME_fnc_directPressureStop; false }, "keydown", "", false, 0] call CBA_fnc_addKeyHandler);
 _medic setVariable ["ACME_DP_KeyIDs", _ids];
 
 [_medic, "activity",
  "%1 started Direct pressure on own %2",
  "%1 started Direct pressure on own %2",
  [[_medic, false, true] call ace_common_fnc_getName, ([_bodyPart, "abbr"] call ACME_fnc_bodyPartName)]] call ACME_fnc_medLog;
+
+// Publish the clinical pressure marker only after provider-local episode state is fully initialized.
+[_medic, "directPressureMarker", [_medic, _bodyPart, true]] call ACME_fnc_ownerDispatch;
 
 private _pfh = [ACME_fnc_directPressureTick, 0, [_medic, _medic, _bodyPart, "self"]] call CBA_fnc_addPerFrameHandler;
 _medic setVariable ["ACME_DP_PFH", _pfh];

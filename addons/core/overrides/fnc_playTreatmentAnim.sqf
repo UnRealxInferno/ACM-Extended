@@ -52,7 +52,7 @@ if (_actionName == "CPR") exitWith {
 private _anim = getText (_config >> _configProperty);
 if (_anim == "") exitWith {
     _medic call ACEFUNC(common,goKneeling);
-    WARNING_2("no anim [%1, %2]",_actionName,_configProperty); 
+    WARNING_2("no anim [%1, %2]",_actionName,_configProperty);
 };
 
 private _wpn = switch (true) do {

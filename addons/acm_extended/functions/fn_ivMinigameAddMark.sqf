@@ -19,20 +19,8 @@ private _view = uiNamespace getVariable ["ACME_IV_View", ""];
 private _site = toLower (uiNamespace getVariable ["ACME_IV_InsSite", ""]);
 if (_site isEqualTo "") then { _site = toLower (uiNamespace getVariable ["ACME_IV_Site", ""]); };
 if (!isNull _patient) then {
-    private _marks = _patient getVariable ["ACME_IV_Marks", []];
-    // element 10 is the site tier, stored so the extravasation check for whether this new iv is distal to a compromised
-    // site can compare a canonical anatomical height across the front and rear views, which do not share a v
-    // coordinate space.
-    // Optional element 13 preserves the physical catheter rotation on every provider.
-    // Existing marks default to zero when rendered. Bruise rotation remains element 11.
-    _marks pushBack [_bp, _view, _u, _v, _kind, _holeTex, _frame, _gauge, _missTime, _scale, _site, _rot, _alpha, if (_kind == "hub") then {uiNamespace getVariable ["ACME_IV_InsAngle", 0]} else {0}];
-    // the marks are the authoritative record of this limb, so they are broadcast and versioned.
-    // two of the three writers used to omit the broadcast flag, so a stick made by one medic never left their own
-    // machine. a second medic on the same limb saw a clean arm, and reopening the screen did not help them,
-    // because there was nothing to read.
-    // the version lets an open screen see the change without a reopen. see the poll in fn_ivminigametick.
-    _patient setVariable ["ACME_IV_Marks", _marks, true];
-    _patient setVariable ["ACME_IV_MarkVer", (_patient getVariable ["ACME_IV_MarkVer", 0]) + 1, true];
-    uiNamespace setVariable ["ACME_IV_MarkVerSeen", (_patient getVariable ["ACME_IV_MarkVer", 0])];
+    private _mark = [_bp, _view, _u, _v, _kind, _holeTex, _frame, _gauge, _missTime, _scale, _site, _rot, _alpha,
+        if (_kind == "hub") then {uiNamespace getVariable ["ACME_IV_InsAngle", 0]} else {0}];
+    [_patient, "ivMarks", ["add", [_mark], [_patient] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
 };
 [] call ACME_fnc_ivMinigameRenderMarks;

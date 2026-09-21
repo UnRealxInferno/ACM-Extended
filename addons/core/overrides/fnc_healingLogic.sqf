@@ -120,7 +120,7 @@ if (_finishTime > 0) exitWith {
                             "ACM_Paracetamol"
                         };
                     };
-                    
+
                     private _cfg = ["CfgWeapons", "CfgMagazines"] select (isClass (configFile >> "CfgMagazines" >> _usedItem));
                     private _itemName = getText (configFile >> _cfg >> _usedItem >> "displayName");
 
@@ -348,7 +348,7 @@ if (true) then {
         _treatmentArgs = [_target, "head", "Naloxone"];
         _treatmentItem = "naloxone";
     };
-    
+
     private _canGiveIV = _needsIV && {_healer call ACEFUNC(medical_treatment,isMedic)};
 
     private _canGiveFluid = _canGiveIV && {([_healer, "@fluid"] call ACEFUNC(medical_ai,itemCheck)) # 0}; // Has fluid
@@ -360,7 +360,7 @@ if (true) then {
     private _canInsertIO = _canGiveIV && !_hasAccess && {([_healer, "@io"] call ACEFUNC(medical_ai,itemCheck)) # 0 && !_canInsertIV};
 
     private _canTransfuse = _canGiveFluid && _hasAccess;
-    
+
     private _doCPR = _inCardiacArrest;
 
     // If in cardiac arrest, first add some blood to injured if necessary, then do CPR (doing CPR when not enough blood is suboptimal if you have IVs)
@@ -506,7 +506,7 @@ if (true) then {
     if (!(_treatmentEvent in ["#needsFewerMeds", "#waitForIV"]) && !_isUnconscious && {(GET_PAIN_PERCEIVED(_target) > 0.25)}) exitWith {
         private _penthroxDose = [_target, "Penthrox"] call ACEFUNC(medical_status,getMedicationCount);
         private _paracetamolDose = [_target, "Paracetamol"] call ACEFUNC(medical_status,getMedicationCount);
-        
+
         switch (true) do {
             case (GET_PAIN_PERCEIVED(_target) > 0.5 && !_hasChestInjury && _heartRate > 60 && _opioidDose < 0.5 && {([_healer, "morphine"] call ACEFUNC(medical_ai,itemCheck)) # 0}): {
                 if (CBA_missionTime < (_target getVariable [QACEGVAR(medical_ai,nextMorphine), -1])) exitWith {

@@ -22,7 +22,11 @@ private _window = missionNamespace getVariable ["ACME_aed_postShockWindow", 2];
 // defibrillation that follows it lethal. see fn_synccardiovert.
 // so it keeps its own timestamp, and this function has to honor both, or the AED would happily re-analyze a
 // fraction of a second after a cardioversion.
+private _sharedLast = _patient getVariable ["ACME_aed_lastShockServer", -1];
+if (_sharedLast >= 0) exitWith {(_sharedLast + _window) > serverTime};
+
+// Compatibility for old serialized states that predate the shared server-time stamp. These owner-clock fields are
+// retained for physiology/persistence; new live shocks never depend on them for cross-client presentation timing.
 private _last = (_patient getVariable ["ACM_circulation_AED_LastShock", -120])
     max (_patient getVariable ["ACME_sync_lastShock", -120]);
-
 (_last + _window) > CBA_missionTime

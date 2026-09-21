@@ -47,52 +47,20 @@ private _fromUsed = ((((_right lbData _idx) splitString "|") param [2, ""]) == "
 // already-y'd site it simply joins the y. this branch fully owns the used case and never falls through to the
 // loose-bag paths below.
 if (_fromUsed) exitWith {
-    private _usedId = ((_right lbData _idx) splitString "|") param [3, ""];
-    private _target2 = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Target", objNull];
-    if (isNull _target2) exitWith {};
-    private _bp2   = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_BodyPart", ""];
-    private _iv2   = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_SelectIV", true];
-    private _site2 = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_AccessSite", -1];
-    if (_bp2 isEqualTo "" || {_site2 < 0}) exitWith {
-        ["Select an access site to hang the used bag on.", 3, ACE_player, 13] call ace_common_fnc_displayTextStructured;
-    };
-    private _used = ACE_player getVariable ["ACME_usedBags", []];
-    private _ui = _used findIf { (_x param [0, ""]) isEqualTo _usedId };
-    if (_ui < 0) exitWith {};
-    (_used select _ui) params [["_uid", ""], ["_utype", ""], ["_uremVol", 0], ["_uAccessType", 0], ["_uBloodType", -1], ["_uOrigVol", 1000], ["_uName", ""]];
-
-    private _bags2 = _target2 getVariable ["ACM_circulation_IV_Bags", createHashMap];
-    private _arr2 = _bags2 getOrDefault [_bp2, []];
-    // on a y'd site a pulled leg leaves an empty marker behind, and re-hanging into that slot, matching the marker
-    // kind at the same site and iv, keeps the y structure and the indices stable. otherwise the bag is added as a
-    // new entry.
-    private _newEntry = [_utype, _uremVol, _uAccessType, _site2, _iv2, _uBloodType, _uOrigVol];
-    private _wantMarker = ["ACME_EmptySaline", "ACME_Empty"] select (_utype in ["Blood", "FreshBlood", "FBTK"]);
-    private _slot = _arr2 findIf {
-        ((_x param [0, ""]) isEqualTo _wantMarker) && {(_x param [3, -1]) isEqualTo _site2} && {(_x param [4, true]) isEqualTo _iv2}
-    };
-    if (_slot >= 0) then { _arr2 set [_slot, _newEntry]; } else { _arr2 pushBack _newEntry; };
-    _bags2 set [_bp2, _arr2];
-    [_target2, _bags2] call ACME_fnc_ivBagsCommit;
-    [_target2, _bp2, _iv2, _site2] call ACME_fnc_resumeSiteFlow;  // a stopped line starts flowing again on a re-hang.
-
-    _used deleteAt _ui;
-    ACE_player setVariable ["ACME_usedBags", _used, true];
-
-    // a warmer re-assert. this branch had none, so a re-hung unit lost the warmed color, tag and rate. blood hung
-    // with a warmer on hand runs warmed exactly like the other hang paths.
-    if ((_utype in ["Blood", "FreshBlood"]) && {([ACE_player, "ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem) >= 1}) then {
-        [_target2, true, false, objNull, CBA_missionTime + 15, true] call ACME_fnc_bloodThermalStateCommit;
-        ["Blood warmer inline.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-    };
-
-    [format ["Re-hung %1 (%2 mL).", _uName, round _uremVol], 2.5, ACE_player] call ace_common_fnc_displayTextStructured;
-    if (!isNil "ace_medical_treatment_fnc_addToLog") then {
-        [_target2, "activity", "%1 re-hung a used %2 (%3 mL)", [[ACE_player, false, true] call ace_common_fnc_getName, _uName, round _uremVol]] call ace_medical_treatment_fnc_addToLog;
-    };
-    if (!isNil "ACM_circulation_fnc_TransfusionMenu_UpdateBagList") then { [false] call ACM_circulation_fnc_TransfusionMenu_UpdateBagList; };
-    uiNamespace setVariable ["ACME_usedRowSig", "__force__"];
-    uiNamespace setVariable ["ACME_coolerRowSig", "__force__"];
+    private _usedId=(((_right lbData _idx) splitString "|") param [3,""]);
+    private _target2=missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Target",objNull];
+    private _bp2=missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_BodyPart",""];
+    private _iv2=missionNamespace getVariable ["ACM_circulation_TransfusionMenu_SelectIV",true];
+    private _site2=missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_AccessSite",-1];
+    if (isNull _target2 || {_bp2==""} || {_site2<0}) exitWith {["Select an access site to hang the used bag on.",3,ACE_player,13] call ace_common_fnc_displayTextStructured;};
+    private _used=ACE_player getVariable ["ACME_usedBags",[]]; private _ui=_used findIf {(_x param [0,""])==_usedId}; if (_ui<0) exitWith {};
+    private _record=+(_used select _ui);
+    // Reserve locally before the network round-trip. A rejected owner transaction restores this exact record.
+    _used deleteAt _ui; ACE_player setVariable ["ACME_usedBags",_used,true];
+    private _requestId=format ["rehang:%1:%2:%3",clientOwner,diag_frameNo,floor(diag_tickTime*1000)];
+    private _pending=uiNamespace getVariable ["ACME_usedRehangPending",createHashMap]; _pending set [_requestId,_record]; uiNamespace setVariable ["ACME_usedRehangPending",_pending]; uiNamespace setVariable ["ACME_usedRowSig","__force__"];
+    private _warmer=([ACE_player,"ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem)>=1;
+    [_target2,"rehangUsedBag",[_target2,ACE_player,_bp2,_iv2,_site2,_usedId,_record,[_target2] call ACME_fnc_clinicalEpoch,_requestId,_warmer]] call ACME_fnc_ownerDispatch;
 };
 
 private _isBlood  = ((toLowerANSI _class) find "blood")  >= 0;
@@ -151,133 +119,74 @@ if (_isBlood && _fromCooler && {([ACE_player, _class] call ace_common_fnc_getCou
     };
 };
 
-// the in-place y refill, "Add Bag". a selected blood on an already-y'd access line hangs straight onto it.
+// the in-place Y refill, "Add Bag". The provider UI does only advisory checks; the casualty owner reserves the
+// exact Y access before ACM's native 5 s Add Bag action starts, then finalizes the replacement against the latest
+// owner-side IV_Bags state. This prevents two medics from both consuming a replacement for the same empty leg.
 private _yBodyPart = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_BodyPart", ""];
 private _yIV   = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_SelectIV", true];
 private _ySite = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_AccessSite", -1];
-private _lineKey = format ["%1#%2#%3", _yBodyPart, _yIV, _ySite];
-private _lineYd = _lineKey in (if (isNull _target) then {[]} else {_target getVariable ["ACME_YLines", []]});
+private _lineKey = toLowerANSI format ["%1#%2#%3", _yBodyPart, _yIV, _ySite];
+private _lineYd = _lineKey in ((if (isNull _target) then {[]} else {_target getVariable ["ACME_YLines", []]}) apply {toLowerANSI _x});
+
+private _requestYRefill = {
+    params ["_mode"];
+    if (isNull _target || {_yBodyPart == ""} || {_ySite < 0}) exitWith {
+        ["Select the Y-line access first.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
+    };
+    private _inventoryMode = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_Inventory", 0];
+    // Cooler rows were materialized into the medic's inventory above before this claim is requested.
+    if (_fromCooler) then {_inventoryMode = 0;};
+    private _warmer = ([ACE_player, "ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem) >= 1;
+    private _epoch = [_target] call ACME_fnc_clinicalEpoch;
+    private _requestId = format ["yrefill:%1:%2:%3", clientOwner, diag_frameNo, floor (diag_tickTime * 1000)];
+    private _pending = uiNamespace getVariable ["ACME_yRefillPending", createHashMap];
+    _pending set [_requestId, [_target,_mode,_class,_action,_yBodyPart,_yIV,_ySite,_epoch,_inventoryMode,_fromCooler,_warmer]];
+    // Bound abandoned UI-side requests. Normal claim/cancel/done acknowledgements delete their own entry.
+    private _keys = keys _pending;
+    while {count _keys > 16} do {_pending deleteAt (_keys deleteAt 0);};
+    uiNamespace setVariable ["ACME_yRefillPending", _pending];
+    [_target, "yRefill", [_target,ACE_player,"claim",_requestId,_mode,_yBodyPart,_yIV,_ySite,_epoch,_fromCooler,_warmer]] call ACME_fnc_ownerDispatch;
+};
 
 if (_isBlood && _lineYd && {!isNull _target}) exitWith {
+    // Local checks are only fast feedback. The casualty owner repeats every clinical/access check before granting.
     private _bags = (_target getVariable ["ACM_circulation_IV_Bags", createHashMap]) getOrDefault [_yBodyPart, []];
-    private _hasActiveBlood = false;
-    private _hasEmptySlot = false;
-    {
-        _x params [["_bt", ""], ["_bv", 0], "", ["_bsite", -1], ["_biv", true]];
-        if (_bsite isEqualTo _ySite && {_biv isEqualTo _yIV}) then {
-            if (_bt isEqualTo "ACME_Empty") then { _hasEmptySlot = true; };
-            if ((_bt in ["Blood", "FreshBlood"]) && {_bv > 0.01}) then { _hasActiveBlood = true; };
-        };
-    } forEach _bags;
-    private _dirtyNow = (_target getVariable ["ACME_YLineDirty", createHashMap]) getOrDefault [toLower (format ["%1#%2#%3", _yBodyPart, _yIV, _ySite]), false];
-
+    private _hasActiveBlood = (_bags findIf {
+        ((_x param [0, ""]) in ["Blood", "FreshBlood"])
+            && {(_x param [1, 0]) > 0.01}
+            && {(_x param [3, -1]) == _ySite}
+            && {(_x param [4, true]) isEqualTo _yIV}
+    }) >= 0;
     if (_hasActiveBlood) exitWith {
         ["A unit is still running on this Y line.", 3, ACE_player, 13] call ace_common_fnc_displayTextStructured;
     };
+    private _dirtyNow = (_target getVariable ["ACME_YLineDirty", createHashMap]) getOrDefault [_lineKey, false];
     if (_dirtyNow) exitWith {
         ["Flush the line (Flush Line) before hanging the next unit.", 3, ACE_player, 13] call ace_common_fnc_displayTextStructured;
     };
     if (([ACE_player, _class] call ace_common_fnc_getCountOfItem) < 1) exitWith {
         ["Blood unit not on hand.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
     };
-
-    // drop the spent [empty blood bag] marker so the new unit takes its slot. the clamped saline reserve stays.
-    if (_hasEmptySlot) then {
-        private _allBags = _target getVariable ["ACM_circulation_IV_Bags", createHashMap];
-        private _bp = _allBags getOrDefault [_yBodyPart, []];
-        _bp = _bp select { !(((_x param [0, ""]) isEqualTo "ACME_Empty") && {(_x param [3, -1]) isEqualTo _ySite} && {(_x param [4, true]) isEqualTo _yIV}) };
-        _allBags set [_yBodyPart, _bp];
-        [_target, _allBags] call ACME_fnc_ivBagsCommit;
-    };
-
-    call ACM_circulation_fnc_TransfusionMenu_AddBag;  // ACM hangs the new unit on the y line.
-    [_target, _yBodyPart, _yIV, _ySite] call ACME_fnc_resumeSiteFlow;  // a stopped line starts flowing on a refill.
-
-    if (!(_lineKey in (_target getVariable ["ACME_YLines", []]))) then {
-        private _yl = _target getVariable ["ACME_YLines", []];
-        _yl pushBack _lineKey;
-        [_target, _yl] call ACME_fnc_yLinesCommit;
-    };
-
-    // an inline blood warmer wins. otherwise a cooler-sourced unit hangs cold and starts the rewarm clock.
-    if (([ACE_player, "ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem) >= 1) then {
-        [_target, true, false, objNull, CBA_missionTime + 15, true] call ACME_fnc_bloodThermalStateCommit;
-        ["Blood warmer inline.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-        if (!isNil "ace_medical_treatment_fnc_addToLog") then {
-            [_target, "activity", "Hung warmed blood: LifeWarmer Quantum [Warmed]", []] call ace_medical_treatment_fnc_addToLog;
-        };
-    } else {
-        if (_fromCooler) then {
-            [_target, false, true, CBA_missionTime, CBA_missionTime + 15, true] call ACME_fnc_bloodThermalStateCommit;
-            ["Cold blood hung. Use the warmer.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-        };
-    };
+    ["blood"] call _requestYRefill;
 };
 
-// the direct y-line saline reserve refill, "Add Bag", restored. a saline selected while this access site carries
-// a y line with a dead or absent clamped reserve hangs straight onto the line and is retagged as the clamped
-// reserve, ACME_SalineY, holding until flush line bleeds it. it mirrors the blood refill above and the
-// empty-marker slot reuse.
-// if a reserve is already live we do not take this path, and we never lock out. the saline falls through to the
-// normal spike and stage path below, so it can still be spiked and hung as an additional bag. you spike bags or
-// add to a y, and you are never blocked from using saline.
+// Saline on a Y'd access becomes the clamped reserve only when that exact IV/IO site has no live reserve.
+// Otherwise it falls through to normal Spike Bag behavior and remains usable as an ordinary additional saline bag.
 private _yReserveLive = false;
 if (_isSaline && _lineYd && {!isNull _target}) then {
     private _bpCheck = (_target getVariable ["ACM_circulation_IV_Bags", createHashMap]) getOrDefault [_yBodyPart, []];
     _yReserveLive = (_bpCheck findIf {
-        ((_x param [0, ""]) in ["ACME_SalineY", "Saline"]) && {(_x param [4, true]) isEqualTo _yIV} && {(_x param [1, 0]) > 0.5}
-    }) > -1;
+        ((_x param [0, ""]) in ["ACME_SalineY", "Saline"])
+            && {(_x param [1, 0]) > 0.5}
+            && {(_x param [3, -1]) == _ySite}
+            && {(_x param [4, true]) isEqualTo _yIV}
+    }) >= 0;
 };
 if (_isSaline && _lineYd && {!isNull _target} && {!_yReserveLive}) exitWith {
-    private _allBags = _target getVariable ["ACM_circulation_IV_Bags", createHashMap];
-    private _bp = _allBags getOrDefault [_yBodyPart, []];
     if (([ACE_player, _class] call ace_common_fnc_getCountOfItem) < 1) exitWith {
         ["Bag not on hand.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
     };
-
-    // drop the spent [empty saline bag] marker on this exact iv or io, so the new reserve takes its slot.
-    _bp = _bp select { !(((_x param [0, ""]) isEqualTo "ACME_EmptySaline") && {(_x param [4, true]) isEqualTo _yIV}) };
-    _allBags set [_yBodyPart, _bp];
-    [_target, _allBags] call ACME_fnc_ivBagsCommit;
-
-    call ACM_circulation_fnc_TransfusionMenu_AddBag;  // ACM consumes the loose saline and hangs it on the y line.
-    [_target, _yBodyPart, _yIV, _ySite] call ACME_fnc_resumeSiteFlow;  // a stopped line starts flowing on a refill.
-
-    // clear the stale pin snapshot for this line, so the replacement reserve pins to its own, full volume instead of
-    // being clamped back down to the near-zero snapshot of the drained bag. that was the 0 ml but not empty ghost
-    // that blocked re-flushing. the pin loop re-snapshots on the next tick once the retag lands.
-    private _pinKeyEx = format ["%1#%2#%3", toLower _yBodyPart, _yIV, _ySite];
-    private _pinsEx = _target getVariable ["ACME_YPins", createHashMap];
-    if (_pinKeyEx in _pinsEx) then {
-        _pinsEx deleteAt _pinKeyEx;
-        _target setVariable ["ACME_YPins", _pinsEx, true];
-    };
-    _target setVariable ["ACME_YPinRelease_" + _pinKeyEx, nil];
-
-    // retag the just-hung saline as the clamped y reserve, which is the latest matching iv or io saline on this body
-    // part. it is delayed so the attach settles. the retag must land, or the reserve would drain like a normal
-    // drip.
-    [{
-        params ["_patient", "_bpName", "_iv2"];
-        if (isNull _patient) exitWith {};
-        private _bags2 = _patient getVariable ["ACM_circulation_IV_Bags", createHashMap];
-        private _arr = _bags2 getOrDefault [_bpName, []];
-        private _sIdx = -1;
-        {
-            if (((_x param [0, ""]) == "Saline") && {(_x param [4, true]) isEqualTo _iv2}) then { _sIdx = _forEachIndex; };
-        } forEach _arr;
-        if (_sIdx >= 0) then {
-            private _e = +(_arr select _sIdx);
-            _e set [0, "ACME_SalineY"];
-            _arr set [_sIdx, _e];
-            _bags2 set [_bpName, _arr];
-            [_patient, _bags2] call ACME_fnc_ivBagsCommit;
-        };
-    }, [_target, _yBodyPart, _yIV], 0.3] call CBA_fnc_waitAndExecute;
-    ["Y saline reserve replaced.", 2.5, ACE_player] call ace_common_fnc_displayTextStructured;
-    if (!isNil "ace_medical_treatment_fnc_addToLog") then {
-        [_target, "activity", "%1 replaced the Y line saline reserve", [[ACE_player, false, true] call ace_common_fnc_getName]] call ace_medical_treatment_fnc_addToLog;
-    };
+    ["saline"] call _requestYRefill;
 };
 
 // spike into stage. any bag not caught above is spiked and staged into the prepared iv sets.

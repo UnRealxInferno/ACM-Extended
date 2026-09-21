@@ -53,6 +53,7 @@ uiNamespace setVariable ["ACME_Thora_Side", _side];
 uiNamespace setVariable ["ACME_Thora_OnZone", false];
 uiNamespace setVariable ["ACME_Thora_Palpating", false];
 uiNamespace setVariable ["ACME_Thora_CurUV", []];
+uiNamespace setVariable ["ACME_Thora_Burp", ["", 0, 0, false]];
 
 uiNamespace setVariable ["ACME_Thora_ZoneRight", missionNamespace getVariable ["ACME_thora_zoneRight", [0.482, 0.443, 0.055, 0.050]]];
 uiNamespace setVariable ["ACME_Thora_ZoneLeft",  missionNamespace getVariable ["ACME_thora_zoneLeft",  [0.515, 0.443, 0.055, 0.050]]];
@@ -115,9 +116,20 @@ private _dh = _bodyH * 0.028;
 uiNamespace setVariable ["ACME_Thora_DotH", _dh];
 uiNamespace setVariable ["ACME_Thora_DotW", _dh * _af];
 
-// the layer order, bottom to top, is the iodine prep, then the pink tract opening, then the red incision line,
+// Soft-tissue contusions sit directly over the base chest and underneath every prep/intervention layer.
+// Keep a fixed pool so repainting or cabin shake never changes z-order.
+private _bruiseCtrls = [];
+for "_i" from 1 to 5 do {
+    private _b = _display ctrlCreate ["RscPictureKeepAspect", -1];
+    _b ctrlEnable false;
+    _b ctrlShow false;
+    _bruiseCtrls pushBack _b;
+};
+uiNamespace setVariable ["ACME_Thora_BruiseCtrls", _bruiseCtrls];
+
+// the layer order, bottom to top, is the bruising, iodine prep, pink tract opening, then red incision line,
 // because later controls draw on top.
-// the chlorhexidine prep trail pool is at the bottom.
+// the chlorhexidine prep trail pool is at the bottom of the procedural intervention layers.
 private _prepDots = [];
 for "_i" from 1 to 130 do {
     private _p = _display ctrlCreate ["ACME_CS_Dot", -1];
@@ -167,19 +179,18 @@ _openCtrl ctrlShow false;
 uiNamespace setVariable ["ACME_Thora_OpenCtrl", _openCtrl];
 
 
-// the right-side tool tray: the flip at the top, then the tools in the order of operations. the slot height is
-// derived so the whole column, the flip plus 5 tools plus the gaps, fits above the done button, with the done
-// button as the bottom padding. all are present by default and the medic selects each manually, because nothing
-// auto-advances.
+// the right-side tool tray: flip at the top, then six full-width tools in the order of operations.  B120 gives
+// chest tube and chest seal their own vertical rows rather than compressing both into one half-width row.
 uiNamespace setVariable ["ACME_Thora_Held", ""];
+uiNamespace setVariable ["ACME_Thora_SeparateClosureSlots", true];
 private _top = _bodyY + (_bodyH * 0.02);
 private _doneTop = _szY + (_szH * 0.92);
 private _flipH = _szH * 0.040;
 private _gapFlip = _szH * 0.015;
-private _slotGap = _szH * 0.010;
+private _slotGap = _szH * 0.008;
 private _botPad = _szH * 0.020;
-private _slotsAvail = (_doneTop - _top - _botPad - _flipH - _gapFlip - (4 * _slotGap)) max (_szH * 0.35);
-private _slotH = _slotsAvail / 5;
+private _slotsAvail = (_doneTop - _top - _botPad - _flipH - _gapFlip - (5 * _slotGap)) max (_szH * 0.35);
+private _slotH = _slotsAvail / 6;
 private _colW = _slotH * _af;
 private _colX = _bodyX + _bodyW + (_bodyH * 0.035 * _af);
 
@@ -192,21 +203,28 @@ private _tools = [
     ["scalpel",       "\x\acm\addons\airway\ui\surgical_airway\inv_scalpel.paa"],
     ["kelly",         "\acm_extended\ui\items\kelly_clamps_icon_ca.paa"],
     ["finger",        "\acm_extended\ui\items\thoracostomy_finger_right_ca.paa"],
-    ["tube",          "\acm_extended\ui\items\chest_tube_right_placed_ca.paa"]
+    ["tube",          "\acm_extended\ui\items\chest_tube_right_placed_ca.paa"],
+    ["seal",          "\x\acm\addons\breathing\ui\chestseal_ca.paa"]
 ];
 private _slotBGs = [];
-private _inset = _slotH * 0.17;
-// Resolve permissions and inventory for the captured provider, not a different UI target.
+// UI X units are wider than Y units.  Keep the artwork physically square by applying the aspect correction to
+// the horizontal inset too; using the raw slot-height inset on both axes was what made the tray art look narrow.
+private _insetY = _slotH * 0.15;
+private _insetX = _insetY * _af;
 private _medic = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
-([_medic] call ACME_fnc_thoraClosureMode) params ["_closure", "_closureCount", "_canTube"];
-private _hasSeal = _closureCount > 0;
+private _canTube = !isNull _medic && {[_medic, "chestTube"] call ACME_fnc_procedureAllowed};
+private _canSeal = !isNull _medic && {[_medic, "thoracostomySeal"] call ACME_fnc_procedureAllowed};
 uiNamespace setVariable ["ACME_Thora_CanTube", _canTube];
-uiNamespace setVariable ["ACME_Thora_SealMode", !_canTube];
+uiNamespace setVariable ["ACME_Thora_SealMode", false];
 {
     _x params ["_tool", "_icon"];
-    private _isTube = (_tool == "tube");
-    // locked only when there is nothing at all to close the chest with. otherwise the tube slot is a seal slot.
-    private _toolLocked = (_isTube && {!_canTube} && {!_hasSeal});
+    private _isTube = _tool == "tube";
+    private _isSeal = _tool == "seal";
+    private _count = -1;
+    if (_isTube) then {_count = if (_canTube) then {[_medic, "ACM_ChestTubeKit"] call ace_common_fnc_getCountOfItem} else {0};};
+    if (_isSeal) then {_count = if (_canSeal) then {[_medic, "ACM_ChestSeal"] call ace_common_fnc_getCountOfItem} else {0};};
+    private _toolLocked = (_isTube || {_isSeal}) && {_count <= 0};
+
     private _bg = _display ctrlCreate ["RscText", -1];
     _bg ctrlSetPosition [_colX, _ty, _colW, _slotH];
     _bg ctrlSetBackgroundColor [0, 0, 0, 0.85];
@@ -215,58 +233,46 @@ uiNamespace setVariable ["ACME_Thora_SealMode", !_canTube];
     _bg ctrlCommit 0;
     _slotBGs pushBack _bg;
 
-    private _icX = _colX + _inset; private _icY = _ty + _inset;
-    private _icW = _colW - (2 * _inset); private _icH = _slotH - (2 * _inset);
+    private _icX = _colX + _insetX; private _icY = _ty + _insetY;
+    private _icW = _colW - (2 * _insetX); private _icH = _slotH - (2 * _insetY);
     private _ic = _display ctrlCreate ["RscPicture", -1];
     _ic ctrlSetPosition [_icX, _icY, _icW, _icH];
     _ic ctrlSetText _icon;
-    // locked, with no kit, is dim gray, and usable is normal.
     _ic ctrlSetTextColor (if (_toolLocked) then {[0.4, 0.4, 0.4, 0.5]} else {[1, 1, 1, 0.85]});
     _ic ctrlCommit 0;
     _bg setVariable ["thoraIcon", _ic];
 
-    // the count, on the slot that consumes something.
-    // the tube slot is the only one that spends an item, and which item it spends depends on whether this provider
-    // can tube at all. so it carries a count in the corner, the same way the airway and iv trays do, and it is
-    // refreshed live in fn_thoratick rather than being read once at open.
-    // live matters here: a medic can seal one side, walk to the other and find they are out, and a number that was
-    // correct when the screen opened would be a lie by then.
-    if (_isTube) then {
+    if (_isTube || {_isSeal}) then {
         private _cnt = _display ctrlCreate ["RscStructuredText", -1];
-        _cnt ctrlSetPosition [_colX, _ty + (_slotH * 0.60), _colW - (_slotH * 0.06), _slotH * 0.36];
+        _cnt ctrlSetPosition [_colX, _ty + (_slotH * 0.60), _colW - (_slotH * 0.05), _slotH * 0.36];
+        _cnt ctrlSetStructuredText parseText format ["<t align='right' size='0.72' color='%1'>x%2</t>", if (_count > 0) then {"#ffffff"} else {"#ff6666"}, _count];
         _cnt ctrlCommit 0;
         _bg setVariable ["thoraCount", _cnt];
-        uiNamespace setVariable ["ACME_Thora_CountCtrl", _cnt];
     };
 
     private _btn = _display ctrlCreate ["ACME_Thora_SlotBtn", -1];
     _btn ctrlSetPosition [_colX, _ty, _colW, _slotH];
     _btn ctrlSetText "";
-    // the tooltip has to say the true reason. "chest tube kit required" was wrong for a medic who has the kit and
-    // not the trait, and wrong again for one who simply has no seal left.
-    _btn ctrlSetTooltip (if (!_toolLocked) then {
-        if (_isTube && {!_canTube}) then {"Place a chest seal"} else {format ["Select %1", _tool]}
-    } else {
-        "No chest seal and no chest tube kit"
+    _btn ctrlSetTooltip (switch (_tool) do {
+        case "tube": {if (_canTube) then {"Place a chest tube"} else {"Chest tube permission required"}};
+        case "seal": {if (_canSeal) then {"Place a chest seal"} else {"Chest seal permission required"}};
+        default {format ["Select %1", _tool]};
     });
     _btn setVariable ["thoraTool", _tool];
     _btn setVariable ["thoraLocked", _toolLocked];
     _btn setVariable ["thoraIcon", _ic];
     _btn setVariable ["thoraBG", _bg];
     _btn setVariable ["thoraIconRect", [_icX, _icY, _icW, _icH]];
-    _btn ctrlSetBackgroundColor [0, 0, 0, 0];
-    // a locked tool button is disabled, so it is not clickable and does not highlight on hover.
-    // the handlers are attached either way, and only the enable state changes. the tube slot can lock and unlock
-    // while the screen is open, when the last seal is used or a kit is picked up, and a button that had no
-    // handler attached at open would stay dead however many times it was later enabled.
     _btn setVariable ["thoraBtnSelf", _btn];
     _bg setVariable ["thoraBtn", _btn];
+    _btn ctrlSetBackgroundColor [0, 0, 0, 0];
     _btn ctrlEnable (!_toolLocked);
-    if (true) then {
-        _btn ctrlAddEventHandler ["ButtonClick", { [(_this select 0) getVariable ["thoraTool", ""]] call ACME_fnc_thoraSelectTool; }];
-        _btn ctrlAddEventHandler ["MouseEnter", { [(_this select 0), true] call ACME_fnc_thoraSlotHover; }];
-        _btn ctrlAddEventHandler ["MouseExit", { [(_this select 0), false] call ACME_fnc_thoraSlotHover; }];
-    };
+    _btn ctrlAddEventHandler ["ButtonClick", {
+        private _t = (_this select 0) getVariable ["thoraTool", ""];
+        if (_t in ["tube", "seal"]) then {[_t, true] call ACME_fnc_thoraSelectTool;} else {[_t] call ACME_fnc_thoraSelectTool;};
+    }];
+    _btn ctrlAddEventHandler ["MouseEnter", { [(_this select 0), true] call ACME_fnc_thoraSlotHover; }];
+    _btn ctrlAddEventHandler ["MouseExit", { [(_this select 0), false] call ACME_fnc_thoraSlotHover; }];
     _btn ctrlCommit 0;
 
     _ty = _ty + _slotH + _slotGap;
@@ -274,18 +280,27 @@ uiNamespace setVariable ["ACME_Thora_SealMode", !_canTube];
 uiNamespace setVariable ["ACME_Thora_SlotBGs", _slotBGs];
 [] call ACME_fnc_thoraUpdateTrayIcons;
 
-// the held-tool cursor sprite. it floats with the mouse and is created last so it sits on top. the side-specific
-// textures use %1 for right or left. the sizes are body-height fractions from the reference photos, and they are
-// tunable.
+// Persistent tube/intervention art must sit below the arm overlay. The overlay itself then masks prep, incision,
+// opening, tube and seal artwork exactly where the patient's arm crosses the chest. Active held tools remain above it.
+private _tubeCtrl = _display ctrlCreate ["RscPicture", -1];
+_tubeCtrl ctrlEnable false;
+_tubeCtrl ctrlShow false;
+uiNamespace setVariable ["ACME_Thora_TubeCtrl", _tubeCtrl];
+
+private _armCtrl = _display ctrlCreate ["RscPicture", -1];
+_armCtrl ctrlEnable false;
+_armCtrl ctrlSetPosition [_bodyX, _bodyY, _bodyW, _bodyH];
+_armCtrl ctrlSetTextColor [1,1,1,1];
+_armCtrl ctrlShow true;
+_armCtrl ctrlCommit 0;
+uiNamespace setVariable ["ACME_Thora_ArmOverlay", _armCtrl];
+
+// Held-tool cursor is created after the arm overlay so the medic's active tool/hand always remains visible.
 private _toolSpr = _display ctrlCreate ["RscPicture", -1];
 _toolSpr ctrlEnable false;
 _toolSpr ctrlShow false;
 uiNamespace setVariable ["ACME_Thora_ToolSpr", _toolSpr];
 uiNamespace setVariable ["ACME_Thora_TubeSnap", false];
-private _tubeCtrl = _display ctrlCreate ["RscPicture", -1];
-_tubeCtrl ctrlEnable false;
-_tubeCtrl ctrlShow false;
-uiNamespace setVariable ["ACME_Thora_TubeCtrl", _tubeCtrl];
 
 // the palpation feel-dot is created last, so it draws on top of everything and you can feel over the incision and
 // the opening.
@@ -308,3 +323,8 @@ private _pfh = [ACME_fnc_thoraTick, 0, []] call CBA_fnc_addPerFrameHandler;
 uiNamespace setVariable ["ACME_Thora_PFH", _pfh];
 _display displayAddEventHandler ["MouseButtonDown", {_this call ACME_fnc_thoraMouseDown}];
 _display displayAddEventHandler ["MouseButtonUp", {_this call ACME_fnc_thoraMouseUp}];
+// Pictures can swallow wheel events before they reach the display. Bind all created controls as well.
+_display displayAddEventHandler ["MouseZChanged", {_this call ACME_fnc_thoraSealScroll}];
+{_x ctrlAddEventHandler ["MouseZChanged", {_this call ACME_fnc_thoraSealScroll}];} forEach allControls _display;
+_surface ctrlSetTooltip "Chest seal: empty hands, RMB to remove; scroll to lift a corner and burp, reverse to lay it down.";
+

@@ -37,6 +37,9 @@ if (isNull _target) exitWith {
 private _bodyPart = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_BodyPart", ""];
 private _iv       = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_SelectIV", true];
 private _site     = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_AccessSite", -1];
+if !([_target,_bodyPart,_iv,_site] call ACME_fnc_transfusionAccessValid) exitWith {
+    ["Establish and select an IV/IO before hanging this set.",2.5,ACE_player,13] call ace_common_fnc_displayTextStructured;
+};
 private _lineKey  = format ["%1#%2#%3", _bodyPart, _iv, _site];
 
 // a set that came off a patient, through remove-to-list, is tied to that patient. untied sets hang on anyone.
@@ -116,95 +119,32 @@ if (_isSingle && {_medicatedPremix}) exitWith {
     [_rec, _target, _bodyPart, _iv, _site, _bloodAction] call ACME_fnc_givePremixedSet;
 };
 
-// commit: consume the set before any attach that closes and reopens the dialog, because the list rebuild must see
-// it gone.
-_sets deleteAt _setIdx;
-ACE_player setVariable ["ACME_preparedIVSets", _sets, true];
-uiNamespace setVariable ["ACME_preparedRowSig", "__force__"];
-
-if (!_isSingle) exitWith {
-    // a y set. bank the cold flag so the unit still hangs [cooled], and register the y line and the blood into saline
-    // pairing.
-    if (_bloodCold) then {
-        private _yc = ACE_player getVariable ["ACME_ySetsCooled", createHashMap];
-        _yc set [_bloodClass, (_yc getOrDefault [_bloodClass, 0]) + 1];
-        ACE_player setVariable ["ACME_ySetsCooled", _yc, true];
-    };
-    private _yl = _target getVariable ["ACME_YLines", []];
-    if (!(_lineKey in _yl)) then { _yl pushBack _lineKey; [_target, _yl] call ACME_fnc_yLinesCommit; };
-    private _pair = ACE_player getVariable ["ACME_yPairSaline", createHashMap];
-    _pair set [_bloodClass, _salineClass];
-    ACE_player setVariable ["ACME_yPairSaline", _pair, true];
-
-    ["Hanging Y set...", 2.5, ACE_player] call ace_common_fnc_displayTextStructured;
-    [_target, _bodyPart, _iv, _site, _lineKey, _bloodClass, _bloodAction, _salineClass, _salineAction] call ACME_fnc_yLineAttach;
-    [_target, _bodyPart, _iv, _site] call ACME_fnc_resumeSiteFlow;  // hanging a set on a stopped site starts it flowing.
-
-    // if either leg came from a pulled, used bag, the set consumed a full standard item, so restore the exact remaining
-    // volume of that leg onto the just-hung bag. ACM items are fixed-size and the exact ml only lives on a hung bag.
-    // it is delayed so yLineAttach has settled the bags in IV_Bags. it is the same in-place edit the saline-reserve
-    // retag uses.
-    if (_bloodExactVol > 0 || {_salineExactVol > 0}) then {
-        [{
-            params ["_target", "_bodyPart", "_site", "_iv", "_bVol", "_sVol"];
-            if (isNull _target) exitWith {};
-            private _bags = _target getVariable ["ACM_circulation_IV_Bags", createHashMap];
-            private _arr = _bags getOrDefault [_bodyPart, []];
-            private _changed = false;
-            {
-                private _t = _x param [0, ""];
-                if (((_x param [3, -1]) isEqualTo _site) && {(_x param [4, true]) isEqualTo _iv}) then {
-                    if (_bVol > 0 && {_t in ["Blood", "FreshBlood"]} && {(_x param [1, 0]) > _bVol}) then {
-                        private _e = +_x; _e set [1, _bVol]; _arr set [_forEachIndex, _e]; _changed = true;
-                    };
-                    if (_sVol > 0 && {_t in ["ACME_SalineY", "Saline"]} && {(_x param [1, 0]) > _sVol}) then {
-                        private _e = +_x; _e set [1, _sVol]; _arr set [_forEachIndex, _e]; _changed = true;
-                    };
-                };
-            } forEach _arr;
-            if (_changed) then { _bags set [_bodyPart, _arr]; [_target, _bags] call ACME_fnc_ivBagsCommit; };
-        }, [_target, _bodyPart, _site, _iv, _bloodExactVol, _salineExactVol], 0.6] call CBA_fnc_waitAndExecute;
-    };
+// The actual hang is a casualty-owner transaction.  The local checks above are only fast feedback; the owner
+// repeats the access/occupancy checks against the latest IV_Bags state and consumes the prepared set only after a
+// successful attach.  This closes the MP race where two providers could both see an empty site and where a set
+// could be deleted locally just before the patient changed locality or the access disappeared.
+private _pending = missionNamespace getVariable ["ACME_preparedHangPending", createHashMap];
+if (((values _pending) findIf {
+    private _r = _x;
+    !(_r param [3, false]) && {(((_r param [1, []]) param [3, ""]) isEqualTo _id)}
+}) >= 0) exitWith {
+    ["That prepared set is already being connected.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
 };
 
-// a single bag, either a fresh hang or a refill. drop any spent empty marker on this exact slot so the new bag
-// takes its place. on a y blood refill that is only the empty blood marker, and the ACME_SalineY reserve is left
-// untouched.
-private _allBags = _target getVariable ["ACM_circulation_IV_Bags", createHashMap];
-private _bp = _allBags getOrDefault [_bodyPart, []];
-private _before = count _bp;
-_bp = _bp select {
-    !( ((_x param [0, ""]) in ["ACME_Empty", "ACME_EmptySaline"]) && {(_x param [3, -1]) isEqualTo _site} && {(_x param [4, true]) isEqualTo _iv} )
+private _freshEntry = [];
+private _ap = _bloodAction splitString "_";
+if ((_ap param [0, ""]) isEqualTo "FreshBloodBag") then {
+    private _freshId = parseNumber (_ap param [2, "-1"]);
+    if (_freshId >= 0) then {_freshEntry = [_freshId] call ACM_circulation_fnc_getFreshBloodEntry;};
 };
-if (count _bp != _before) then { _allBags set [_bodyPart, _bp]; [_target, _allBags] call ACME_fnc_ivBagsCommit; };
+private _epoch = [_target] call ACME_fnc_clinicalEpoch;
+private _serial = (missionNamespace getVariable ["ACME_preparedHangSerial", 0]) + 1;
+missionNamespace setVariable ["ACME_preparedHangSerial", _serial];
+private _requestId = format ["preparedHang:%1:%2:%3", clientOwner, _serial, floor (diag_tickTime * 1000)];
+private _warmer = ([ACE_player, "ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem) >= 1;
+private _args = [_target, ACE_player, _requestId, _id, _bodyPart, _iv, _site, _epoch, _warmer, _freshEntry];
+_pending set [_requestId, [_target, _args, CBA_missionTime, false]];
+missionNamespace setVariable ["ACME_preparedHangPending", _pending];
 
-// hang the single bag on this access site.
-[ACE_player, _target, _bodyPart, _bloodAction, objNull, _bloodClass, _iv, _site] call ace_medical_treatment_fnc_ivBag;
-[_target, _bodyPart, _iv, _site] call ACME_fnc_resumeSiteFlow;  // hanging on a stopped site starts it flowing.
-
-// blood: a warmer on hand wins, and otherwise a [cooled] unit hangs cold and starts the rewarm clock.
-if (_kind isEqualTo "blood") then {
-    if (([ACE_player, "ACME_BloodWarmer"] call ace_common_fnc_getCountOfItem) >= 1) then {
-        [_target, true, false, objNull, CBA_missionTime + 15, true] call ACME_fnc_bloodThermalStateCommit;
-        ["Blood warmer inline.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-        if (!isNil "ace_medical_treatment_fnc_addToLog") then {
-            [_target, "activity", "Hung warmed blood: LifeWarmer Quantum [Warmed]", []] call ace_medical_treatment_fnc_addToLog;
-        };
-    } else {
-        if (_bloodCold) then {
-            [_target, false, true, CBA_missionTime, CBA_missionTime + 15, true] call ACME_fnc_bloodThermalStateCommit;
-            ["Cold blood hung. Use the warmer.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-        };
-    };
-};
-
-[_target, "activity", "%1 hung a prepared bag", [[ACE_player, false, true] call ace_common_fnc_getName]] call ace_medical_treatment_fnc_addToLog;
-["Hanging bag...", 2, ACE_player] call ace_common_fnc_displayTextStructured;
-
-// rebuild the menu, so the new row and the decremented list show. it mirrors the close and reopen of addbag.
-closeDialog 0;
-[{
-    params ["_p", "_bp2"];
-    if (isNull _p) exitWith {};
-    [ACE_player, _p, _bp2] call ACM_circulation_fnc_openTransfusionMenu;
-}, [_target, _bodyPart], 0.3] call CBA_fnc_waitAndExecute;
+["Connecting prepared set...", 2.5, ACE_player] call ace_common_fnc_displayTextStructured;
+[_target, "preparedHang", _args] call ACME_fnc_ownerDispatch;

@@ -4,18 +4,16 @@
 params ["_medic", "_patient", "_bodyPart"];
 if (isNull _medic || {isNull _patient}) exitWith {};
 
-// A direct call can bypass fn_directPressureStart, so retain a defensive maneuver check and clean the clinical
-// marker if it was already written by a caller.
+// A direct call can bypass fn_directPressureStart, so retain the maneuver guard. Any clinical marker cleanup is
+// owner-routed and cannot erase another provider's replacement hold.
 if (missionNamespace getVariable ["ACM_core_ContinuousAction_Active", false]) exitWith {
-    if ((_patient getVariable [format ["ACME_DP_press_%1", _bodyPart], objNull]) isEqualTo _medic) then {
-        _patient setVariable [format ["ACME_DP_press_%1", _bodyPart], objNull, true];
-    };
+    [_patient, "directPressureMarker", [_medic, _bodyPart, false]] call ACME_fnc_ownerDispatch;
     ["Another active maneuver is already in progress.", 2, _medic] call ace_common_fnc_displayTextStructured;
 };
 
 _medic setVariable ["ACME_DP_Active", true, true];
 _medic setVariable ["ACME_DP_Patient", _patient, true];
-_medic setVariable ["ACME_DP_Part", _bodyPart];
+_medic setVariable ["ACME_DP_Part", _bodyPart, true];
 _medic setVariable ["ACME_DP_Mode", "torso"];
 _medic setVariable ["ACME_DP_Start", CBA_missionTime];
 _medic setVariable ["ACME_DP_NextClot", CBA_missionTime + 15];
@@ -27,7 +25,6 @@ _medic setVariable ["ACME_DP_LastPoseAssert", 0];
 _medic setVariable ["ACME_DP_ClinicalYield", false];
 _medic setVariable ["ACME_DP_ClinicalYieldStart", 0];
 _medic setVariable ["ACME_DP_OwnsContinuous", false];
-_patient setVariable ["ACME_DP_TorsoMedic", _medic, true];
 
 // Enter the connected two-handed pressure hold directly. No scripted weapon draw/holster cycle is introduced.
 if (isNull objectParent _medic) then {
@@ -52,6 +49,9 @@ _ids pushBack ([0x23, [false,false,false], { [false, ACE_player, false] call ACM
 _medic setVariable ["ACME_DP_KeyIDs", _ids];
 
 [_patient, "activity", "%1 started Direct pressure on %2", "%1 started Direct pressure on %2", [[_medic, false, true] call ace_common_fnc_getName, ([_bodyPart, "abbr"] call ACME_fnc_bodyPartName)]] call ACME_fnc_medLog;
+
+// Publish the clinical pressure marker only after provider-local episode state is fully initialized.
+[_patient, "directPressureMarker", [_medic, _bodyPart, true]] call ACME_fnc_ownerDispatch;
 
 private _pfh = [ACME_fnc_directPressureTick, 0, [_medic, _patient, _bodyPart, "torso"]] call CBA_fnc_addPerFrameHandler;
 _medic setVariable ["ACME_DP_PFH", _pfh];

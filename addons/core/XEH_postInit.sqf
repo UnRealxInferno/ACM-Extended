@@ -10,7 +10,7 @@ if (GVAR(ignoreIncompatibleAddonWarning)) then {
 
 [0, {
     if (_this getVariable [QACEGVAR(medical,isBleeding), false]) exitWith {};
-    
+
     private _count = 0;
 
     ({
@@ -169,9 +169,11 @@ ACE_player addEventHandler ["AnimDone", {
         }, {
             params ["_unit"];
 
-            [QGVAR(handleSitting), _unit] call CBA_fnc_localEvent; 
+            [QGVAR(handleSitting), _unit] call CBA_fnc_localEvent;
         }, [_unit], 2] call CBA_fnc_waitUntilAndExecute;
     };
 }];
 
 ["ACE_splint", "ACM_SAMSplint"] call ACEFUNC(common,registerItemReplacement);
+
+call FUNC(registerContinuousRuntime);

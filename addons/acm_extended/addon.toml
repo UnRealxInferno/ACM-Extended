@@ -1,0 +1,3 @@
+# ACME intentionally uses the root PBO namespace "acm_extended"
+# because runtime/UI assets reference \acm_extended\...
+ignore_pboprefix = true

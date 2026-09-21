@@ -35,7 +35,7 @@ if (_reFracture && ((_patient getVariable [QGVAR(Fracture_State), [0,0,0,0,0,0]]
     [_patient] call ACEFUNC(medical_engine,updateDamageEffects);
 
     private _preparedArray = _patient getVariable [QGVAR(Fracture_Prepared), [false,false,false,false,false,false]];
-    
+
     if (_preparedArray select _partIndex) then {
         _preparedArray set [_partIndex, false];
         _patient setVariable [QGVAR(Fracture_Prepared), _preparedArray, true];

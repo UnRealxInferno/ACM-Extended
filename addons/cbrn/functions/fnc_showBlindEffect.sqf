@@ -36,7 +36,7 @@ if (_active) then {
     EGVAR(core,ppBlindness) ppEffectCommit ([20, 3] select _cameraChange);
 
     GVAR(blindnessEffectActive) = false;
-    
+
     [{
         if (GVAR(blindnessEffectActive)) exitWith {};
         EGVAR(core,ppBlindness) ppEffectEnable false;

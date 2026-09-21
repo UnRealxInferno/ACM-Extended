@@ -8,14 +8,8 @@ params ["_medic", "_patient", "_bodyPart"];
 // the packing loop ends with the action rather than running on past it.
 [_medic] call ACME_fnc_junctionalPackSfxStop;
 private _p = toLower _bodyPart;
-_patient setVariable [format ["ACME_Junc_%1", _p], "packed", true];
-// the packing is finished, so the hands come off the active-pack tamponade and the finished gauze now controls 50
-// percent on its own, handled in the bleed pfh. clear the in-progress flag the bleed pfh watches.
-_patient setVariable [format ["ACME_Junc_Packing_%1", _p], false, true];
-
-if (_patient call ace_common_fnc_isAwake) then {
-    [_patient, (missionNamespace getVariable ["ACME_junctionalPackPain", 0.2])] call ace_medical_fnc_adjustPainLevel;
-};
+// The casualty owner owns junctional state and pain. Provider-local completion keeps only UI/SFX/log presentation.
+[_patient, "junctionalPackDone", [_medic, _p]] call ACME_fnc_ownerDispatch;
 
 ["Combat gauze packed.", 4] call ace_common_fnc_displayTextStructured;
 

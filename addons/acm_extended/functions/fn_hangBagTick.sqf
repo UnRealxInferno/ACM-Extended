@@ -4,14 +4,30 @@
 params ["_args", "_pfhId"];
 _args params ["_medic", "_patient"];
 
-if (isNull _medic || {!alive _medic} || {!(_medic getVariable ["ACME_hang_Active", false])}) exitWith {
-    [false] call ACME_fnc_hangBagStop;
+// B127: the stored PFH id plus patient is the Hang Bag episode identity. An old callback must never see a later
+// ACME_hang_Active=true and lower the new bag because its old patient went out of range or changed state.
+if (isNull _medic) exitWith {[_pfhId] call CBA_fnc_removePerFrameHandler;};
+if ((_medic getVariable ["ACME_hang_PFH", -1]) != _pfhId
+    || {!((_medic getVariable ["ACME_hang_Patient", objNull]) isEqualTo _patient)}) exitWith {
+    [_pfhId] call CBA_fnc_removePerFrameHandler;
 };
-if !(local _medic) exitWith {};
+if (!alive _medic || {!(_medic getVariable ["ACME_hang_Active", false])}) exitWith {
+    [false, _medic] call ACME_fnc_hangBagStop;
+    [_pfhId] call CBA_fnc_removePerFrameHandler;
+};
+if !(local _medic) exitWith {
+    [true, _medic] call ACME_fnc_hangBagStop;
+    [_pfhId] call CBA_fnc_removePerFrameHandler;
+};
+// Resolve the cross-client race that remains possible if two providers commit during the same replication window.
+// The patient's replicated holder is authoritative: whichever provider does not own it immediately tears down.
+if ((_patient getVariable ["ACME_hang_Medic", objNull]) isNotEqualTo _medic) exitWith {
+    [true, _medic] call ACME_fnc_hangBagStop;
+};
 // the system toggle. it is the same rule as direct pressure: disabling the system lowers the bag cleanly instead of
 // leaving the medic locked holding it.
 if !(missionNamespace getVariable ["ACME_sys_hang", true]) exitWith {
-    [false] call ACME_fnc_hangBagStop;
+    [false, _medic] call ACME_fnc_hangBagStop;
 };
 
 private _stop = false;
@@ -22,13 +38,13 @@ if (!_stop && {(_medic distance _patient) > _leash}) then {
     _stop = true;
     _why = "Out of line range. Bag lowered.";
 };
-if (!_stop && {!isNull objectParent _medic || {_medic getVariable ["ace_medical_isUnconscious", false]} || {(stance _medic) == "PRONE"}}) then {
+if (!_stop && {!isNull objectParent _medic || {_medic getVariable ["ACE_isUnconscious", false]} || {(stance _medic) == "PRONE"}}) then {
     _stop = true;
     _why = "Bag lowered.";
 };
 if (_stop) exitWith {
     if (_why != "") then { [_why, 2, _medic] call ace_common_fnc_displayTextStructured; };
-    [true] call ACME_fnc_hangBagStop;
+    [true, _medic] call ACME_fnc_hangBagStop;
 };
 
 // auto-lower when the hung bag has finished transfusing. once flow has been seen on this line and it is gone,
@@ -55,10 +71,17 @@ if (_hPart != "") then {
 };
 if (_doneTransfusing) exitWith {
     ["Transfusion complete. Bag lowered.", 2, _medic] call ace_common_fnc_displayTextStructured;
-    [true] call ACME_fnc_hangBagStop;  // this hides the hint. the exitwith here means the tick will not re-assert it.
+    [true, _medic] call ACME_fnc_hangBagStop;  // this hides the hint. the exitwith here means the tick will not re-assert it.
 };
 
-[_patient, "ACME_hang_flowMult", (missionNamespace getVariable ["ACME_hang_flowMult", 1.75])] call ACME_fnc_setVarNet;
+// The start path already publishes this scalar. Most held bags target another player's casualty, so the patient is
+// remote on the provider client and ACME_fnc_setVarNet intentionally cannot use its owner-only scalar cache here.
+// Do not turn this 20 Hz presentation/validity tick into a 20 Hz public-variable stream. Re-publish only if another
+// system actually changed the multiplier while this exact hold is still active.
+private _desiredFlowMult = missionNamespace getVariable ["ACME_hang_flowMult", 1.75];
+if ((_patient getVariable ["ACME_hang_flowMult", 1]) isNotEqualTo _desiredFlowMult) then {
+    [_patient, "ACME_hang_flowMult", _desiredFlowMult] call ACME_fnc_setVarNet;
+};
 
 // keep the cancel prompt up: recreate it if a HUD refresh cleared the control, and only while the hang is genuinely
 // still active. during teardown, from a completed transfusion, RMB or esc, hangBagStop has already cleared
@@ -79,6 +102,6 @@ private _graceUntil = _medic getVariable ["ACME_hang_PoseRetryAt", 0];
 if (CBA_missionTime >= _graceUntil) then {
     private _animNow = toLower animationState _medic;
     if ((_animNow find "jetscrewaidfcrouchthumbup") < 0) exitWith {
-        [true] call ACME_fnc_hangBagStop;
+        [true, _medic] call ACME_fnc_hangBagStop;
     };
 };

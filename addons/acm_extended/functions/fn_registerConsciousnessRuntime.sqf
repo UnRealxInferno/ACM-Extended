@@ -14,7 +14,7 @@
 ["ace_treatmentStarted", {
     params ["_medic", "_patient", "_bodyPart", "_classname"];
     if (isPlayer _patient) then {
-        _patient setVariable ["ACME_beingTreated_until", CBA_missionTime + (missionNamespace getVariable ["ACME_obtunded_careGraceMax", 25]), true];
+        [_patient, "careGrace", [missionNamespace getVariable ["ACME_obtunded_careGraceMax", 25]]] call ACME_fnc_ownerDispatch;
     };
 }] call CBA_fnc_addEventHandler;
 
@@ -34,6 +34,6 @@ if (hasInterface) then {
 {
     [_x, {
         params ["_medic", "_patient"];
-        if (isPlayer _patient) then { _patient setVariable ["ACME_beingTreated_until", CBA_missionTime + 1, true]; };  // small tail, then clears
+        if (isPlayer _patient) then {[_patient, "careGrace", [1]] call ACME_fnc_ownerDispatch;};  // small owner-local tail
     }] call CBA_fnc_addEventHandler;
 } forEach ["ace_treatmentSucceded", "ace_treatmentFailed"];

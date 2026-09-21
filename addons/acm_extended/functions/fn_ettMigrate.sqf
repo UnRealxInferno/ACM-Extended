@@ -10,6 +10,7 @@
 // securing makes the problem disappear rather than shrink it.
 params ["_patient", ["_sev", 1]];
 if (isNull _patient) exitWith {};
+if (!local _patient) exitWith {[_patient, "ettMigrate", [_sev]] call ACME_fnc_ownerDispatch;};
 if (!(_patient getVariable ["ACME_ETT_Inserted", false])) exitWith {};
 
 private _secured = _patient getVariable ["ACME_ETT_Secured", false];

@@ -19,11 +19,20 @@
 
 params ["_unit", "_deltaT", "_syncValues"];
 private _acmeBinding = "NA4:getBloodVolumeChange";
+private _acmeReconcile = "B106:volumeCanonical";
 if (!local _unit) exitWith {_unit getVariable ["ace_medical_bloodVolume", 6]};
 _deltaT = (_deltaT max 0) min 5; // explicit stalled-frame cap shared by the owner integration
 [_unit] call ACME_fnc_syncPremixedBags;
 
 _unit setVariable ["ACME_infusion_getBloodVolumeChangePatched", CBA_missionTime, false];
+
+// B107: progressive bandage control is time-dependent.  Re-evaluate the wound bleed rate immediately before
+// integrating blood loss so the circulation model follows the treatment timer instead of waiting for a later
+// wound-state mutation.
+private _activeBandageProgress = _unit getVariable [QEGVAR(damage,BandageProgress), createHashMap];
+if (_activeBandageProgress isEqualType createHashMap && {count _activeBandageProgress > 0}) then {
+    [_unit] call ACEFUNC(medical_status,updateWoundBloodLoss);
+};
 
 private _bloodVolume = _unit getVariable [QEGVAR(circulation,Blood_Volume), 6];
 private _plasmaVolume = _unit getVariable [QEGVAR(circulation,Plasma_Volume), 0];
@@ -48,6 +57,10 @@ private _activeVolumes = 0;
 private _bloodLoss = -_deltaT * GET_BLOOD_LOSS(_unit);
 private _internalBleeding = -_deltaT * GET_INTERNAL_BLEEDRATE(_unit);
 private _capillaryBleeding = -_deltaT * GET_CAPILLARYDAMAGE_BLEEDRATE(_unit);
+// B102: junctional hemorrhage publishes a rate instead of writing blood volume in its own PFH. Keep that
+// contribution as a separate blood-only change so junctionals retain their tuned severity without a second
+// runtime-state update in the same tick.
+private _junctionalBloodLoss = -_deltaT * ((_unit getVariable ["ACME_junctionalBleedLPS", 0]) max 0);
 
 // citrate-induced hypocalcemia from a massive transfusion is coagulopathic, because ionized calcium is factor
 // iv. circhandle owns ionized ca and publishes a coag multiplier of 1 or more, and it is applied to every
@@ -81,6 +94,14 @@ if (_acmePermHypo != 1) then {
 };
 
 private _inCardiacArrest = IN_CRDC_ARRST(_unit);
+// B116: fluid admission requires forward circulation. Use actual mechanical cardiac output as the native guard,
+// with CPR as the only substitute in arrest. The ordinary gauge/site flow curve remains unchanged whenever
+// forward output exists; this is a zero-output safety gate, not a new arbitrary resuscitation-rate curve.
+private _cprActiveForFlow = [_unit] call EFUNC(core,cprActive);
+private _nativeCOForFlow = [_unit] call ACEFUNC(medical_status,getCardiacOutput);
+if (!(_nativeCOForFlow isEqualType 0) || {!finite _nativeCOForFlow}) then {_nativeCOForFlow = 0;};
+private _fluidPerfusionOpen = _cprActiveForFlow || {!_inCardiacArrest && {_nativeCOForFlow > 0.0001}};
+_unit setVariable ["ACME_fluidFlowPerfusionBlocked", !_fluidPerfusionOpen, false];
 
 private _TXAEffect = ([_unit, "TXA_IV", false] call ACEFUNC(medical_status,getMedicationCount));
 
@@ -93,8 +114,12 @@ if (GET_INTERNAL_BLEEDING(_unit) > 0.3 || (_plateletCount < 0.1 && _TXAEffect < 
 private _HTXState = _unit getVariable [QEGVAR(breathing,Hemothorax_State), 0];
 private _hemothoraxBleeding = 0;
 
-private _plateletBleedRatio = [(0.8 min (linearConversion [2.9, 1.8, _plateletCount, 0.8, 0.5]) max 0), 0] select _inCardiacArrest;
-private _plateletInternalBleedRatio = [(0.8 min (linearConversion [2.4, 1.6, _plateletCount, 0.8, 0.5]) max 0), 0] select _inCardiacArrest;
+// B135: cardiac arrest must not switch coagulation off. These ratios describe clot/platelet protection of an
+// existing hemorrhage source, not forward fluid delivery. CPR can restore enough pressure to make a source bleed
+// again, but platelets already at the wound still function and systemically-delivered TXA does not vanish when the
+// rhythm becomes pulseless. Keep the normal platelet protection during arrest; flow gating remains separate below.
+private _plateletBleedRatio = (0.8 min (linearConversion [2.9, 1.8, _plateletCount, 0.8, 0.5]) max 0);
+private _plateletInternalBleedRatio = (0.8 min (linearConversion [2.4, 1.6, _plateletCount, 0.8, 0.5]) max 0);
 
 if (_HTXState > 0) then {
     _hemothoraxBleeding = -_deltaT * GET_HEMOTHORAX_BLEEDRATE(_unit);
@@ -122,7 +147,7 @@ if (_salineVolume > 0) then {
 };
 
 if (_plateletCount > 0.1) then {
-    if (_TXAEffect > 0.5 && !_inCardiacArrest) then {
+    if (_TXAEffect > 0.5) then {
         _bloodLoss = _bloodLoss * (linearConversion [0.5, 2, _TXAEffect, 1, 0.9, true]);
         _internalBleeding = _internalBleeding * (linearConversion [0.5, 2, _TXAEffect, 1, 0.85, true]);
         _hemothoraxBleeding = _hemothoraxBleeding * (linearConversion [0.5, 2, _TXAEffect, 1, 0.8, true]);
@@ -131,13 +156,14 @@ if (_plateletCount > 0.1) then {
 
     _plateletCountChange = (_bloodLoss * _plateletBleedRatio) + ((_internalBleeding * 0.6) * _plateletInternalBleedRatio) + (_hemothoraxBleeding * _plateletBleedRatio) + (_capillaryBleeding * _plateletBleedRatio);
 
-    if (_TXAEffect > 0.1 && !_inCardiacArrest) then {
+    if (_TXAEffect > 0.1) then {
         _plateletCountChange = _plateletCountChange * 0.9;
     };
 };
 
 if (_bloodVolume > 0) then {
     _bloodVolumeChange = ((_bloodLoss * (1 - _plateletBleedRatio)) + ((_internalBleeding * _internalBleedingSeverity) * (1 - _plateletInternalBleedRatio)) + (_hemothoraxBleeding * (1 - _plateletBleedRatio)) + (_capillaryBleeding * (1 - _plateletBleedRatio))) / _activeVolumes;
+    _bloodVolumeChange = _bloodVolumeChange + _junctionalBloodLoss;
 };
 
 if (_plasmaVolume > 0) then {
@@ -173,17 +199,27 @@ private _warmthAdd = 0;
 private _coolDrop = 0;
 private _bloodBagsPresent = false;
 
-if (_unit getVariable [QEGVAR(circulation,IV_Bags_Active), false]) then {
+// The authoritative bag map decides whether the infusion worker runs. IV_Bags_Active is only a cache.
+private _fluidBags = _unit getVariable [QEGVAR(circulation,IV_Bags), createHashMap];
+private _hasFluidBags = (_fluidBags isEqualType createHashMap) && {count _fluidBags > 0};
+private _activeFlag = _unit getVariable [QEGVAR(circulation,IV_Bags_Active), false];
+if (_activeFlag isNotEqualTo _hasFluidBags) then {
+    _unit setVariable [QEGVAR(circulation,IV_Bags_Active), _hasFluidBags, true];
+};
+
+if (_hasFluidBags) then {
     private _IVFlowMultiplier = 1;
     private _IOFlowMultiplier = 1;
 
     private _activeBagTypesIV = _unit getVariable [QEGVAR(circulation,ActiveFluidBags_IV), ACM_IV_PLACEMENT_DEFAULT_1];
     private _activeBagTypesIO = _unit getVariable [QEGVAR(circulation,ActiveFluidBags_IO), ACM_IO_PLACEMENT_DEFAULT_1];
 
-    if (IN_CRDC_ARRST(_unit)) then {
-        _IVFlowMultiplier = EGVAR(circulation,cardiacArrestBleedRate);
-        _IOFlowMultiplier = 0.9;
-        if (alive (_unit getVariable [QACEGVAR(medical,CPR_provider), objNull])) then {
+    if (!_fluidPerfusionOpen) then {
+        _IVFlowMultiplier = 0;
+        _IOFlowMultiplier = 0;
+    } else {
+        if (_inCardiacArrest && {_cprActiveForFlow}) then {
+            // Preserve ACM's reduced arrest-flow calibration once CPR is actually producing forward perfusion.
             _IVFlowMultiplier = 0.9;
             _IOFlowMultiplier = 1;
         };
@@ -333,6 +369,10 @@ if (_unit getVariable [QEGVAR(circulation,IV_Bags_Active), false]) then {
                     };
                 };
 
+                // Final perfusion gate after every fixed-rate override, including the blood warmer. No CPR means
+                // no forward circulation in arrest, therefore no bag volume may be consumed or credited.
+                if (!_fluidPerfusionOpen) then {_bagChange = 0;};
+
                 if (_iv && EGVAR(circulation,IVComplications)) then {
                     private _comp = (GET_IV_COMPLICATIONS_FLOW_X(_unit,_partIndex,_accessSite)) max 0 min 2;
                     _bagChange = _bagChange * ([1,0.9,0.85] select _comp);
@@ -340,12 +380,28 @@ if (_unit getVariable [QEGVAR(circulation,IV_Bags_Active), false]) then {
                 };
                 _bagChange = _bagChange max 0;
                 _fluidPassRatio = [_unit,_targetBodyPart,if (_iv) then {_accessSite} else {-1}] call ACME_fnc_medicationLineFraction;
+
+                // FBTK runs in the opposite direction from an infusion. The line fraction must reduce how much
+                // blood is physically collected, not reduce donor loss after the bag has already been credited.
+                // The old order could fill a 500 mL FBTK while removing only a fraction of that from a compromised
+                // donor IV. Apply the line loss to collection first, then settle bag gain and donor loss 1:1.
+                if (_type == "FBTK") then {
+                    _bagChange = _bagChange * _fluidPassRatio;
+                    _fluidPassRatio = 1;
+
+                    // Never manufacture donor blood at extreme hypovolemia. External/internal bleeding has already
+                    // been accumulated into _bloodVolumeChange above, so this is the blood actually available for
+                    // collection in this integration step.
+                    private _donorAvailableMl = (((_bloodVolume + _bloodVolumeChange) max 0) * 1000);
+                    _bagChange = _bagChange min _donorAvailableMl;
+                };
+
                 private _admitted = _bagChange * _fluidPassRatio;
                 if (_type != "FBTK") then {
                     [_unit, _targetBodyPart, _acmeBagIndex, _acmeOriginalBag, _bagChange, _admitted, _deltaT] call ACME_fnc_fluidCommit;
                 };
                 if (_type == "FBTK") then {
-                    _bagVolumeRemaining = _bagVolumeRemaining + _bagChange;
+                    _bagVolumeRemaining = (_bagVolumeRemaining + _bagChange) min _originalVolume;
                 } else {
                     _bagVolumeRemaining = _bagVolumeRemaining - _bagChange;
                 };
@@ -459,9 +515,6 @@ if (_unit getVariable [QEGVAR(circulation,IV_Bags_Active), false]) then {
                             _unit setVariable ["ACME_YLineDirty", _d, true];
                         };
                     };
-                    if (missionNamespace getVariable ["ACME_hcEff_transfusion", false]) then {
-                        _unit setVariable ["ACME_bloodLineDirty", true, true];
-                    };
                     ["ACME_Empty", 0, _accessType, _accessSite, _iv, _bloodType, _originalVolume, _freshBloodID, _bagUid]
                 } else {
                     // a non-blood bag, saline or crystalloid, that drains is removed, as ACM does.
@@ -506,7 +559,25 @@ if (_unit getVariable [QEGVAR(circulation,IV_Bags_Active), false]) then {
         [_unit, ""] call EFUNC(circulation,updateActiveFluidBags);
         _unit setVariable [QEGVAR(circulation,IV_Bags_FreshBloodEffect), 0, true];
     } else {
-        _unit setVariable [QEGVAR(circulation,IV_Bags), _fluidBags, _syncValues];
+        // The casualty owner changes bag volume every medical tick, but ACM's normal whole-patient sync cadence
+        // is too sparse for a remote medic who is actively watching the transfusion menu. Keep the exact map local
+        // every tick and publish a changed map at no more than 4 Hz. This makes remote bag volume visibly flow
+        // without returning to per-frame network spam.
+        private _acmeBagUiSig = str _fluidBags;
+        private _acmeBagUiLastSig = _unit getVariable ["ACME_transfusionUiBagSig", ""];
+        private _acmeBagUiLastAt = _unit getVariable ["ACME_transfusionUiBagSyncAt", -1];
+        private _acmeBagUiChanged = _acmeBagUiSig != _acmeBagUiLastSig;
+        private _acmeBagUiPublish = _syncValues || {
+            _acmeBagUiChanged && {
+                _acmeBagUiLastAt < 0 || {(CBA_missionTime - _acmeBagUiLastAt) >= 0.25}
+            }
+        };
+
+        _unit setVariable [QEGVAR(circulation,IV_Bags), _fluidBags, _acmeBagUiPublish];
+        if (_acmeBagUiPublish) then {
+            _unit setVariable ["ACME_transfusionUiBagSig", _acmeBagUiSig, false];
+            _unit setVariable ["ACME_transfusionUiBagSyncAt", CBA_missionTime, false];
+        };
         _unit setVariable [QEGVAR(circulation,IV_Bags_FreshBloodEffect), _freshBloodEffectiveness, _syncValues];
     };
 };
@@ -541,6 +612,10 @@ if (_transfusionPain > 0) then {
     [_unit, (_transfusionPain min 0.8)] call ACEFUNC(medical_status,adjustPainLevel);
 };
 
+// Native ACM compartment conversion. This is deliberately slow and is NOT the patient's
+// hemodynamic volume gain. Plasma/saline already count immediately in the total circulating
+// volume returned at the end of this function. The conversion only migrates volume between
+// ACM's product compartments over time.
 if (_bloodVolume < 6) then {
     private _conversionRateModifier = ([1,2] select (_freshBloodEffectiveness > 0.83));
     if (_plasmaVolume + _plasmaVolumeChange > 0) then {
@@ -696,4 +771,10 @@ _unit setVariable [QEGVAR(circulation,Blood_Volume), _bloodVolume, _syncValues];
 _unit setVariable [QEGVAR(circulation,Plasma_Volume), _plasmaVolume, _syncValues];
 _unit setVariable [QEGVAR(circulation,Saline_Volume), _salineVolume, _syncValues];
 
-_bloodVolume + _plasmaVolume + _salineVolume min DEFAULT_BLOOD_VOLUME;
+// B103: make the ACE-facing circulating volume explicit. Every admitted milliliter of
+// compatible blood, plasma or crystalloid is represented here immediately. Do not use the
+// slow compartment-conversion rates above as a proxy for resuscitation volume.
+private _circulatingVolume = ((_bloodVolume + _plasmaVolume + _salineVolume) min DEFAULT_BLOOD_VOLUME) max 0;
+_unit setVariable ["ACME_circulatingVolume", _circulatingVolume, _syncValues];
+
+_circulatingVolume;

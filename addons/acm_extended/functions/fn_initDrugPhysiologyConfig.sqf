@@ -41,8 +41,9 @@ ACME_lido_halfLifeSec   = 330;  // about a 5.5 min compressed elimination half-l
 ACME_lido_shockClearFrac = 0.6;  // active shock multiplies clearance by this, because hepatic clearance is perfusion-limited.
 ACME_lido_betaClearFrac  = 0.7;  // esmolol (beta-blocker) on board multiplies clearance by this
 
-// lidocaine toxicity, phase 2: the seizure. the vitals are modeled and the body visual is parked.
-// at or above seizurethreshold an unconscious patient seizes. the tell is apnea, because the dedicated seizure
+// lidocaine toxicity, phase 2: the shared generalized seizure. at or above seizurethreshold an unconscious
+// patient seizes. The visible convulsion is the same 1.35x GestureSpasm3-6 sequence used by TBI and severe ACM
+// nerve-agent seizures. the physiologic tell is apnea, because the dedicated seizure
 // rr channel drives rr to seizureapnearr, which crashes SpO2 through ACM's native oxygen model. a sympathetic
 // tachycardia runs with it. the arc is active, then postictal, then resolve. it recurs while the patient stays
 // toxic and untreated, which is status epilepticus. midazolam on board, at a count of seizuremidazolamsupp or
@@ -63,21 +64,29 @@ ACME_lido_benzoClassnames        = ["Midazolam", "Midazolam_IV"];  // classnames
 ACME_lido_seizureBenzoBase       = 1;  // midazolam administrations, as an effective count, that control a seizure right at the threshold.
 ACME_lido_seizureBenzoRefractory = 0.1;  // extra administrations needed per mcg/ml above the seizure threshold.
 
-// seizure body motion, the synthesized convulsions. see fn_seizuremotion. it gives pulsed bursts, still
-// pauses and an occasional ragdoll flop. the defaults are a starting point to dial in game, because arma
-// animation fidelity cannot be judged from outside the game.
-ACME_seizure_motionEnabled = 1;  // master toggle for the visible convulsions
-ACME_seizure_jerkHz        = 11;  // clonic jerk frequency in hz. high gives a fast vibration rather than a slow swing.
-ACME_seizure_yawAmp        = 1.2;  // peak heading thrash either side of rest, in degrees. a tiny value gives a subtle fine vibration.
-ACME_seizure_yawChaos      = 0.75;  // random jitter, 0 to 1, layered on the rhythm. higher gives more trembling and less metronome.
-ACME_seizure_burstMin      = 1;  // shortest thrash burst (seconds)
-ACME_seizure_burstMax      = 2;  // longest thrash burst in seconds. short bursts cycle the ragdoll flops more often.
-ACME_seizure_pauseMin      = 1;  // shortest still pause between bursts (seconds)
-ACME_seizure_pauseMax      = 2.5;  // longest still pause between bursts (seconds)
-ACME_seizure_ragdollChance = 0.7;  // chance a burst ends in a ragdoll flop rather than a still pause. most bursts flop.
-ACME_seizure_ragdollDur    = 1.2;  // hold time while a ragdoll flop settles before the motion resumes, in seconds.
-ACME_seizure_settleDur     = 1.5;  // initial settle after the onset collapse, before the first burst, in seconds.
-ACME_seizure_camShake      = 1;  // shake the camera if the patient is a local player
+// seizure body motion. BI GestureSpasm3-6 are played as ACME-only gesture aliases at 1.35x and chained on
+// GestureDone, so each spasm completes before the next one begins. The old setDir tremor, random yaw jitter,
+// burst/pause oscillator, repeated ragdoll flops and seizure camera shake are retired.
+ACME_seizure_motionEnabled = 1;  // legacy mission-level master toggle retained for compatibility
+ACME_seizure_settleDur     = 1.5;  // let the one-time onset collapse settle before the first gesture
+
+// Legacy visual tuning names are retained as inert compatibility values so old missions/settings do not error.
+// fn_seizureMotion no longer reads any of them.
+ACME_seizure_jerkHz         = 11;
+ACME_seizure_yawAmp         = 1.2;
+ACME_seizure_yawChaos       = 0.75;
+ACME_seizure_burstMin       = 1;
+ACME_seizure_burstMax       = 2;
+ACME_seizure_pauseMin       = 1;
+ACME_seizure_pauseMax       = 2.5;
+ACME_seizure_ragdollChance  = 0.7;
+ACME_seizure_ragdollDur     = 1.2;
+ACME_seizure_camShake       = 1;
+
+// ACM Sarin/nerve-agent seizure activity now enters the same seizure state machine instead of using intermittent
+// local camera shake. 10 is ACM's original onset for the Midazolam-suppressible seizure/shake effect; the separate
+// airway-spasm/critical band still begins at buildup 60.
+ACME_sarin_seizureThreshold = 10;
 
 // TBI pre-herniation seizures. this is the per-tick chance to start a seizure while the brain sits in the
 // pre-herniation decompensation stage, with cushing engaged and no herniation yet. a high value gives a

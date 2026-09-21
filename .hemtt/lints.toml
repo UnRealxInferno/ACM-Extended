@@ -1,0 +1,23 @@
+# ACME lint policy: keep correctness diagnostics, suppress advisory micro-optimization/style noise.
+# Do NOT disable invalid args, undefined variables/functions, missing files, or missing localization keys.
+
+[sqf]
+if_assign = false
+find_in_str = false
+select_parse_number = false
+in_vehicle_check = false
+command_case = false
+extra_not = false
+count_array_comp = false
+select_count = false
+reimplementing_command = false
+string_concat_in_loop = false
+array_append = false
+
+[config]
+unused_external = false
+
+[stringtables.usage]
+options.ignore_unused = true
+options.ignore_missing = false
+options.ignore_duplicate = false

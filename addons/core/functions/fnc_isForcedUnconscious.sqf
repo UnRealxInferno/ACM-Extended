@@ -17,4 +17,4 @@
 
 params ["_patient"];
 
-(_patient getVariable [QEGVAR(evacuation,casualtyTicketClaimed), false]) || (_patient getVariable [QEGVAR(airway,SurgicalAirway_State), false]);
+((_patient getVariable ["ACME_lido_seizureState", ""]) == "active") || (_patient getVariable [QEGVAR(evacuation,casualtyTicketClaimed), false]) || (_patient getVariable [QEGVAR(airway,SurgicalAirway_State), false]);

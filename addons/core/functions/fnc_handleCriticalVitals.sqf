@@ -34,7 +34,7 @@ private _PFH = [{
     ([_patient] call ACEFUNC(medical_status,getBloodPressure)) params ["_BPDiastolic", "_BPSystolic"];
 
     private _MAP = GET_MAP(_BPSystolic,_BPDiastolic);
-    
+
     private _timeUntil = _patient getVariable [QGVAR(CriticalVitals_Time), -1];
 
     private _heartRateLimits = _HR > 240 || _HR < 30;

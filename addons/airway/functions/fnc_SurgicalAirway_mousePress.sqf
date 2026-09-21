@@ -70,7 +70,7 @@ if (_button == 0) then { // Left
             private _ctrlVerticalIncisionSite = _display displayCtrl IDC_SURGICAL_AIRWAY_SPACE_INCISION_VERTICAL;
 
             (ctrlPosition _ctrlVerticalIncisionSite) params ["", "_incisionSiteY", "", "_incisionSiteH"];
-            
+
             if (!(GVAR(SurgicalAirway_Target) getVariable [QGVAR(SurgicalAirway_IncisionVerticalSuccess), false]) && ([(ctrlPosition _ctrlIncision), (ctrlPosition _ctrlVerticalIncisionSite)] call EFUNC(GUI,isZoneOverlapping)) && {(_startPosition select 1) < _incisionSiteY && (_endPosition select 1) > (_incisionSiteY + _incisionSiteH)}) then {
                 GVAR(SurgicalAirway_Target) setVariable [QGVAR(SurgicalAirway_IncisionVerticalSuccess), true, true];
                 GVAR(SurgicalAirway_IncisionX) = (ctrlPosition (GVAR(SurgicalAirway_ActiveIncision_VisualCtrl) select 0)) select 0;

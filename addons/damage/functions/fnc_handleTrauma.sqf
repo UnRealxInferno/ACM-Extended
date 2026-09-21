@@ -48,4 +48,4 @@ if (_exceeded) then {
     _patient setVariable [QGVAR(InstantDeath), true];
 };
 
-_exceeded; 
+_exceeded;

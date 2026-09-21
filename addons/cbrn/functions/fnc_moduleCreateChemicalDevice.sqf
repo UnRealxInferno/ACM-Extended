@@ -97,7 +97,7 @@ private _fnc_onConfirm = {
     private _radius = sliderPosition (_display displayCtrl IDC_MODULE_CREATE_CHEMICALDEVICE_RADIUS);
     private _effectTime = [(20 + (random 15)), -1] select (cbChecked (_display displayCtrl IDC_MODULE_CREATE_CHEMICALDEVICE_PERMANENT));
     private _affectAI = cbChecked (_display displayCtrl IDC_MODULE_CREATE_CHEMICALDEVICE_AFFECTAI);
-    
+
     [{
         params ["_attachedObject"];
 

@@ -4,7 +4,11 @@ class CfgPatches {
     class ADDON {
         name = COMPONENT_NAME;
         units[] = {};
-        weapons[] = {};
+        weapons[] = {
+            "ACM_PressureBandage",
+            "ACM_EmergencyTraumaDressing",
+            "ACM_ElasticWrap"
+        };
         requiredVersion = REQUIRED_VERSION;
         requiredAddons[] = {
             "cba_main",

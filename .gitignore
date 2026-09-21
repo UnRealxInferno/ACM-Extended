@@ -16,3 +16,6 @@ FORK_DEV.md
 /.hemttout/
 /releases/ACM-1.4.5.0.zip
 /releases/*.zip
+__pycache__/
+*.py[cod]
+.pytest_cache/

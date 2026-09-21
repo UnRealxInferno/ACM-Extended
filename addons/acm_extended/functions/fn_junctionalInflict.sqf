@@ -6,15 +6,27 @@
 // gauze into pressure flow.
 // junctional wounds are limbs only, meaning the arms and legs. the chest, body, was removed, because penetrating
 // chest trauma is handled by the chest-seal path instead.
-params ["_unit", "_part", ["_silent", false], ["_epoch", -1]];
+params ["_unit", "_part", ["_silent", false], ["_epoch", -1], ["_sourceWoundId", -1]];
 if (_epoch < 0) then {_epoch = [_unit] call ACME_fnc_clinicalEpoch;};
-if (!local _unit) exitWith {[_unit, "junctionalInflict", [_unit, _part, _silent, _epoch]] call ACME_fnc_ownerDispatch;};
+if (!local _unit) exitWith {[_unit, "junctionalInflict", [_unit, _part, _silent, _epoch, _sourceWoundId]] call ACME_fnc_ownerDispatch;};
 if (_epoch != ([_unit] call ACME_fnc_clinicalEpoch)) exitWith {};
 private _p = toLower _part;
 if !(_p in ["leftarm", "rightarm", "leftleg", "rightleg"]) exitWith {
     ["Junctional wounds only apply to the arms or legs.", 2.5] call ace_common_fnc_displayTextStructured;
 };
 _unit setVariable [format ["ACME_Junc_%1", _p], "open", true];
+// B134: remember which native ACE/ACM wound created this junctional. Older/scripted junctionals may not pass an
+// id; in that case bind to the highest-bleeding current wound on the part once, rather than suppressing the whole limb.
+if (_sourceWoundId < 0) then {
+    private _bestScore = -1;
+    private _openWounds = _unit getVariable ["ace_medical_openWounds", createHashMap];
+    {
+        _x params ["_id", "_amount", "_bleed"];
+        private _score = (_amount max 0) * (_bleed max 0);
+        if (_score > _bestScore) then {_bestScore = _score; _sourceWoundId = _id;};
+    } forEach (_openWounds getOrDefault [_p, []]);
+};
+if (_sourceWoundId >= 0) then {_unit setVariable [format ["ACME_Junc_SourceWound_%1", _p], _sourceWoundId, true];};
 [_unit] call ACME_fnc_junctionalStartBleed;
 // If the new junction is already beneath an AAJT-S placement, immediately recompute native wound loss for that
 // limb. Zone 3, unilateral inguinal and axillary placements all use the same central occlusion predicate.

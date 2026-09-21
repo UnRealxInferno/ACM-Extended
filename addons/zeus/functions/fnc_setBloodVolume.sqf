@@ -81,7 +81,7 @@ private _fnc_sliderMove = {
     if (isNull _logic) exitWith {};
 
     private _patient = attachedTo _logic;
-    
+
     private _currentValue = switch (_idcIndex) do {
         case 0: {_patient getVariable [QEGVAR(circulation,Blood_Volume), 6];};
         case 1: {_patient getVariable [QEGVAR(circulation,Plasma_Volume), 0];};

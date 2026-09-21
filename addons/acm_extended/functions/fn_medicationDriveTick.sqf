@@ -1,17 +1,28 @@
-/* Called once by patient owner's circulation tick. Integral of rate is admitted mg.
-   Remaining durations are relative and survive save/load without wall-clock backfill. */
+/* B121 called once by patient-owner circulation. The total-rate keys preserve the historical API; source-specific
+   keys are also published for diagnostics/future tuning. */
 params ["_patient","_dt"];
 private _rates = createHashMap;
+if (isNull _patient || {!local _patient}) exitWith {_rates};
+if (!alive _patient) exitWith {
+    [_patient] call ACME_fnc_deadPhysiologyFreeze;
+    _rates
+};
 if (_dt <= 0) exitWith {_rates};
 private _queue = _patient getVariable ["ACME_medicationDriveQueue",[]];
 private _keep = [];
 {
-    _x params ["_base","_mass","_remaining"];
+    _x params ["_base","_mass","_remaining",["_source","bolus"]];
     private _step = _dt min (_remaining max 0.000001);
     private _delivered = _mass * (_step / (_remaining max 0.000001));
-    _rates set [_base,(_rates getOrDefault [_base,0]) + _delivered * 60 / _dt];
-    if (_remaining > _dt + 0.000001) then {_keep pushBack [_base,(_mass - _delivered) max 0,_remaining - _dt];};
+    private _rate = _delivered*60/_dt;
+    _rates set [_base,(_rates getOrDefault [_base,0])+_rate];
+    _rates set [format ["%1#%2",_base,_source],(_rates getOrDefault [format ["%1#%2",_base,_source],0])+_rate];
+    if (_remaining > _dt+0.000001) then {_keep pushBack [_base,(_mass-_delivered) max 0,_remaining-_dt,_source];};
 } forEach _queue;
 _patient setVariable ["ACME_medicationDriveQueue",_keep,true];
-[_patient,"ACME_ketRapidLoad",(_patient getVariable ["ACME_ketRapidLoad",0]) * (0.5 ^ (_dt / 20))] call ACME_fnc_setVarNet;
+[_patient,"ACME_ketRapidLoad",(_patient getVariable ["ACME_ketRapidLoad",0])*(0.5^(_dt/20))] call ACME_fnc_setVarNet;
+{
+    _x params ["_key","_half"];
+    [_patient,_key,(_patient getVariable [_key,0])*(0.5^(_dt/_half))] call ACME_fnc_setVarNet;
+} forEach [["ACME_hcMed_rapidPropofol",35],["ACME_hcMed_rapidMidazolam",45],["ACME_hcMed_rapidOpioid",45],["ACME_hcMed_rapidRocuronium",60]];
 _rates

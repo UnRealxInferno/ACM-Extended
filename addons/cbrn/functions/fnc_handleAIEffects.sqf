@@ -28,7 +28,7 @@ _patient setVariable [QGVAR(AIEffect_NextCheck), (CBA_missionTime + 5)];
 
 if (_isExposed || (_isExposedExternal && (_hazardType == "chemical_lewisite"))) then {
     [QACEGVAR(ai,allowFleeing), [_patient, 1], _patient] call CBA_fnc_targetEvent;
-    
+
     _patient doMove (_patient getPos [(20 + random 20), (150 + random 30)]);
     _patient setSpeedMode "FULL";
 

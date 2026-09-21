@@ -5,6 +5,9 @@
 // _this is the ACE callback [_medic, _patient, _bodyPart].
 params ["_medic", "_patient"];
 if (isNull _patient) exitWith {};
+if (!local _patient) exitWith {
+    ["ACME_ownerCommand", [_patient, "hpmkUnwrap", [_medic, _patient]], _patient] call CBA_fnc_targetEvent;
+};
 if (!((_patient getVariable ["ACME_hpmk_state", ""]) in ["wrapped", "exposed"])) exitWith {};
 
 [_patient, "prepped", true, false] call ACME_fnc_hpmkStateCommit;

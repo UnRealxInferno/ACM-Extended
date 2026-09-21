@@ -12,7 +12,7 @@ if (!isNull _tgt) then {
     // silencing buys you sixty seconds to act rather than a way to make the problem disappear. a new alarm still
     // un-silences immediately, in fn_ventalarmtick.
     private _dur = missionNamespace getVariable ["ACME_vent_alarmSilenceSeconds", 60];
-    _tgt setVariable ["ACME_vent_alarmSilencedUntil", CBA_missionTime + _dur, true];
+    _tgt setVariable ["ACME_vent_alarmSilencedUntil", serverTime + _dur, true];
 };
 
 playSound "ACME_VentClick";

@@ -32,8 +32,9 @@ class IVPanelGeometry(unittest.TestCase):
         self.assertAlmostEqual(heights[-1],(.97-.045)*1.5)
         self.assertTrue(all(a<b for a,b in zip(heights,heights[1:])))
         init=src('ivMinigameInit')
-        self.assertIn('getVariable ["ACME_iv_uiScaleV2", 1]',init)
-        self.assertNotIn('getVariable ["ACME_iv_uiScale",',init)
+        self.assertIn('getVariable ["ACME_iv_uiScaleV3", 1]',init)
+        self.assertNotIn('getVariable ["ACME_iv_uiScaleV2",',init)
+        self.assertIn('private _zoom = _zoomSetting * 1.10;',init)
         self.assertIn('private _bodyH = _szH * 0.925 * _zoom;',init)
         self.assertNotIn('_bodyH = _botLimit - _bodyY',init)
 

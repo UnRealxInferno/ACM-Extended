@@ -164,7 +164,7 @@ if (hasInterface) then {
             private _alarms = _pat getVariable ["ACME_vent_alarms", []];
             private _prio = _pat getVariable ["ACME_vent_alarmPrio", 0];
             private _silUntil = _pat getVariable ["ACME_vent_alarmSilencedUntil", 0];
-            private _silenced = CBA_missionTime < _silUntil;
+            private _silenced = serverTime < _silUntil;
             if (_alarms isEqualTo [] || {_silenced} || {_prio <= 0}) then {
                 ACME_vent_alarmSnd deleteAt _id;  // nothing to say, or acknowledged: reset the pattern
             } else {

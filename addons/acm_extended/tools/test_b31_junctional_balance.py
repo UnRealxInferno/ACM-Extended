@@ -107,10 +107,22 @@ class JunctionalB31(unittest.TestCase):
     def test_corpse_render_keeps_evidence_without_rebleed_progression(self):
         image = source('updateJunctionalImage')
         self.assertIn('_woundC ctrlShow (_state in ["open", "packed", "xstat"]);', image)
-        self.assertIn('_wrapC  ctrlShow (_state == "wrapped");', image)
+        self.assertIn('_packedC ctrlShow (_state in ["packed", "xstat"]);', image)
+        self.assertIn('_wrapC ctrlShow (_state == "wrapped");', image)
         self.assertNotIn('alive _target', image)
         self.assertIn('alive _target,', source('junctionalGuiSyncTick'))
         self.assertIn('if (alive _target && {(time - _at) > _xDwell})', source('junctionalInjuryEntry'))
+
+    def test_packing_layers_over_wound_without_fade(self):
+        image = source('updateJunctionalImage')
+        self.assertIn('base wound', image.lower())
+        self.assertIn('treatment overlay', image.lower())
+        self.assertIn('junctionalwound_packed_leftarm_ca.paa', image)
+        self.assertIn('junctionalwound_xstat_leftarm_ca.paa', image)
+        self.assertIn('ctrlSetFade 0', image)
+        self.assertNotIn('ACME_JuncVisualFadeStart', image)
+        self.assertNotIn('ACME_junctionalImageFadeInSec', image)
+        self.assertNotIn('ctrlCommit _left', image)
 
 
 if __name__ == '__main__':

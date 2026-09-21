@@ -174,8 +174,9 @@ if (_capBreathing) then {
         // how recently. without this, an apneic or arrested patient being correctly bagged reads as zero ventilation
         // everywhere downstream, and the provider is charged with hypoventilation for doing exactly the right thing.
         if (!isNull _bvmPatient) then {
-            [_bvmPatient, "ACME_bvm_rate", _rr] call ACME_fnc_setVarNet;
-            [_bvmPatient, "ACME_bvm_lastBreath", CBA_missionTime] call ACME_fnc_setVarNet;
+            // TBI/manual-ventilation telemetry is casualty-owned. The owner publishes a serverTime freshness stamp,
+            // so a medic's local clock can never make bagging appear stale/future on another machine.
+            [_bvmPatient, "bvmTelemetry", [_rr]] call ACME_fnc_ownerDispatch;
         };    };
 };
 _player setVariable ["ACME_emma_breaths", _breaths];

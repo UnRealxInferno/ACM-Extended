@@ -7,16 +7,15 @@ if (!local _patient) exitWith {
         ["ACME_ventSimpleManualBreath", [_patient, _medic, _custody, _epoch, _issued, _id, _episodeId, _hops + 1], _patient] call CBA_fnc_targetEvent;
     };
 };
-private _age = CBA_missionTime - _issued;
 private _episode = _patient getVariable ["ACME_vent_simpleEpisode", [false, 0]];
 if (_id == "" || {_epoch != ([_patient] call ACME_fnc_clinicalEpoch)}
-    || {_age < -0.5} || {_age > 3} || {_episodeId != (_episode select 1)}
+    || {_episodeId != (_episode select 1)}
     || {!(_episode select 0)}) exitWith {};
 private _receipts = +(_patient getVariable ["ACME_vent_simpleManualReceipts", []]);
 if (_id in _receipts) exitWith {};
 _receipts pushBack _id;
 if (count _receipts > 64) then {_receipts deleteAt 0;};
-[_patient, "ACME_vent_simpleManualReceipts", _receipts] call ACME_fnc_setVarNet;
+_patient setVariable ["ACME_vent_simpleManualReceipts", _receipts, false];
 if (!(missionNamespace getVariable ["ACME_sys_vent", true])
     || {!(missionNamespace getVariable ["ACME_vent_simpleMode", false])}
     || {!alive _patient} || {!alive _medic}
@@ -61,19 +60,21 @@ private _vte = _vt * (1 - (_leak min 0.75));
 private _times = +(_patient getVariable ["ACME_vent_manualBreathTimes", []]);
 _times = _times select {_now - _x <= 60};
 _times pushBack _now;
-[_patient, "ACME_vent_manualBreathTimes", _times] call ACME_fnc_setVarNet;
+_patient setVariable ["ACME_vent_manualBreathTimes", _times, false];
 [_patient, "ACME_vent_manualRR", count _times] call ACME_fnc_setVarNet;
-[_patient, "ACME_vent_manualBreathT", _now] call ACME_fnc_setVarNet;
+_patient setVariable ["ACME_vent_manualBreathT", _now, false];
+[_patient, "ACME_vent_manualBreathServer", serverTime] call ACME_fnc_setVarNet;
 private _volumes = +(_patient getVariable ["ACME_vent_simpleManualVolumes", []]);
 _volumes = _volumes select {_now - (_x select 0) <= 60};
 _volumes pushBack [_now, _vte];
 if (count _volumes > 128) then {_volumes deleteAt 0;};
-[_patient, "ACME_vent_simpleManualVolumes", _volumes] call ACME_fnc_setVarNet;
+_patient setVariable ["ACME_vent_simpleManualVolumes", _volumes, false];
 ["ACME_ventSimpleManualAccepted", [_patient, _medic, _custody], _medic] call CBA_fnc_targetEvent;
 // A completely ineffective breath cannot establish an oxygenation provider.
 if (_vte > 150) then {
     private _provider = _patient getVariable ["ACM_breathing_BVM_provider", objNull];
     if (isNull _provider || {_provider isEqualTo _patient}) then {
         [_patient, [["bvmProvider", _patient], ["bvmLastBreath", _now], ["bvmConnectedOxygen", true], ["bvmLastBreathOxygen", _now]], true] call ACM_breathing_fnc_setRuntimeState;
+        _patient setVariable ["ACME_bvm_lastBreathServer", serverTime, true];
     };
 };

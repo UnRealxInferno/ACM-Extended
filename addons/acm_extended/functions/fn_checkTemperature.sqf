@@ -13,7 +13,7 @@ if (([_medic, "ACM_Thermometer"] call ace_common_fnc_getCountOfItem) <= 0) exitW
 
 private _t = _patient getVariable ["ACME_hypo_temp", 37];
 _patient setVariable ["ACME_tempReading", _t, true];
-_patient setVariable ["ACME_tempReadingAt", CBA_missionTime, true];
+_patient setVariable ["ACME_tempReadingAt", serverTime, true];
 
 [format ["Temperature: %1%2C", (_t toFixed 1), (toString [176])], 1.75, _medic] call ace_common_fnc_displayTextStructured;
 if (!isNil "ace_medical_treatment_fnc_addToLog") then {

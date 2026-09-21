@@ -10,6 +10,7 @@ if (isNull _patient || {!local _patient}) exitWith {};
 // The begin half invalidates delayed work, removes native/custom PFHs and active-list membership, but does not clear
 // clinical/intervention fields. Do not run the finish half: finish is the full-heal/respawn reset path.
 [_patient, "begin", true] call ACME_fnc_clinicalReset;
+[_patient] call ACME_fnc_deadPhysiologyFreeze;
 _patient setVariable ["ACME_resetVentCustody", nil, false];
 
 // Stop presentation-only seizure motion. Do not tear down an actively held direct-pressure action here: direct

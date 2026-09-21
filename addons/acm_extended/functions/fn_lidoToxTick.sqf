@@ -1,8 +1,8 @@
 // the lidocaine toxicity arc, phase 2: the seizure. it is driven by the serum level, ACME_lido_serumLevel, built
 // in phase 1.
-// at or above the seizure threshold an unconscious patient seizes: a generalized tonic-clonic event, modeled on
-// its vitals, because arma has no seizure animation and the body visual is parked. the recognizable tell is
-// apnea. we drive a dedicated seizure rr channel, ACME_seizure_rrDrive, which is higher priority than the TBI
+// at or above the seizure threshold an unconscious patient seizes: a generalized tonic-clonic event with shared
+// ACME physiology and the 1.35x GestureSpasm3-6 visual sequence. the recognizable physiologic tell is apnea. we
+// drive a dedicated seizure rr channel, ACME_seizure_rrDrive, which is higher priority than the TBI
 // drive in the updateRespirationRate sole-writer, to 0, and the SpO2 then crashes on its own through ACM's
 // native oxygen model, because its updateoxygen drops the sat at maxdecrease whenever rr is 0. a sympathetic
 // tachycardia is folded into the circ hr drive, and fn_circhandle reads the state.
@@ -54,15 +54,25 @@ private _phaseEnd    = _patient getVariable ["ACME_lido_seizurePhaseEnd", 0];
 private _tbiState   = _patient getVariable ["ACME_tbi_State", createHashMap];
 private _tbiPreHern = (_tbiState getOrDefault ["cushing", false]) && {!(_tbiState getOrDefault ["herniating", false])};
 
-// a seizure cause is present, which keeps an episode running and allows recurrence after a cooldown, if lidocaine
-// is still in the seizure band or the brain is in the pre-herniation stage.
-private _causePresent = (_lidoLevel >= _clearThresh) || _tbiPreHern;
+// Severe ACM nerve-agent toxicity joins this same state machine instead of running its old client-only camera
+// shake. The CBRN effect owns this cause flag from its buildup threshold; a benzodiazepine suppresses the seizure
+// without pretending to remove the toxin, so the episode can recur if the drug wears off while exposure persists.
+private _sarinCause = _patient getVariable ["ACME_sarinSeizureCause", false];
 
-// a seizure triggers from rest deterministically for lidocaine at threshold, and with a high per-tick chance for
-// the pre-herniation TBI stage, which gives a variable onset that is near certain to fire while the stage
-// persists.
+// Debug-induced seizures are a temporary real cause, not an animation override. The debug action sets an expiry
+// on the patient owner; while it is live the ordinary seizure state machine owns apnea, LOC, motion and postictal.
+private _debugUntil = _patient getVariable ["ACME_debugSeizureUntil", 0];
+private _debugCause = _debugUntil > _now;
+if (!_debugCause && {_debugUntil > 0}) then {
+    _patient setVariable ["ACME_debugSeizureUntil", nil, true];
+};
+
+// A seizure cause keeps an episode running and allows recurrence after a cooldown. Lidocaine has hysteresis,
+// TBI remains the variable pre-herniation trigger, severe Sarin is deterministic, and debug is time-bounded.
+private _causePresent = (_lidoLevel >= _clearThresh) || _tbiPreHern || _sarinCause || _debugCause;
+
 private _tbiChance   = missionNamespace getVariable ["ACME_tbi_seizureChancePerTick", 0.3];
-private _triggerNow  = (_lidoLevel >= _thresh) || (_tbiPreHern && {random 1 < _tbiChance});
+private _triggerNow  = (_lidoLevel >= _thresh) || _sarinCause || _debugCause || (_tbiPreHern && {random 1 < _tbiChance});
 
 switch (_state) do {
     case "active": {

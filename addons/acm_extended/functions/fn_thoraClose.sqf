@@ -3,6 +3,12 @@
 // carrier was left lying on the ground superior to the head and the casualty stayed flat, permanently. it is the
 // same delayed resume the chest seal screen uses, so ACM has finished whatever it was doing first.
 private _pHE = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
+private _mHE = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
+private _vestLease = uiNamespace getVariable ["ACME_Thora_ChestAccessLease",""];
+if (_vestLease != "") then {
+    uiNamespace setVariable ["ACME_Thora_ChestAccessLease",""];
+    if (!isNull _pHE) then {[_pHE,_mHE,_vestLease,false,"thoracostomy"] call ACME_fnc_chestAccessVestEvent;};
+};
 if (!isNull _pHE) then {[_pHE, "ui:thora:" + str clientOwner, false] call ACME_fnc_ecgJostleRequest;};
 if (!isNull _pHE && {_pHE getVariable ["ACME_headElev_Suspended", false]}) then {
     _pHE setVariable ["ACME_headElev_ResumePending", true, true];

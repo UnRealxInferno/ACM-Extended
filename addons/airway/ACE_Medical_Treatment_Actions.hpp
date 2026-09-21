@@ -10,7 +10,7 @@ class ACEGVAR(medical_treatment,actions) {
         treatmentTime = 2.5;
         allowedSelections[] = {"Head"};
         allowSelfTreatment = 0;
-        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)));
         callbackSuccess = QFUNC(checkAirway);
         ACM_rollToBack = 1;
     };
@@ -21,7 +21,7 @@ class ACEGVAR(medical_treatment,actions) {
         icon = "";
         medicRequired = 0;
         treatmentTime = 5;
-        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == '') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == ''));
         callbackSuccess = QFUNC(performHeadTurn);
         ACM_cancelRecovery = 1;
     };
@@ -42,9 +42,9 @@ class ACEGVAR(medical_treatment,actions) {
         displayNameProgress = CSTRING(EstablishRecoveryPosition_Progress);
         icon = "";
         medicRequired = 0;
-        treatmentTime = QGVAR(treatmentTimeRecoveryPosition);
+        treatmentTime = 3;
         allowedSelections[] = {"Body"};
-        condition = QUOTE(GVAR(enable) && !([_patient] call EFUNC(core,cprActive)) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] != 'SGA') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])) && !(IN_RECOVERYPOSITION(_patient)) && (isNull objectParent _patient));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] != 'SGA') && !(IN_RECOVERYPOSITION(_patient)) && (isNull objectParent _patient));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,true)] call FUNC(setRecoveryPosition));
         ACM_rollToBack = 0;
     };
@@ -68,7 +68,7 @@ class ACEGVAR(medical_treatment,actions) {
         treatmentTime = QUOTE([_patient] call FUNC(getSuctionTime));
         items[] = {"ACM_SuctionBag"};
         consumeItem = 1;
-        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,0)] call FUNC(handleSuction));
         ACM_cancelRecovery = 1;
         ACM_menuIcon = "ACM_SuctionBag";
@@ -93,7 +93,7 @@ class ACEGVAR(medical_treatment,actions) {
         treatmentTime = QGVAR(treatmentTimeOPA);
         items[] = {"ACM_OPA"};
         consumeItem = 1;
-        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == '') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == ''));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,'OPA')] call FUNC(insertAirwayItem));
         ACM_cancelRecovery = 1;
         ACM_menuIcon = "ACM_OPA";
@@ -105,7 +105,7 @@ class ACEGVAR(medical_treatment,actions) {
         medicRequired = QGVAR(allowNPA);
         treatmentTime = QGVAR(treatmentTimeNPA);
         items[] = {"ACM_NPA"};
-        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Nasal),'')] == '') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && !(_patient call ACEFUNC(common,isAwake)) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Nasal),'')] == ''));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,'NPA')] call FUNC(insertAirwayItem));
         ACM_menuIcon = "ACM_NPA";
     };
@@ -126,14 +126,14 @@ class ACEGVAR(medical_treatment,actions) {
         icon = "";
         medicRequired = 0;
         treatmentTime = 1.5;
-        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == 'OPA') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == 'OPA'));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,false)] call FUNC(removeAirwayItem));
     };
     class RemoveNPA: RemoveOPA {
         displayName = CSTRING(RemoveNPA);
         displayNameProgress = CSTRING(RemoveNPA_Progress);
         icon = "";
-        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Nasal),'')] == 'NPA') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Nasal),'')] == 'NPA'));
         callbackSuccess = QUOTE([ARR_3(_medic,_patient,true)] call FUNC(removeAirwayItem));
     };
     class RemoveIGel: RemoveOPA {
@@ -141,7 +141,7 @@ class ACEGVAR(medical_treatment,actions) {
         displayNameProgress = CSTRING(RemoveIGel_Progress);
         icon = "";
         treatmentTime = 2;
-        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == 'SGA') && !(alive (_patient getVariable [ARR_2(QQEGVAR(breathing,BVM_Medic),objNull)])));
+        condition = QUOTE(GVAR(enable) && (_patient getVariable [ARR_2(QQGVAR(AirwayItem_Oral),'')] == 'SGA'));
     };
 
     class EstablishSurgicalAirway: CheckAirway {

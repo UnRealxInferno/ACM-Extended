@@ -28,37 +28,28 @@ uiNamespace setVariable ["ACME_laryngo_state", if (_tubeCommittedB39) then {"col
 // The cuff can be inflated before seating. That is a valid mechanical state, but it is NOT
 // a definitive airway until the tube has actually passed the cords. Preserve the inflated cuff
 // while allowing further tube manipulation/insertion.
-if (_tubeCommittedB39) then {
-    [_patient, true, true, -1, -1, true, false] call ACME_fnc_ettAirwayStateCommit;
-    _patient setVariable ["ACME_ETT_Medic", _medic, true];
-    _patient setVariable ["ACME_ETT_Time", CBA_missionTime, true];
-} else {
-    [_patient, -1, true, -1, -1, true, false] call ACME_fnc_ettAirwayStateCommit;
-};
+private _rammed = _tubeCommittedB39 && {uiNamespace getVariable ["ACME_laryngo_tubeRammed", false]};
+private _timeToTube = uiNamespace getVariable ["ACME_laryngo_attemptClock", 0];
+[_patient, "ettCuffDone", [_medic, _tubeCommittedB39, _rammed, _timeToTube]] call ACME_fnc_ownerDispatch;
 
 if (_tubeCommittedB39) then {
     // rammed in. advancing the tube faster than the cords will tolerate scrapes them, and that shows up after the tube
     // is in rather than as a failure at the time, because that is when a scraped airway announces itself. the
     // consequence is deliberately mild and recoverable: the airway bleeds around the tube. the tube itself still
     // works, the casualty is still combat-recoverable, and suction handles it.
-    if (uiNamespace getVariable ["ACME_laryngo_tubeRammed", false]) then {
-        _patient setVariable ["ACME_ETT_Trauma", true, true];
+    if (_rammed) then {
         [_patient, "trauma"] call ACME_fnc_laryngoBleed;
     };
-    
+
     if (!isNil "ace_medical_treatment_fnc_addToLog") then {
         [_patient, "airway", "Orotracheal intubation: ET tube placed, cuff inflated", []] call ace_medical_treatment_fnc_addToLog;
     };
     if (!isNil "ace_medical_treatment_fnc_addToTriageCard") then {
         [_patient, "Endotracheal tube placed"] call ace_medical_treatment_fnc_addToTriageCard;
     };
-    
+
     // the attempt record, for the aar. first-pass success and time to tube are the two numbers the airway world
     // actually cares about, so they are worth having on the casualty rather than only in a hint.
-    private _passes = (_patient getVariable ["ACME_laryngo_failCount", 0]) + 1;
-    _patient setVariable ["ACME_ETT_Passes", _passes, true];
-    _patient setVariable ["ACME_ETT_TimeToTube", (uiNamespace getVariable ["ACME_laryngo_attemptClock", 0]), true];
-    
 };
 
 if (!isNull _dlg) then {

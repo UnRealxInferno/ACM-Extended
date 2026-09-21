@@ -6,29 +6,42 @@
 params [["_medic", objNull, [objNull]]];
 if (isNull _medic || {!local _medic} || {!alive _medic} || {[_medic] call ACME_fnc_animBlocked}) exitWith {0};
 
-// currentWeapon can remain populated for a frame after the unit has already reached a Wnon/Snon state. Treat the
-// animation state as the visual truth. Without this guard an already-empty-handed medic receives ACE's weapon-away
-// request anyway, visibly performs a pointless stow gesture, and the requested medical RTM starts late or misses
-// its short treatment window entirely.
+// Empty hands are not ready until BOTH Arma's logical weapon selection and the visible animation agree.
+// This matters most for sidearms: selectWeapon "" can clear currentWeapon before the pistol model/hand pose has
+// actually finished holstering, which lets a medical RTM play underneath a still-visible handgun.
 private _state = toLowerANSI animationState _medic;
 private _visuallyEmpty = ((_state find "wnon") >= 0) && {((_state find "snon") >= 0)};
-if (currentWeapon _medic == "" || {_visuallyEmpty}) exitWith {
-    _medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_ready", CBA_missionTime], false];
+private _weapon = currentWeapon _medic;
+if (_weapon == "" && {_visuallyEmpty}) exitWith {
+    _medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_ready", CBA_missionTime, ""], false];
     0
 };
 
+// One engine holster request per treatment handoff. Never repair a visual/logical mismatch with selectWeapon "";
+// that shortcut is what left pistols visibly attached to the hands while the underlying medical animation ran.
+// Keep the one-shot reservation longer than the treatment preflight timeout so another controller cannot enqueue
+// a second launcher/rifle/pistol put-away chain while the first request is still settling.
 private _previous = _medic getVariable ["ACME_medicAnimationPrep", []];
 if (_previous isEqualType [] && {count _previous >= 2} && {(_previous param [0, ""]) == "empty_hands_once"}) then {
     private _elapsed = CBA_missionTime - (_previous param [1, -99]);
-    // The request is still settling. Do not replay the holster animation just because currentWeapon has not cleared
-    // on this exact frame yet.
-    if (_elapsed >= 0 && {_elapsed < 1.10}) exitWith {(1.10 - _elapsed) max 0.05};
+    if (_elapsed >= 0 && {_elapsed < 3.2}) exitWith {
+        private _requested = _previous param [2, ""];
+        private _minSettle = if (_requested != "" && {_requested == handgunWeapon _medic}) then {0.95} else {0.70};
+        (_minSettle - _elapsed) max 0.05
+    };
 };
+
+// If the logical weapon is already clear but the holster animation is still finishing, just wait for the visible
+// Wnon/Snon state. Issuing another SwitchWeapon here creates the multi-weapon stow carousel seen on treatment exit.
+if (_weapon == "") exitWith {0.05};
 
 if (!isNil "ace_weaponselect_fnc_putWeaponAway") then {
     [_medic] call ace_weaponselect_fnc_putWeaponAway;
 } else {
     _medic action ["SwitchWeapon", _medic, _medic, 299];
 };
-_medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_once", CBA_missionTime], false];
-0.70
+_medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_once", CBA_missionTime, _weapon], false];
+
+// Sidearm holsters need a little more minimum settle time than long-gun Wnon transitions. The caller still waits
+// for the actual logical+visual empty-hands state, so these are minimum delays rather than guessed completion times.
+if (_weapon == handgunWeapon _medic) then {0.95} else {0.70}

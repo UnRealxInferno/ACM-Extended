@@ -88,16 +88,14 @@ if (_occupied) exitWith {
 private _sd = [_markPart, _siteName] call ACME_fnc_ivSiteData;
 if (_sd isEqualType [] && {count _sd >= 6}) then {
     _sd params ["_viewTex", "_bandTex", "_bandU", "_bandV", "_veinU", "_veinV"];
-    private _marks = _unit getVariable ["ACME_IV_Marks", []];
-    if !(_marks isEqualType []) then { _marks = []; };
+
     // Match the fixed anatomical-side family used by manual IV/EJ placement.
     private _frame = if (_markPart in ["leftarm", "leftleg"]) then {"_15_left"} else {"_15_right"};
     if (_isEJ) then {
         _frame = if (_siteName isEqualTo "left") then { "_ej_15_right" } else { "_ej_15_left" };
     };
-    _marks pushBack [_markPart, _viewTex, _veinU, _veinV, "hub", "", _frame, _gauge, -1, 1, _siteName, 0, 1, 0];
-    _unit setVariable ["ACME_IV_Marks", _marks, true];
-    _unit setVariable ["ACME_IV_MarkVer", (_unit getVariable ["ACME_IV_MarkVer", 0]) + 1, true];
+    private _mark = [_markPart, _viewTex, _veinU, _veinV, "hub", "", _frame, _gauge, -1, 1, _siteName, 0, 1, 0];
+    [_unit, "ivMarks", ["add", [_mark], [_unit] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
 };
 
 // the same line a hand placement writes, from the same function, so the two read alike in the record.

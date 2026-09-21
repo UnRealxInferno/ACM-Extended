@@ -21,36 +21,36 @@
 
 params ["_medic", "_patient", ["_useOxygen", false], ["_portableOxygen", false]];
 
-if !(isNull (_patient getVariable [QGVAR(BVM_Medic), objNull])) exitWith {
+if (isNull _medic || {isNull _patient} || {!local _medic} || {!alive _medic}
+    || {!([_medic] call ACEFUNC(common,isAwake))}
+    || {missionNamespace getVariable [QEGVAR(core,ContinuousAction_Active), false]}
+    || {!([_medic, _patient, true] call FUNC(canUseBVM))}) exitWith {};
+private _reserved = _patient getVariable [QGVAR(BVM_Medic), objNull];
+if ([_reserved, _patient] call FUNC(bvmSessionValid)) exitWith {
     [LLSTRING(BVM_Already), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
 };
 
-GVAR(BVMCancel_MouseID) = [0xF0, [false, false, false], {
-        GVAR(BVMTarget) setVariable [QGVAR(BVM_provider), objNull, true];
-        GVAR(BVMTarget) setVariable [QGVAR(BVM_Medic), objNull, true];
-        EGVAR(core,ContinuousAction_Active) = false;
-}, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
+// Recover a dead, disconnected or abandoned provider reservation before a new start.
+private _oldSession = _patient getVariable [QGVAR(BVM_session), []];
+[_reserved, _patient, _oldSession param [1, -1]] call FUNC(bvmRelease);
 
-GVAR(BVMToggle_MouseID) = [0xF1, [false, false, false], {
-    // BVM ventilation does not consume the CPR provider slot. Keep the two roles independent so one provider can
-    // ventilate while another compresses, regardless of airway adjunct type.
-    if (GVAR(BVMTarget) getVariable [QGVAR(BVM_provider), objNull] isEqualTo objNull) then {
-        GVAR(BVMTarget) setVariable [QGVAR(BVM_provider), ACE_player, true];
-    } else {
-        GVAR(BVMTarget) setVariable [QGVAR(BVM_provider), objNull, true];
-    };
-}, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
-
-GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
-    if (isNull (GVAR(BVMTarget) getVariable [QGVAR(BVM_provider), objNull]) && isNull (GVAR(BVMTarget) getVariable [QEGVAR(circulation,CPR_Medic), objNull])) then {
-        GVAR(SwapToCPR) = true;
-        EGVAR(core,ContinuousAction_Active) = false;
-    };
-}, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
+// BVM needs both hands. End this provider's Direct Pressure before ACM takes over the
+// controls and animation; a paused pressure worker must not keep its own input handlers.
+if (_medic getVariable ["ACME_DP_Active", false] && {!isNil "ACME_fnc_directPressureStop"}) then {
+    [true, _medic, false] call ACME_fnc_directPressureStop;
+};
 
 [[_medic, _patient, "head", [_useOxygen, _portableOxygen]], { // On Start
     params ["_medic", "_patient", "_bodyPart", "_extraArgs"];
     _extraArgs params ["_useOxygen", "_portableOxygen"];
+
+    private _epoch = missionNamespace getVariable ["ACM_core_ContinuousAction_Epoch", -1];
+    _extraArgs set [2, _epoch];
+    GVAR(BVM_LocalSession) = [_medic, _patient, _epoch];
+    _medic setVariable [QGVAR(BVM_patient), _patient, true];
+    _medic setVariable [QGVAR(BVM_epoch), _epoch, true];
+    _patient setVariable [QGVAR(BVM_session), [_medic, _epoch], true];
+    [QGVAR(bvmTrack), [_medic, _patient, _epoch]] call CBA_fnc_serverEvent;
 
     "ACM_UseBVM" cutRsc ["RscUseBVM", "PLAIN", 0, false];
 
@@ -71,8 +71,39 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
 
     GVAR(BVMTarget_Intubated) = ((_patient getVariable [QEGVAR(airway,AirwayItem_Oral), ""]) == "SGA");
 
+    // B127: BVM used to install these handlers before beginContinuousAction had accepted the session. A rejected
+    // start therefore leaked live mouse handlers, and an old BVM handler could later clear the global continuous
+    // action gate while CPR, head tilt or another maneuver was running. Install them only from On Start, after the
+    // controller has assigned this session's epoch, and make every handler generation-aware.
+    {
+        private _oldID = missionNamespace getVariable [_x, -1];
+        if (!(_oldID isEqualTo -1) && {!(_oldID isEqualTo "")}) then {[_oldID, "keydown"] call CBA_fnc_removeKeyHandler;};
+    } forEach [
+        "ACM_breathing_BVMCancel_MouseID",
+        "ACM_breathing_BVMToggle_MouseID",
+        "ACM_breathing_BVMSwap_MouseID"
+    ];
+
+    private _cancelCode = compile format [
+        "if ((missionNamespace getVariable ['ACM_core_ContinuousAction_Epoch', -2]) != %1) exitWith {false}; missionNamespace setVariable ['ACM_core_ContinuousAction_Active', false]; false",
+        _epoch
+    ];
+    GVAR(BVMCancel_MouseID) = [0xF0, [false, false, false], _cancelCode, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
+
+    private _toggleCode = compile format [
+        "if ((missionNamespace getVariable ['ACM_core_ContinuousAction_Epoch', -2]) != %1) exitWith {false}; private _t = missionNamespace getVariable ['ACM_breathing_BVMTarget', objNull]; if (isNull _t) exitWith {false}; if ((_t getVariable ['ACM_breathing_BVM_provider', objNull]) isEqualTo objNull) then {_t setVariable ['ACM_breathing_BVM_provider', ACE_player, true];} else {_t setVariable ['ACM_breathing_BVM_provider', objNull, true];}; false",
+        _epoch
+    ];
+    GVAR(BVMToggle_MouseID) = [0xF1, [false, false, false], _toggleCode, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
+
+    private _swapCode = compile format [
+        "if ((missionNamespace getVariable ['ACM_core_ContinuousAction_Epoch', -2]) != %1) exitWith {false}; private _t = missionNamespace getVariable ['ACM_breathing_BVMTarget', objNull]; if (isNull _t) exitWith {false}; if (isNull (_t getVariable ['ACM_breathing_BVM_provider', objNull]) && {isNull (_t getVariable ['ACM_circulation_CPR_Medic', objNull])}) then {missionNamespace setVariable ['ACM_breathing_SwapToCPR', true]; missionNamespace setVariable ['ACM_core_ContinuousAction_Active', false];}; false",
+        _epoch
+    ];
+    GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], _swapCode, "keydown", "", false, 0] call CBA_fnc_addKeyHandler;
+
     private _display = uiNamespace getVariable ["ACM_UseBVM", displayNull];
-    private _ctrlTopText = _display displayCtrl IDC_USEBVM_TOPTEXT; 
+    private _ctrlTopText = _display displayCtrl IDC_USEBVM_TOPTEXT;
     private _ctrlText = _display displayCtrl IDC_USEBVM_TEXT;
 
     // A BVM session remains an active ventilation session during CPR. The old non-SGA branch deliberately did
@@ -99,7 +130,7 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
     };
 
     _medic setVariable [QGVAR(isUsingBVM), ([_patient] call EFUNC(core,bvmActive)), true];
-    
+
     _ctrlText ctrlSetText ([_patient, false, true] call ACEFUNC(common,getName));
 
     GVAR(BVM_NextBreath) = (CBA_missionTime + 2);
@@ -118,40 +149,33 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
     params ["_medic", "_patient", "_bodyPart", "_extraArgs"];
     _extraArgs params ["_useOxygen", "_portableOxygen"];
 
-    [GVAR(BVMCancel_MouseID), "keydown"] call CBA_fnc_removeKeyHandler;
-    [GVAR(BVMToggle_MouseID), "keydown"] call CBA_fnc_removeKeyHandler;
-    [GVAR(BVMSwap_MouseID), "keydown"] call CBA_fnc_removeKeyHandler;
-
-    [] call ACEFUNC(interaction,hideMouseHint);
-
-    if ((_patient getVariable [QGVAR(BVM_provider), objNull]) isNotEqualTo objNull) then {
-        _patient setVariable [QGVAR(BVM_provider), objNull, true];
-    };
-
-    _patient setVariable [QGVAR(BVM_Medic), objNull, true];
-
-    _medic setVariable [QGVAR(isUsingBVM), false, true];
-
-    _patient setVariable [QGVAR(BVM_ConnectedOxygen), false, true];
-
-    "ACM_UseBVM" cutText ["","PLAIN", 0, false];
+    private _epoch = _extraArgs param [2, -1];
+    private _swapToCPR = missionNamespace getVariable [QGVAR(SwapToCPR), false];
+    if !([_medic, _patient, _epoch] call FUNC(bvmCleanupLocal)) exitWith {};
+    // Death/respawn/locality loss releases ownership without reopening menus on the replacement player.
+    if (isNull _medic || {isNull _patient} || {!local _medic} || {!alive _medic}
+        || {!(_medic isEqualTo ACE_player)} || {!([_medic] call ACEFUNC(common,isAwake))}) exitWith {};
 
     [_patient, "activity", LLSTRING(BVM_ActionLog_Stop), [[_medic, false, true] call ACEFUNC(common,getName), GVAR(BVM_BreathCount)]] call ACEFUNC(medical_treatment,addToLog);
 
     closeDialog 0;
 
-    if (GVAR(SwapToCPR)) then {
+    if (_swapToCPR) then {
         EGVAR(core,ContinuousAction_ForceOpenMenu) = false;
+        // B128: this handoff used to fire unconditionally 0.1 s after BVM teardown. If another continuous action
+        // started in that gap, the old BVM callback could inject CPR into the new maneuver. Carry the generation
+        // which actually owned this BVM and abandon the handoff if anything newer has taken the controller.
         [{
-            params ["_medic", "_patient"];
-
+            params ["_medic", "_patient", "_epoch"];
+            if ((missionNamespace getVariable ["ACM_core_ContinuousAction_Epoch", -2]) != _epoch
+                || {missionNamespace getVariable ["ACM_core_ContinuousAction_Active", false]}
+                || {isNull _medic} || {isNull _patient}) exitWith {};
             [LLSTRING(BVM_SwappedToCPR), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
-
             [_medic, _patient] call EFUNC(circulation,beginCPR);
-        }, [_medic, _patient], 0.1] call CBA_fnc_waitAndExecute;
+        }, [_medic, _patient, _epoch], 0.1] call CBA_fnc_waitAndExecute;
     } else {
         [LLSTRING(BVM_Stopped), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
-        [QEGVAR(core,openMedicalMenu), GVAR(BVMTarget)] call CBA_fnc_localEvent;
+        [QEGVAR(core,openMedicalMenu), _patient] call CBA_fnc_localEvent;
     };
 
     GVAR(BVMTarget) = objNull;
@@ -161,13 +185,14 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
 
     private _updateMouseHint = false;
     private _updateText = false;
-    
-    if ([_patient] call EFUNC(core,cprActive) != GVAR(CPRActive) || [_patient] call EFUNC(core,bvmActive) != GVAR(BVMActive)) then {
+
+    if ((([_patient] call EFUNC(core,cprActive)) isNotEqualTo GVAR(CPRActive))
+        || {([_patient] call EFUNC(core,bvmActive)) isNotEqualTo GVAR(BVMActive)}) then {
         _updateMouseHint = true;
         _updateText = true;
     };
 
-    if ((_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]) != GVAR(BVM_OxygenActive)) then {
+    if ((_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]) isNotEqualTo GVAR(BVM_OxygenActive)) then {
         GVAR(BVM_OxygenActive) = (_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]);
         _updateText = true;
     };
@@ -182,7 +207,7 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
             GVAR(BVMActive) = true;
         } else { // Paused BVM
             [LLSTRING(BVM_Paused), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
-            [LLSTRING(BVM_Stop), LLSTRING(BVM_Continue), (["", LLSTRING(BVM_SwapToCPR)] select (isNull (_patient getVariable [QGVAR(CPR_Medic), objNull])))] call ACEFUNC(interaction,showMouseHint);
+            [LLSTRING(BVM_Stop), LLSTRING(BVM_Continue), (["", LLSTRING(BVM_SwapToCPR)] select (isNull (_patient getVariable [QEGVAR(circulation,CPR_Medic), objNull])))] call ACEFUNC(interaction,showMouseHint);
             GVAR(BVMActive) = false;
         };
         _medic setVariable [QGVAR(isUsingBVM), ([_patient] call EFUNC(core,bvmActive)), true];
@@ -191,7 +216,7 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
     if (_updateText) then {
         private _display = uiNamespace getVariable ["ACM_UseBVM", displayNull];
         private _ctrlTopText = _display displayCtrl IDC_USEBVM_TOPTEXT;
-        
+
         if ([_patient] call EFUNC(core,cprActive)) then {
             if !(_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]) then {
                 _ctrlTopText ctrlSetText LLSTRING(BVM_UsingBVM_Assist);
@@ -217,10 +242,9 @@ GVAR(BVMSwap_MouseID) = [0xF2, [false, false, false], {
             playSound3D [QPATHTO_R(sound\bvm_squeeze.wav), _patient, false, getPosASL _patient, 12, 1, 12]; // 1.227s
             GVAR(BVM_BreathCount) = GVAR(BVM_BreathCount) + 1;
             if (GVAR(BVM_BreathCount) > 1 && (GET_AIRWAYSTATE(_patient) > 0)) then {
-                _patient setVariable [QGVAR(BVM_lastBreath), CBA_missionTime, true];
-                if (_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]) then {
-                    _patient setVariable [QGVAR(BVM_lastBreathOxygen), CBA_missionTime, true];
-                };
+                // Oxygen physiology consumes these timestamps on the casualty owner. Never stamp them with the
+                // provider client's mission clock; one owner-routed event per delivered breath is sufficient.
+                [_patient, "bvmBreath", [_patient getVariable [QGVAR(BVM_ConnectedOxygen), false]]] call ACME_fnc_ownerDispatch;
             };
 
             if (GVAR(BVM_PortableOxygen)) then {

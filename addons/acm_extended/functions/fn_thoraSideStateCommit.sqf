@@ -1,9 +1,17 @@
-/* Phase 84: authoritative writer for durable per-side thoracostomy procedural state. */
-params ["_patient", "_side", "_field", ["_value", nil]];
+/* Phase 84: authoritative writer for durable per-side thoracostomy procedural state.
+ * An omitted/nil value clears the field without ever referencing an undefined local.
+ */
+params ["_patient", "_side", "_field"];
 if (isNull _patient) exitWith {};
 _side = toLower _side;
 _field = toLower _field;
 if !(_side in ["left","right"]) exitWith {};
-private _allowed = ["incision","incisionscore","prep","infection","open","ribtarget","site","tube","sealed"];
+private _allowed = ["incision","incisionscore","prep","infection","open","ribtarget","site","tube","sealed","closed"];
 if !(_field in _allowed) exitWith {};
-_patient setVariable [format ["ACME_thora_%1_%2", _field, _side], _value, true];
+private _name = format ["ACME_thora_%1_%2", _field, _side];
+private _hasValue = (count _this > 3) && {!isNil {_this select 3}};
+if (_hasValue) then {
+    _patient setVariable [_name, _this select 3, true];
+} else {
+    _patient setVariable [_name, nil, true];
+};

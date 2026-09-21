@@ -32,6 +32,9 @@ addMissionEventHandler ["EntityRespawned", {
         _newUnit setVariable ["ACME_rhythm_bpOffset", 0, local _newUnit];
         _newUnit setVariable ["ACME_rhythm_savedTargetHR", nil, local _newUnit];
         _newUnit setVariable ["ACME_rhythm_obtundUntil", -1, local _newUnit];
+        _newUnit setVariable ["ACME_rhythm_torsadesNonPerfusing", nil, local _newUnit];
+        _newUnit setVariable ["ACME_rhythm_torsadesPerfusion", nil, local _newUnit];
+        _newUnit setVariable ["ACME_rhythm_torsadesArrestRequestAt", nil, false];
         [_newUnit, "", -1, local _newUnit, false] call ACME_fnc_rhythmNativeHoldCommit;
         [_newUnit, 0, false, false, false] call ACME_fnc_rhythmNativeHighHRFloorCommit;
         [_newUnit, 0, false, false] call ACME_fnc_rhythmNativeShockGraceCommit;

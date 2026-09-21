@@ -4,12 +4,12 @@ class GVAR(Stethoscope_Dialog) {
     idd = IDC_STETHOSCOPE;
     movingEnable = 0;
     onLoad = "";
-    onUnload = QUOTE(uiNamespace setVariable [ARR_2(QQGVAR(Stethoscope_DLG),nil)]);
+    onUnload = "_this call ACME_fnc_stethoscopeClose;";
     objects[] = {};
 
     class ControlsBackground {
         class BodyBackground: RscPicture {
-            idc = -1;
+            idc = IDC_STETHOSCOPE_BODY;
             x = QUOTE(ACM_STETHOSCOPE_BG_POS_X_CENTER(180));
             y = QUOTE(ACM_STETHOSCOPE_BG_POS_Y_CENTER(135,36));
             w = QUOTE(ACM_STETHOSCOPE_POS_W(180));
@@ -151,7 +151,7 @@ class GVAR(Stethoscope_Dialog) {
             h = QUOTE(safeZoneH / 10);
             colorText[] = {1,1,1,1};
             colorBackground[] = {0,0,0,0};
-            text = CSTRING(Stethoscope_Using);
+            text = "Hold left mouse to listen and drag. Release to lift the bell.";
             lineSpacing = 0;
             sizeEx = QUOTE(GUI_GRID_H * 1.4 * NORMALIZE_SIZEEX);
             fixedWidth = 0;
@@ -168,34 +168,35 @@ class GVAR(Stethoscope_Dialog) {
             text = "";
         };
 
-        class Bell: RscButtonMenu {
+        class ViewLabel: TopText {
+            idc = IDC_STETHOSCOPE_VIEW_LABEL;
+            x = 0;
+            y = 0;
+            w = 0;
+            h = 0;
+            sizeEx = QUOTE(GUI_GRID_H * 0.8 * NORMALIZE_SIZEEX);
+            text = "";
+        };
+        class ChangeView: RscButton {
+            idc = IDC_STETHOSCOPE_VIEW;
+            x = QUOTE(safeZoneX + safeZoneW * 0.4625);
+            y = QUOTE(safeZoneY + safeZoneH * 0.92);
+            w = QUOTE(safeZoneW * 0.075);
+            h = QUOTE(safeZoneH * 0.045);
+            text = "Flip Side";
+            tooltip = "Turn the patient over (front / back)";
+            onButtonClick = "[] call ACME_fnc_stethoscopeFlip;";
+            colorBackground[] = {0.14, 0.20, 0.30, 0.90};
+            colorText[] = {0.93, 0.89, 0.80, 1};
+        };
+        class Bell: RscPicture {
             idc = IDC_STETHOSCOPE_BELL;
-            soundClick[] = {};
-            soundEnter[] = {};
-            soundPush[] = {};
-            soundEscape[] = {};
             x = QUOTE(ACM_pxToScreen_X(960));
             y = QUOTE(ACM_pxToScreen_Y(800));
-            w = QUOTE(ACM_pxToScreen_W(128));
-            h = QUOTE(ACM_pxToScreen_H(128));
+            w = QUOTE(ACM_pxToScreen_W(152));
+            h = QUOTE(ACM_pxToScreen_H(152));
             shadow = 0;
-            font = "RobotoCondensed";
-            sizeEx = "0";
-            onMouseButtonUp = QUOTE(call FUNC(Stethoscope_MoveBell));
-            textureNoShortcut = QPATHTOF(ui\stethoscope_bell.paa);
-            tooltip = CSTRING(Stethoscope_MoveBell);
-            colorBackground[] = {1,1,1,0};
-            colorBackgroundFocused[] = {1,1,1,0};
-            period = 0;
-            periodFocus = 0;
-            periodOver = 0;
-            class ShortcutPos
-            {
-                left = 0;
-                top = 0;
-                w = QUOTE(ACM_pxToScreen_W(128));
-                h = QUOTE(ACM_pxToScreen_H(128));
-            };
+            text = QPATHTOF(ui\stethoscope_bell.paa);
         };
     };
 };

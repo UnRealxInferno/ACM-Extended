@@ -1,5 +1,5 @@
 // add a "SEIZING (active)" or "Postictal" row to the medical-menu overview injury list while a patient is in the
-// lidocaine-toxicity seizure arc.
+// shared ACME generalized-seizure arc, regardless of whether the source is lidocaine toxicity, TBI or severe Sarin.
 // a generalized seizure is a whole-body neuro finding, so it reads on the head and torso, the parts a medic checks
 // for it, rather than a single limb. it mirrors the AAJT-s injury-entry pattern and hooks the same
 // ace_medical_gui_updateInjuryListWounds event, which passes _woundEntries by reference.

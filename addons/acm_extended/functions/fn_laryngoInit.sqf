@@ -277,11 +277,19 @@ uiNamespace setVariable ["ACME_laryngo_fulcNext", 0];
 // open, so the same casualty wanted a different lever each time and two medics on one patient were solving two
 // different problems. it is cached on them now, exactly the way fn_airwaygrade caches mallampati and
 // cormack-lehane.
-private _fulcNeed = _patient getVariable ["ACME_laryngo_fulcNeed", -1];
-if (_fulcNeed < 1) then {
-    _fulcNeed = 1 + (floor (random 5));
-    _patient setVariable ["ACME_laryngo_fulcNeed", _fulcNeed, true];
+private _stableAirwayDraw = {
+    params ["_p", "_salt", "_count", "_base"];
+    if (!isMultiplayer) exitWith {_base + floor (random _count)};
+    private _key = if (isPlayer _p) then {getPlayerUID _p} else {netId _p};
+    if (_key == "") then {_key = netId _p;};
+    if (_key == "") then {_key = format ["%1:%2:%3", typeOf _p, vehicleVarName _p, str _p];};
+    private _h = 0;
+    { _h = ((_h * 139) + _x + ((_forEachIndex + 1) * 23)) % 9973; } forEach (toArray (_key + _salt));
+    _base + (_h % _count)
 };
+private _fulcNeed = _patient getVariable ["ACME_laryngo_fulcNeed", -1];
+private _needFulcCache = _fulcNeed < 1;
+if (_needFulcCache) then {_fulcNeed = [_patient, ":laryngo:fulcrum", 5, 1] call _stableAirwayDraw;};
 uiNamespace setVariable ["ACME_laryngo_fulcNeed", _fulcNeed];
 
 // how deep this particular airway wants the tube. trachea length varies, so a depth that sits perfectly in one
@@ -291,9 +299,11 @@ uiNamespace setVariable ["ACME_laryngo_fulcNeed", _fulcNeed];
 // sink it past this and it goes down the right main bronchus, because that bronchus is the straighter of the
 // two. one lung then gets everything and the other gets nothing.
 private _ideal = _patient getVariable ["ACME_ETT_IdealFrame", -1];
-if (_ideal < 1) then {
-    _ideal = 5 + (floor (random 4));
-    _patient setVariable ["ACME_ETT_IdealFrame", _ideal, true];
+private _needIdealCache = _ideal < 1;
+if (_needIdealCache) then {_ideal = [_patient, ":laryngo:depth", 4, 5] call _stableAirwayDraw;};
+if (_needFulcCache || {_needIdealCache}) then {
+    // Same deterministic answer on every medic client; only the casualty owner persists it for saves/AAR/reopens.
+    [_patient, "laryngoAnatomy", [_fulcNeed, _ideal]] call ACME_fnc_ownerDispatch;
 };
 uiNamespace setVariable ["ACME_laryngo_idealFrame", _ideal];
 // Do not accept the tube at the old shallow frame 4. Most airways now require frame 5-7 before the tube is

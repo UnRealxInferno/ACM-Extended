@@ -82,6 +82,20 @@ if (_showTriage) exitWith {
 // Build display-local headers only when grouping is enabled. The collected actions already
 // carry the correct categories and order for both grouped and flat menus.
 private _menuActions = missionNamespace getVariable ['ace_medical_gui_actions', []];
+// Check Airway and Check Breathing are head-only assessments. canTreatCached deliberately keeps these evidence
+// checks available on corpses for AAR/training continuity, so the paint layer must not reintroduce a death-only
+// gate which leaks patient death. Re-apply anatomy only because grouped children replace their condition after collection.
+_menuActions = _menuActions select {
+    private _class = toLower (_x param [8, '']);
+    !(_class in ['checkairway', 'checkbreathing']) || {_bodyPart == 0 && {!isNull _target}}
+};
+
+// Do not retain a cached positioning row after the casualty stands up.
+_menuActions = _menuActions select {
+    (toLower (_x param [8, ''])) != 'acme_elevatehead'
+        || {[_target, ACE_player] call ACME_fnc_headElevateCanStart}
+};
+
 // Dog tags always remain the last standalone examination, even if another addon
 // supplied group metadata or the native collector fallback has no class metadata.
 private _dogTagLabel = getText (configFile >> 'ace_medical_treatment_actions' >> 'CheckDogTags' >> 'displayName');
@@ -297,15 +311,12 @@ private _actionIndex = 0;
         _ctrl ctrlSetTextColor ([_textColor, 'protect'] call ACME_fnc_cbColor);
         if (_groupKey == '') then {_actionIndex = _actionIndex + 1;};
         _ctrl ctrlShow true;
-        // Mark the reopen intent BEFORE the treatment statement.  Some treatments close the medical display
-        // synchronously while their ButtonClick handler is still executing; setting this afterward is too late for
-        // onMenuClose to distinguish a real action from the player manually closing the menu.
-        // Apply/Stop Direct Pressure repaint this same display in place. They never open a progress dialog, so do
-        // not arm ACE's close/reopen path for those two rows. Every normal treatment keeps the native behavior.
+        // Match ACE's normal treatment lifecycle exactly: run the treatment statement first, then arm the reopen
+        // flag. Direct Pressure Apply/Stop are immediate in-place state toggles, so they never touch pendingReopen.
+        _ctrl ctrlAddEventHandler ['ButtonClick', _statement];
         if (_groupKey isEqualTo '' && {!(_actionClass in ['acme_directpressure', 'acme_stopdirectpressure'])}) then {
             _ctrl ctrlAddEventHandler ['ButtonClick', {ace_medical_gui_pendingReopen = true;}];
         };
-        _ctrl ctrlAddEventHandler ['ButtonClick', _statement];
 
         _shownIndex = _shownIndex + 1;
     };

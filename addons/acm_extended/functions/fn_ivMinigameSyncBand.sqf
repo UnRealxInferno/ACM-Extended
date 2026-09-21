@@ -60,12 +60,13 @@ if (_visible) then {
     _ctrl ctrlSetPosition (uiNamespace getVariable ["ACME_IV_BodyRect", [0,0,1,1]]);
     _ctrl ctrlCommit 0;
 } else {
-    uiNamespace setVariable ["ACME_IV_Dragging", false];
-    (uiNamespace getVariable ["ACME_IV_DotCtrl", controlNull]) ctrlShow false;
+    // No BOA is a valid IV state. Do not clear the provider's held mouse input here: that old band-gate behavior
+    // made unbanded palpation impossible and could interrupt an unbanded catheter push. The main tick owns the
+    // palpation dot and decides whether the cursor is over patient artwork.
 };
 _ctrl ctrlShow _visible;
 // Never cancel another provider's own partially inserted catheter or held needle.
 if ((uiNamespace getVariable ["ACME_IV_InsStage", ""]) == "") then {
-    uiNamespace setVariable ["ACME_IV_Stage", if (_visible) then {"ready"} else {"needband"}];
+    uiNamespace setVariable ["ACME_IV_Stage", "ready"];  // band presence changes difficulty, not permission.
 };
 [] call ACME_fnc_ivMinigameRefreshBandSlot;

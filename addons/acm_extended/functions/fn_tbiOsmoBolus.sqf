@@ -16,6 +16,21 @@ if (_item != "") then {
 };
 if (_item == "__UNAVAILABLE__") exitWith {};
 
+// Non-bag osmotherapy still carries real vascular fluid and must enter ACM's native crystalloid compartment.
+// That is what lets it affect total circulating volume immediately and then gain effective-blood-volume value
+// through ACM's original saline -> Blood_Volume conversion path. Do not credit these as blood directly.
+//
+// HTS 23.4%: the treatment dose is its physical 30 mL bullet volume.
+// Mannitol 20%: 20 g / 100 mL, so a 50 g dose contains 250 mL of solution.
+private _fluidMl = switch (_agent) do {
+    case "HTS3": {_dose};
+    case "Mannitol": {(_dose / 20) * 100};
+    default {0};
+};
+if (_fluidMl isEqualType 0 && {finite _fluidMl} && {_fluidMl > 0}) then {
+    [_patient, "crystalloidCredit", [_fluidMl / 1000]] call ACME_fnc_ownerDispatch;
+};
+
 // there is no TBI state, so there is nothing to act on, and it still consumes realistically.
 private _state = _patient getVariable ["ACME_tbi_State", createHashMap];
 if (count _state == 0) then {

@@ -22,7 +22,7 @@ _radiusDimensions params ["_radiusX", "_radiusY"];
 
 [missionNamespace, "Draw3D", {
     _thisArgs params ["_originObject", "_radiusX", "_radiusY"];
-    
+
     if (isNull _originObject) exitWith {
         removeMissionEventHandler [_thisType, _thisID];
     };

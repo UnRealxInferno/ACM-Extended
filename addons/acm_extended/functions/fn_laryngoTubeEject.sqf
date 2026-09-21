@@ -53,7 +53,11 @@ private _dur = missionNamespace getVariable ["ACME_laryngo_ejectTime", 0.35];
         if (!isNull _pat) then {
             [_pat, false, false, false, false, true, false] call ACME_fnc_ettAirwayStateCommit;
             [_pat, "placement", [0, 0, false]] call ACME_fnc_ettMigrationStateCommit;
-            if (_wasCommitted) then { [_pat, "ACME_ETTube"] call ace_common_fnc_addToInventory; };
+            [_pat, "tip", [[]]] call ACME_fnc_ettMigrationStateCommit;
+            if (_wasCommitted) then {
+                private _medic = uiNamespace getVariable ["ACME_laryngo_medic", objNull];
+                if (!isNull _medic) then {["ACME_ettReturnTube", [_medic], _medic] call CBA_fnc_targetEvent;};
+            };
         };
         uiNamespace setVariable ["ACME_laryngo_tubePassed", false];
         uiNamespace setVariable ["ACME_laryngo_tubeAnchored", false];

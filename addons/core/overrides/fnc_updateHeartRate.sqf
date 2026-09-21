@@ -28,13 +28,16 @@ private _heartRate = GET_HEART_RATE(_unit);
 // Extended target values are offsets from the unchanged native resting baseline, not replacement returns.
 private _base = _unit getVariable ["ACME_hrRestBaseline", _desiredHR];
 private _custom = [_unit] call ACME_fnc_rhythmGet;
-if (_custom in [100,101,103,104]) then {_desiredHR = _unit getVariable ["ACME_rhythm_targetHR", _desiredHR];};
+if (_custom in [100,101,102,103,104]) then {_desiredHR = _unit getVariable ["ACME_rhythm_targetHR", _desiredHR];};
 // Apply circulation first. TBI is applied separately so nonterminal ICP cannot be the sole reason an otherwise
 // viable ACM target crosses the fatal <40 bpm line. Terminal stage 3 is intentionally exempt.
 private _circTarget = _unit getVariable ["ACME_hrTarget_circ", -1];
 if (_circTarget >= 0 && {missionNamespace getVariable ["ACME_sys_circ", true]}) then {
     _desiredHR = _desiredHR + (_circTarget - _base);
 };
+// Shock phenotype contributes as its own additive chronotropic source. Keeping it here, in the single
+// authoritative HR endpoint, prevents a phenotype PFH from fighting circulation/rhythm target writers.
+_desiredHR = _desiredHR + (_unit getVariable ["ACME_shock_hrAdj", 0]);
 private _preTbiDesired = _desiredHR;
 private _tbiTarget = _unit getVariable ["ACME_hrTarget_tbi", -1];
 if (_tbiTarget >= 0 && {missionNamespace getVariable ["ACME_sys_tbi", true]}) then {
@@ -66,7 +69,7 @@ if (!(alive _unit) || !(HAS_PULSE(_unit)) || alive (_unit getVariable [QACEGVAR(
     private _oxygenSaturation = GET_OXYGEN(_unit);
     if (_bloodVolume > BLOOD_VOLUME_CLASS_4_HEMORRHAGE) then {
         private _timeSinceROSC = (CBA_missionTime - (_unit getVariable [QEGVAR(circulation,ROSC_Time), -45]));
-        
+
         GET_BLOOD_PRESSURE(_unit) params ["_BPDiastolic", "_BPSystolic"];
         private _meanBP = GET_MAP(_BPSystolic,_BPDiastolic);
         private _painLevel = GET_PAIN_PERCEIVED(_unit);
@@ -101,6 +104,9 @@ if (!(alive _unit) || !(HAS_PULSE(_unit)) || alive (_unit getVariable [QACEGVAR(
         _targetHR = _targetHR max _targetOxygenHR;
 
         _targetHR = (_targetHR + _hrTargetAdjustment) max 0;
+        // Perfusing torsades owns its ventricular rate. Generic compensatory tachycardia must not push the
+        // 210-bpm torsades target across ACM's >220 native VT/PVT threshold and replace the morphology.
+        if (_custom == 102) then {_targetHR = _targetHR min (_unit getVariable ["ACME_rhythm_targetHR",210]);};
 
         if (_timeSinceROSC < 45) then {
             _targetHR = _targetHR max (_desiredHR + 40 * ((30 / (_timeSinceROSC max 0.001)) min 1));
@@ -110,6 +116,7 @@ if (!(alive _unit) || !(HAS_PULSE(_unit)) || alive (_unit getVariable [QACEGVAR(
                 _targetHR = _targetHR min (_targetHR / (_desiredHR max 0.001)) * (_desiredHR * 0.7);
             };
         };
+        if (_custom == 102) then {_targetHR = _targetHR min (_unit getVariable ["ACME_rhythm_targetHR",210]);};
 
         _hrChange = round(_targetHR - _heartRate) / 2;
     } else {

@@ -44,7 +44,7 @@ private _PFH = [{
 
     if (count _treatmentProviders < 1 || !(alive _patient) || (_patient getVariable [QEGVAR(evacuation,casualtyTicketClaimed), false])) exitWith {
         _patient setVariable [QGVAR(TreatmentText_PFH), -1];
-        
+
         _ctrlText ctrlSetFade 1;
         _ctrlText ctrlCommit 0.5;
 

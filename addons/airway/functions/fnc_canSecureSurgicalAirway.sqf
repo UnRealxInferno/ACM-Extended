@@ -22,4 +22,4 @@ if (_patient getVariable [QGVAR(SurgicalAirway_StrapSecure), false] || !(HAS_SUR
     false;
 };
 
-!(alive (_patient getVariable [QEGVAR(breathing,BVM_Medic), objNull])) && !(_patient getVariable [QGVAR(SurgicalAirway_InProgress), false]);
+!(_patient getVariable [QGVAR(SurgicalAirway_InProgress), false]);

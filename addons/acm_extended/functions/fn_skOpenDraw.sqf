@@ -62,22 +62,26 @@ ace_medical_gui_pendingReopen = false;
             call ACME_fnc_skPendingTagEnsure;
             call ACME_fnc_skPendingTagRender;
         };
-        // if an infusion bag context is pending, this draw is an INFUSION prep: repurpose the dialog's buttons
-        // for "Inject Into Bag" (and set the infusion vial list + top text). re-applied here on every open AND
-        // every size-switch reopen, so size switching stays in infusion mode. a plain narc-box draw has no
-        // pending context and keeps the normal draw/push buttons.
-        if !((missionNamespace getVariable ["ACME_infusion_pendingContext", []]) isEqualTo []) then {
-            call ACME_fnc_patchDrawDialog;
+        // B121: reopening a running one-handed push must not initialize a fresh preparation session. The active
+        // stable syringe already owns this dialog and its flow state lives outside every menu.
+        private _hcPushOpen = missionNamespace getVariable ["ACME_HCMedPushJob",createHashMap];
+        if (_hcPushOpen isEqualType createHashMap && {count _hcPushOpen > 0}) then {
+            call ACME_fnc_hardcorePushRestoreUi;
         } else {
-            // PLAIN narc-box draw: compounding is the DEFAULT. start the compound accumulator straight away so the
-            // medic can draw a drug, select another, and draw it into the same syringe -- no "Mix" button, no mode
-            // to enter. draw locks each drug in and advances the plunger floor; save commits the (single or mixed)
-            // syringe to the drawn list. skipped for infusion prep (above) and while a flush waste flow is running.
-            if (_flushClass != "" && {([ACE_player, _flushClass] call ace_common_fnc_getCountOfItem) > 0}) then {
-                [_flushClass] call ACME_fnc_skWasteBegin;
+            // if an infusion bag context is pending, this draw is an INFUSION prep: repurpose the dialog's buttons
+            // for "Inject Into Bag" (and set the infusion vial list + top text). re-applied here on every open AND
+            // every size-switch reopen, so size switching stays in infusion mode. a plain narc-box draw has no
+            // pending context and keeps the normal draw/push buttons.
+            if !((missionNamespace getVariable ["ACME_infusion_pendingContext", []]) isEqualTo []) then {
+                call ACME_fnc_patchDrawDialog;
             } else {
-                if ((uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "") then {
-                    [] call ACME_fnc_skCompoundBegin;
+                // PLAIN narc-box draw: compounding is the DEFAULT.
+                if (_flushClass != "" && {([ACE_player, _flushClass] call ace_common_fnc_getCountOfItem) > 0}) then {
+                    [_flushClass] call ACME_fnc_skWasteBegin;
+                } else {
+                    if ((uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "") then {
+                        [] call ACME_fnc_skCompoundBegin;
+                    };
                 };
             };
         };

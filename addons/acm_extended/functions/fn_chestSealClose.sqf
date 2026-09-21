@@ -1,3 +1,32 @@
+disableSerialization;
+params [["_closing", displayNull]];
+// A late unload from an older panel cannot release the current workspace or its input loop.
+if (_this isNotEqualTo [] && {_closing isNotEqualTo (uiNamespace getVariable ["ACME_CS_DLG", displayNull])}) exitWith {};
+// Cancel a live Flip immediately. Closing the minigame is an explicit abort, not a request to let the provider
+// finish medic4. Remove the flip PFH now, invalidate its token, and hard-cancel only this chest-seal roll owner.
+private _flipPFH = uiNamespace getVariable ["ACME_CS_FlipPFH",-1];
+if (_flipPFH isEqualType 0 && {_flipPFH >= 0}) then {[_flipPFH] call CBA_fnc_removePerFrameHandler;};
+uiNamespace setVariable ["ACME_CS_FlipPFH",-1];
+uiNamespace setVariable ["ACME_CS_FlipPendingToken",""];
+private _flipMedic = uiNamespace getVariable ["ACME_CS_Medic",objNull];
+if (!isNull _flipMedic && {local _flipMedic}) then {
+    [_flipMedic,"chestSealFlip"] call ACME_fnc_rollProviderCancel;
+
+    private _holdEpoch = _flipMedic getVariable ["ACME_CS_providerHoldEpoch",-1];
+    private _pose = _flipMedic getVariable ["ACME_treatmentPoseState",[]];
+    if ((_pose param [1,""]) == "chestSealWorkspace") then {
+        [_flipMedic,"chestSealWorkspace",_holdEpoch] call ACME_fnc_treatmentPoseStop;
+    };
+    _flipMedic setVariable ["ACME_CS_providerHoldEpoch",-1,false];
+};
+uiNamespace setVariable ["ACME_CS_ProviderHoldEpoch",-1];
+if (!isNull _flipMedic && {local _flipMedic}
+    && {(_flipMedic getVariable ["ACME_DP_PauseTreatmentClass",""]) == "chestsealflip"}) then {
+    _flipMedic setVariable ["ACME_DP_Paused",false];
+    _flipMedic setVariable ["ACME_DP_PauseTreatmentClass",""];
+    _flipMedic setVariable ["ACME_DP_TreatmentBusy",false];
+    _flipMedic setVariable ["ACME_DP_IdleStart",CBA_missionTime];
+};
 // this fires first, before anything in this function can run or fail. the order against the keydown probes is the
 // whole answer: a close landing at the same instant ACE's cursormenu is created means creating a second child
 // display of 46 destroyed the first, and display mode is structurally impossible.
@@ -8,21 +37,13 @@ private _patient = uiNamespace getVariable ["ACME_CS_Patient", objNull];
 if (!isNull _patient) then {[_patient, "ui:chest:" + str clientOwner, false] call ACME_fnc_ecgJostleRequest;};
 // NA2: no clinical writes on unload. Pending actions resolve independently of this display.
 
-// leave the patient exactly on the side and orientation they were on when the provider exits the minigame. do not
-// force a roll back to the front.
-
-// if the head was elevated when we opened, because we lowered them flat for the procedure, resume the
-// head-elevation system without using a forced chest-seal roll-back delay.
-// the exception is that if the patient is mid-seizure, do not raise them here. the seizure owns the flat pose and
-// re-elevates them itself once it and its cooldown finish, in fn_lidotoxtick. raising a still-convulsing patient
-// would just fight that.
-if (!isNull _patient
-    && {_patient getVariable ["ACME_headElev_Suspended", false]}
-    && {((_patient getVariable ["ACME_lido_seizureState", ""]) in ["", "postictal"])}
-) then {
-    _patient setVariable ["ACME_headElev_ResumePending", true, true];
-    [{ _this call ACME_fnc_headElevTryResume }, _patient, missionNamespace getVariable ["ACME_headElev_resumeDelay", 0.75]] call CBA_fnc_waitAndExecute;
+// Restore the casualty through the same owner-local procedure transaction that prepared them. It returns them to
+// the side they had before the minigame, gives the carrier back, then resumes an existing Semi-Fowler placement.
+private _sessionToken = uiNamespace getVariable ["ACME_CS_SessionToken", ""];
+if (!isNull _patient && {_sessionToken != ""}) then {
+    [_patient, "chestSealPatientEnd", [_patient, _sessionToken]] call ACME_fnc_ownerDispatch;
 };
+uiNamespace setVariable ["ACME_CS_SessionToken", ""];
 
 private _pfh = uiNamespace getVariable ["ACME_CS_PFH", -1];
 if (_pfh >= 0) then { [_pfh] call CBA_fnc_removePerFrameHandler; };
@@ -34,6 +55,8 @@ uiNamespace setVariable ["ACME_CS_PFH", -1];
 // closed, gvar is -1 and ACE re-adds its own pfh the next time it opens, so we only restore an open menu.
 call ACM_GUI_fnc_resumeMedicalMenuPFH;
 uiNamespace setVariable ["ACME_CS_Dragging", false];
+uiNamespace setVariable ["ACME_CS_DragPt", []];
+uiNamespace setVariable ["ACME_CS_DragLast", -1];
 uiNamespace setVariable ["ACME_CS_FlipLockedUntil", 0];
 uiNamespace setVariable ["ACME_CS_VirtualFlip", false];
 uiNamespace setVariable ["ACME_CS_FingerGlow", []];
@@ -57,10 +80,11 @@ uiNamespace setVariable ["ACME_CS_DLG", displayNull];
 uiNamespace setVariable ["ACME_CS_GhostPool", []];
 uiNamespace setVariable ["ACME_CS_presenceLastT", -1];
 uiNamespace setVariable ["ACME_CS_presenceLastState", ["", ""]];
-private _viewer = uiNamespace getVariable ["ACME_CS_presenceViewer", player];
+private _viewer = uiNamespace getVariable ["ACME_CS_presenceViewer", objNull];
+if (isNull _viewer) then {_viewer = _flipMedic;};
 if (!isNull _patient) then {
     private _targets = (uiNamespace getVariable ["ACME_CS_presenceTargets", []]) - [_viewer];
-    ["ACME_CS_session", [_patient, _viewer, "leave"]] call CBA_fnc_serverEvent;
+    ["ACME_CS_session", [_patient, _viewer, "leave", _sessionToken]] call CBA_fnc_serverEvent;
     if !(_targets isEqualTo []) then {
         ["ACME_CS_presenceLeave", [netId _patient, netId _viewer], _targets] call CBA_fnc_targetEvent;
     };
@@ -87,7 +111,10 @@ uiNamespace setVariable ["ACME_minigame_open", false];
 
 // drop back into the medical menu rather than exiting to the game. it is a no-op during the flashlight close and
 // reopen.
-[uiNamespace getVariable ["ACME_CS_Patient", objNull], "airway"] call ACME_fnc_reopenMedicalMenu;
+if (!isNull _flipMedic && {alive _flipMedic} && {_flipMedic isEqualTo ACE_player}
+    && {!(_flipMedic getVariable ["ACE_isUnconscious", false])}) then {
+    [uiNamespace getVariable ["ACME_CS_Patient", objNull], "airway"] call ACME_fnc_reopenMedicalMenu;
+};
 
 // a burp in progress dies with the panel. the state is uiNamespace, so leaving it set would make the next panel
 // open with a seal already drawn half lifted and a timestamp from the last casualty.

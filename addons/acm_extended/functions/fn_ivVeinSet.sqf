@@ -77,13 +77,23 @@ switch (_pheno) do {
     // one side fat, the other thready. which side is decided off the same cached phenotype draw so it is
     // stable for the casualty rather than rerolling per palpation.
     default {
-        private _cephDom = ((_patient getVariable ["ACME_iv_phenotypeSide", -1]) < 0);
-        if ((_patient getVariable ["ACME_iv_phenotypeSide", -1]) < 0) then {
-            _cephDom = (random 1) < 0.5;
-            _patient setVariable ["ACME_iv_phenotypeSide", [0, 1] select _cephDom, true];
-        } else {
-            _cephDom = (_patient getVariable ["ACME_iv_phenotypeSide", 0]) == 1;
+        private _side = _patient getVariable ["ACME_iv_phenotypeSide", -1];
+        if (_side < 0) then {
+            if (isMultiplayer) then {
+                private _key = if (isPlayer _patient) then {getPlayerUID _patient} else {netId _patient};
+                if (_key == "") then {_key = netId _patient;};
+                if (_key == "") then {_key = format ["%1:%2:%3", typeOf _patient, vehicleVarName _patient, str _patient];};
+                private _h = 37;
+                { _h = ((_h * 137) + _x + ((_forEachIndex + 3) * 19)) % 9973; } forEach (toArray (_key + ":dominant"));
+                _side = _h % 2;
+            } else {
+                _side = floor (random 2);
+            };
+            // Derived multiplayer state is local-only. Every client computes the same value; broadcasting it just
+            // creates a first-client-wins anatomy race and unnecessary traffic.
+            _patient setVariable ["ACME_iv_phenotypeSide", _side, false];
         };
+        private _cephDom = _side == 1;
         _out = [
             [_baseU, _baseV, _defHalf * 0.70, 0.75, "Median Cubital"],
             [_cephU, _baseV + _rise, _defHalf, ([0.45, 1.15] select _cephDom), "Cephalic"],

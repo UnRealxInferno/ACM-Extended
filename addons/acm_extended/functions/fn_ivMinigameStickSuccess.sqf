@@ -99,8 +99,10 @@ private _context = [_dlg, +(uiNamespace getVariable ["ACME_IV_Session", []]),
     private _gB = uiNamespace getVariable ["ACME_IV_InsGauge", 18];
     private _hitB = uiNamespace getVariable ["ACME_IV_InsHit", true];
     private _accB = uiNamespace getVariable ["ACME_IV_StickAcc", 1];
-    // One outcome call means one bruise/compromised-line update, including a complete miss.
-    if ([_bpB, _stB, _gB, _hitB, _accB] call ACME_fnc_ivStickBlows) then {
+    // A clean successful venous hit is visually CLEAN. Do not manufacture a bruise merely because the catheter
+    // was large or slightly off-center. Immediate IV-site bruising belongs to an actual missed vessel; later
+    // infiltration/extravasation is driven by its own live complication state.
+    if (!_hitB && {[_bpB, _stB, _gB, _hitB, _accB] call ACME_fnc_ivStickBlows}) then {
         [_su, _sv, _gB, _bpB, _stB] call ACME_fnc_ivInfiltrated;
     };
 

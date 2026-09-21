@@ -74,7 +74,7 @@ private _timer = 15 + (random 15);
             private _partIndex = _forEachIndex;
             private _IVPlacementOnBodyPart = GET_IV(_patient) select _partIndex;
             private _damageOnBodyPart = _x;
-            
+
             {
                 private _type = _x;
 
@@ -110,7 +110,7 @@ private _timer = 15 + (random 15);
                     };
                     default {};
                 };
-                
+
                 if (_targetPain > _painOnSite) then {
                     [_patient, _partIndex, _forEachIndex, _targetPain min (_painOnSite + 1)] call _fnc_setIVPain;
                 };

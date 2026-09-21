@@ -19,6 +19,7 @@ params ["_unit"];
 
 private _lastTimeUpdated = _unit getVariable [QACEGVAR(medical_vitals,lastTimeUpdated), 0];
 private _acmeBinding = "NA3:handleUnitVitals";
+private _acmeReconcile = "B106:vasoconstrictionPersist";
 if (!local _unit) exitWith {false};
 private _elapsed = (CBA_missionTime - _lastTimeUpdated) max 0;
 private _deltaT = _elapsed min 5;
@@ -133,7 +134,7 @@ if (_adjustments isNotEqualTo []) then {
                         _RRAdjustmentMap set [_medicationType, [_cappedRRAdjust, _medMaxRRAdjust]];
                     };
                 } else {
-                    _respirationRateAdjustment = _respirationRateAdjustment + _rrAdjust * _effectRatio; 
+                    _respirationRateAdjustment = _respirationRateAdjustment + _rrAdjust * _effectRatio;
                 };
             };
             if (_coSensitivityAdjust != 0) then { _coSensitivityAdjustment = _coSensitivityAdjustment + _coSensitivityAdjust * _effectRatio; };
@@ -225,7 +226,7 @@ if (EGVAR(CBRN,enable)) then {
 private _heartRate = [_unit, _hrTargetAdjustment, _deltaT, _syncValues] call ACEFUNC(medical_vitals,updateHeartRate);
 [_unit, _painSuppressAdjustment, _deltaT, _syncValues] call ACEFUNC(medical_vitals,updatePainSuppress);
 
-private _vasoconstriction = 0;
+private _vasoconstriction = GET_VASOCONSTRICTION(_unit);
 private _targetVasoconstriction = 0;
 
 if (_bloodVolume < 5.9) then {

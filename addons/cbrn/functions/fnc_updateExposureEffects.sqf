@@ -44,7 +44,7 @@ private _isExposedExternal = false;
 
         if (_patient getVariable [(format ["ACM_CBRN_%1_Contaminated_State", toLower _hazardType]), false]) then {
             _isContaminated =  true;
-            
+
             if (_patient getVariable [(format ["ACM_CBRN_%1_Exposed_State", toLower _hazardType]), false]) then {
                 _isExposed =  true;
             };

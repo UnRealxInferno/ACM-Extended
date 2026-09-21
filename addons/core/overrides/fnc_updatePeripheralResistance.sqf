@@ -12,6 +12,7 @@ private _infToxResist = if (missionNamespace getVariable ["ACME_sys_circ", true]
 private _awakeResist = if (missionNamespace getVariable ["ACME_sys_paralytic", true]) then {_unit getVariable ["ACME_roc_awakeResistAdd", 0]} else {0};
 private _tbiResist = if (missionNamespace getVariable ["ACME_sys_tbi", true]) then {_unit getVariable ["ACME_tbi_resistAdd", 0]} else {0};
 private _flightG = if (missionNamespace getVariable ["ACME_sys_flight", true]) then {_unit getVariable ["ACME_flightG_resistAdd", 0]} else {0};
+private _shockResist = _unit getVariable ["ACME_shock_resistDelta", 0];
 
 private _autoPeepDrop = 0;
 private _apVal = _unit getVariable ["ACME_vent_autoPEEP", 0];
@@ -20,7 +21,7 @@ if (_apVal > 2 && {missionNamespace getVariable ["ACME_sys_vent", true]} && {_un
 };
 
 _unit setVariable [VAR_PERIPH_RES,
-    1 max (DEFAULT_PERIPH_RES + _peripheralResistanceAdjustment + _circResist + _pressorAdd + _lidoToxResist + _esmToxResist + _infToxResist + _awakeResist + _tbiResist + _flightG + _autoPeepDrop),
+    1 max (DEFAULT_PERIPH_RES + _peripheralResistanceAdjustment + _circResist + _pressorAdd + _lidoToxResist + _esmToxResist + _infToxResist + _awakeResist + _tbiResist + _flightG + _shockResist + _autoPeepDrop),
     _syncValue
 ];
 _unit setVariable ["ACME_resistanceApplied_tbi", _tbiResist, false];

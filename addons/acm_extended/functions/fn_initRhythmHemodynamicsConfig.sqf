@@ -18,19 +18,13 @@ ACME_rhythm_bpDropTorsades     = -30;  // torsades: near-arrest perfusion
 ACME_rhythm_bpDropAFib         = 0;  // controlled AFib: rate-controlled, perfuses fine
 ACME_rhythm_bpDropSVT          = -18;  // SVT: symptomatic / cardiovertible
 
-// synchronized cardioversion, the LifePak SYNC key.
-// these are the custom rhythms that perfuse. ACM's critical-vitals watchdog arrests anything that is not sinus
-// or vt, and our rhythms all live in ACM's own rhythmstate variable. without this list an injured patient in
-// any of them gets arrested into vf on a timer whatever the medic does. torsades, 102, is absent on purpose. it
-// is a lethal ventricular rhythm and it should degenerate. it proxies to ACM as PVT. see ACME_rhythm_acmProxy
-// below.
+// Custom rhythms that are perfusing for their full lifetime. Torsades (102) is transitional: it perfuses only
+// while its entry morphology converts, then deliberately enters native PVT arrest while retaining the 102 waveform.
 ACME_rhythm_perfusingCustom = [100, 101, 103, 104];
 
-// what each custom rhythm looks like to ACM. anything not listed proxies as sinus, 0, which is correct for a
-// perfusing supraventricular rhythm. torsades proxies as PVT, 3, because it is ventricular, shockable and
-// lethal. if it proxied as sinus it would become harmless, and a defibrillation would asystole the patient.
-// see fn_rhythmset. this is the piece that lets us stop lying to ACM without losing anything.
-ACME_rhythm_acmProxy = [[102, 3]];
+// Custom rhythms no longer masquerade as a native arrest rhythm while they still perfuse. Native ACM takes over
+// only after a real critical/arrest transition, at which point the custom overlay is released.
+ACME_rhythm_acmProxy = [];
 
 // Electrical monitor-rate contract. PEA is an unstable organized electrical rhythm from 60-100 BPM. One seed and
 // one start timestamp are networked on entry; every machine derives the same low-frequency variation from mission

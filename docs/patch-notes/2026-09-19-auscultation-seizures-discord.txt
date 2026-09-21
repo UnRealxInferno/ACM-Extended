@@ -1,0 +1,11 @@
+ACM Extended 1.2.1-rc1 update
+
+- Stethoscope audio reduced by another 6 dB.
+- Added front/back auscultation using the existing body images at matching scale, with correct left/right lung mapping.
+- Hemothorax above 300 mL adds crackles at the affected lung's lower listening points, increasing toward 1.1 L and fading as fluid drains.
+- Clinical bruising wording now reads Severe Ecchymosis, including injury-list rows.
+- Corrected seizure playback to 1.05x each clip's native speed. The previous setting made the clips much too fast.
+- Seizures start directly on the gesture layer, with a settled-ragdoll handoff that preserves the patient's up-facing side. CPR or a manual roll should no longer be needed to start debug seizures.
+- Added episode guards so old seizure callbacks cannot restart after healing or a new episode.
+
+Source and numerical checks passed. HEMTT and in-game validation are still pending.

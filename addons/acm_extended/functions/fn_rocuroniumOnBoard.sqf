@@ -1,5 +1,9 @@
-/* B13: native effective units are now mg/kg and incorporate dose-specific binding. */
+/* B121: native effective units incorporate dose/onset. Hardcore rapid IV delivery may transiently accelerate
+   establishment of block by at most ~18%; dose remains the dominant variable. */
 params ["_patient"];
 if (isNull _patient) exitWith {0};
-([_patient, "Rocuronium_IV", false] call ace_medical_status_fnc_getMedicationCount)
-    + ([_patient, "Rocuronium", false] call ace_medical_status_fnc_getMedicationCount)
+private _base = ([_patient,"Rocuronium_IV",false] call ace_medical_status_fnc_getMedicationCount)
+    + ([_patient,"Rocuronium",false] call ace_medical_status_fnc_getMedicationCount);
+if !(missionNamespace getVariable ["ACME_hcEff_medications",false]) exitWith {_base};
+private _rapid = (_patient getVariable ["ACME_hcMed_rapidRocuronium",0]) max 0;
+_base * (1 + 0.18*(_rapid/(0.5+_rapid)))

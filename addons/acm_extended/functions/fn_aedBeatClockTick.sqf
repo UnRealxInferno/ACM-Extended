@@ -24,6 +24,16 @@ private _now = CBA_missionTime;
         continue;
     };
 
+    // Engine-dead corpses cannot generate a live monitor rate. Clear any stale display/clock state once.
+    if (!alive _patient || {(lifeState _patient) isEqualTo "DEAD"}) then {
+        if ((round (_patient getVariable ["ACM_circulation_AED_Pads_Display", 0])) != 0) then {
+            [_patient, [["aedPadsDisplay", 0]], true] call ACM_circulation_fnc_setRuntimeState;
+        };
+        _patient setVariable ["ACME_AED_BeatClockActive", false, false];
+        _patient setVariable ["ACME_AED_BeatHR", 0, false];
+        continue;
+    };
+
     private _hr = if (!isNil "ACM_circulation_fnc_getEKGHeartRate") then {
         [_patient] call ACM_circulation_fnc_getEKGHeartRate
     } else {

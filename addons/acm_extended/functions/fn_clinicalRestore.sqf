@@ -124,6 +124,26 @@ private _toxicityFiredRestore = createHashMap;
     };
     if (_name in ["ACME_CS_holeData", "ACME_CS_wastedSeals", "ACME_ncd_placed", "ACME_ncd_tensionBase", "ACME_penetratingTorso", "ACME_penetratingTorsoCount", "ACME_thora_outputMl", "ACME_thora_outputPerHour", "ACME_thora_outputStart"]) then {_chest pushBack [_name, _value];} else {_patient setVariable [_name, _value, true];};
 } forEach (_payload param [1, []]);
+
+// B106: XStat surgical/impaired flags are derived from the junctional device state.
+// Rebuild them after ownership/state restoration so forceWalk and evacuation eligibility cannot drift.
+private _xStatActive = (["leftarm", "rightarm", "leftleg", "rightleg"] findIf {
+    toLowerANSI (_patient getVariable [format ["ACME_Junc_%1", _x], ""]) isEqualTo "xstat"
+}) >= 0;
+private _xStatLegActive = (["leftleg", "rightleg"] findIf {
+    toLowerANSI (_patient getVariable [format ["ACME_Junc_%1", _x], ""]) isEqualTo "xstat"
+}) >= 0;
+private _xStatWasImpaired = _patient getVariable ["ACME_XStat_impaired", false];
+_patient setVariable ["ACME_XStat_needsSurgery", _xStatActive, true];
+_patient setVariable ["ACME_XStat_impaired", _xStatLegActive, true];
+if (_xStatLegActive || {_xStatWasImpaired}) then {
+    if (local _patient) then {
+        _patient forceWalk _xStatLegActive;
+    } else {
+        [_patient, _xStatLegActive] remoteExec ["ACME_fnc_forceWalkLocal", _patient];
+    };
+};
+
 // Phase 67: persistent owner-gated state must rehydrate through the same mutation boundaries used at runtime.
 if (count _hpmkRestore > 0) then {
     private _state = _hpmkRestore getOrDefault ["ACME_hpmk_state", ""];

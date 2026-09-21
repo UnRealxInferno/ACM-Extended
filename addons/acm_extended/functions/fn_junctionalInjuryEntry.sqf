@@ -24,9 +24,8 @@ switch (_target getVariable [format ["ACME_Junc_%1", _p], ""]) do {
     case "xstat":   {
         // an XStat seated gives a green "[XStat]", meaning controlled but unresolved and needing surgery. if the 2-hour
         // dwell has lapsed and it has rebled, flip to a red warning so the medic sees it has failed.
-        private _at = _target getVariable [format ["ACME_Junc_XStatAt_%1", _p], time];
-        private _xDwell = missionNamespace getVariable ["ACME_xstatDwellTime", 7200];
-        if (alive _target && {(time - _at) > _xDwell}) then {
+        private _rebled = _target getVariable [format ["ACME_Junc_XStatRebled_%1", _p], false];
+        if (alive _target && {_rebled}) then {
             _woundEntries pushBack [_base + " [XStat. REBLEEDING]", (["danger", 1] call ACME_fnc_a11yColor)];
         } else {
             _woundEntries pushBack [_base + " [XStat]",              (["success", 1] call ACME_fnc_a11yColor)];

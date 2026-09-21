@@ -28,29 +28,11 @@ class B28Regression(unittest.TestCase):
         self.assertIn('private _active = _systemOn',t)
         self.assertIn('ACME_ObtundedActive',t)
         self.assertIn('ACME_ObtundedVoiceGuardAt',t)
-    def test_babble_enable_requires_real_obtundation(self):
-        t=src('acreBabbleSet')
-        self.assertIn('ACME_sys_obtunded", false',t)
-        self.assertIn('ACME_obtunded", false',t)
-        self.assertIn('ACE_isUnconscious',t)
-        self.assertIn('_pulseAuthorized',t)
-        self.assertIn('acre_api_fnc_isSpeaking',t)
-        self.assertIn('if (!_valid) exitWith { [false, false, true] call ACME_fnc_acreBabbleSet; };',t)
-    def test_babble_restore_not_gated_by_master_or_feature(self):
-        t=src('acreBabbleSet')
-        restore=t.split('// RESTORE IS NEVER GATED',1)[1]
-        body=restore.split('if (missionNamespace getVariable',1)[1]
-        self.assertNotIn('ACME_sys_obtunded',body)
-        self.assertNotIn('ACME_acre_babbleEnable',body)
-        self.assertIn('ACME_acre_prevLanguage',restore)
-        self.assertIn('_knownNow - [_id]',restore)
     def test_voice_true_request_is_clamped_to_actual_state(self):
         t=src('obtundedVoice')
         self.assertIn('private _effectiveMute = _mute',t)
         self.assertIn('ACME_sys_obtunded", false',t)
         self.assertIn('ACME_obtunded", false',t)
-        self.assertNotIn('[_effectiveMute] call ACME_fnc_acreBabbleSet;',t)
-        self.assertIn('[false] call ACME_fnc_acreBabbleSet;',t)
-        b=src('acreBabbleTick')
-        self.assertIn('[true, true] call ACME_fnc_acreBabbleSet;',b)
+        self.assertIn('TFAR_fnc_setForbiddenToSpeak',t)
+
 if __name__=='__main__': unittest.main()

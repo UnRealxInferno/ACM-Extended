@@ -30,7 +30,7 @@ call FUNC(generatePTXMap);
 ] call CBA_fnc_addSetting;
 
 // Pneumothorax
-    
+
 [
     QGVAR(pneumothoraxEnabled),
     "CHECKBOX",

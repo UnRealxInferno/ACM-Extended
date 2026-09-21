@@ -1,0 +1,11 @@
+ACM Extended 1.2.1-rc1 | PEA morphology
+
+- Default and obstructive PEA now use a narrow, sinus-like P-QRS-T tracing.
+- The existing wide PEA tracing is reserved for severe transfusion burden not covered by calcium.
+- Calcium coverage can narrow the tracing while an unresolved obstructive cause keeps the patient in PEA.
+- The monitor detects morphology changes without resetting its electrical beat clock.
+- Both forms remain pulseless and nonshockable.
+
+This uses ACME's existing transfusion/calcium burden as a gameplay proxy. It does not add a measured potassium level or change arrest-entry/ROSC logic. At an 80 BPM resting baseline, wide PEA requires more than 2 L of uncovered burden.
+
+Source and numerical checks passed. Added waveform regression tests; pytest, HEMTT and in-game verification still need to run.

@@ -29,6 +29,78 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     private _severity = (_state getOrDefault ["severity", 0.5]) max 0 min 1;  // a clamp, so a bad state can never go negative.
     private _severityStart = _severity;  // a rise-cap anchor. however many insults stack this tick, severity climbs no faster than the fixed cap.
 
+    // B119 separates permanent injury history from the current acute burden. Existing save states migrate on first
+    // tick by taking their current severity as the structural high-water mark. Structural severity does not itself
+    // keep a stable patient deteriorating; it defines vulnerability and the best autoregulatory/autonomic reserve
+    // the brain can recover to. The ordinary severity value remains the reversible burden used by ICP progression.
+    private _structural = (_state getOrDefault ["structuralSeverity", _severity]) max 0 min 1;
+    _structural = _structural max (_state getOrDefault ["severityFloor", 0]);
+    _state set ["structuralSeverity", _structural];
+
+    private _mildMax = missionNamespace getVariable ["ACME_tbi_structuralMildMax", 0.35];
+    private _modMax  = missionNamespace getVariable ["ACME_tbi_structuralModerateMax", 0.60];
+    private _sevMax  = missionNamespace getVariable ["ACME_tbi_structuralSevereMax", 0.80];
+
+    private _autoregBase = switch (true) do {
+        case (_structural <= _mildMax): { missionNamespace getVariable ["ACME_tbi_autoregMild", 1.00] };
+        case (_structural <= _modMax): {
+            linearConversion [_mildMax, _modMax, _structural, missionNamespace getVariable ["ACME_tbi_autoregMild", 1.00], missionNamespace getVariable ["ACME_tbi_autoregModerate", 0.95], true]
+        };
+        case (_structural <= _sevMax): {
+            linearConversion [_modMax, _sevMax, _structural, missionNamespace getVariable ["ACME_tbi_autoregModerate", 0.95], missionNamespace getVariable ["ACME_tbi_autoregSevere", 0.70], true]
+        };
+        default {
+            linearConversion [_sevMax, 1, _structural, missionNamespace getVariable ["ACME_tbi_autoregSevere", 0.70], missionNamespace getVariable ["ACME_tbi_autoregCritical", 0.35], true]
+        };
+    };
+    private _prevStage = (_state getOrDefault ["herniationStage", 0]) max 0 min 3;
+    private _prevComp = (_state getOrDefault ["compFrac", 0]) max 0;
+    private _autoregPenaltyAcute = linearConversion [0.45, 1, _severity, 0, 0.28, true];
+    private _autoregPenaltyStage = [0, 0.06, 0.22, 0.48] param [_prevStage, 0.48];
+    private _autoregPenaltyComp = linearConversion [0.75, 1.75, _prevComp, 0, 0.22, true];
+    private _autoregTarget = (_autoregBase - _autoregPenaltyAcute - _autoregPenaltyStage - _autoregPenaltyComp) max 0.05 min 1;
+    private _autoregRaw = _state getOrDefault ["autoregIntegrity", -1];
+    private _autoreg = if (_autoregRaw < 0) then {_autoregBase} else {_autoregRaw max 0.05 min 1};
+    private _autoRate = if (_autoregTarget < _autoreg) then {
+        missionNamespace getVariable ["ACME_tbi_autoregFallPerSec", 0.018]
+    } else {
+        missionNamespace getVariable ["ACME_tbi_autoregRecoverPerSec", 0.0035]
+    };
+    private _autoStep = _autoRate * _dt;
+    _autoreg = _autoreg + (((_autoregTarget - _autoreg) max (-_autoStep)) min _autoStep);
+    _autoreg = _autoreg max 0.05 min 1;
+    _state set ["autoregIntegrity", _autoreg];
+    _state set ["autoregTarget", _autoregTarget];
+
+    private _autonomicBase = switch (true) do {
+        case (_structural <= _mildMax): { missionNamespace getVariable ["ACME_tbi_autonomicMild", 1.00] };
+        case (_structural <= _modMax): {
+            linearConversion [_mildMax, _modMax, _structural, missionNamespace getVariable ["ACME_tbi_autonomicMild", 1.00], missionNamespace getVariable ["ACME_tbi_autonomicModerate", 0.97], true]
+        };
+        case (_structural <= _sevMax): {
+            linearConversion [_modMax, _sevMax, _structural, missionNamespace getVariable ["ACME_tbi_autonomicModerate", 0.97], missionNamespace getVariable ["ACME_tbi_autonomicSevere", 0.80], true]
+        };
+        default {
+            linearConversion [_sevMax, 1, _structural, missionNamespace getVariable ["ACME_tbi_autonomicSevere", 0.80], missionNamespace getVariable ["ACME_tbi_autonomicCritical", 0.55], true]
+        };
+    };
+    private _autonomicPenaltyAcute = linearConversion [0.60, 1, _severity, 0, 0.32, true];
+    private _autonomicPenaltyStage = [0, 0.04, 0.24, 0.55] param [_prevStage, 0.55];
+    private _autonomicPenaltyComp = linearConversion [0.85, 1.85, _prevComp, 0, 0.25, true];
+    private _autonomicTarget = (_autonomicBase - _autonomicPenaltyAcute - _autonomicPenaltyStage - _autonomicPenaltyComp) max 0.05 min 1;
+    private _autonomicRaw = _state getOrDefault ["autonomicIntegrity", -1];
+    private _autonomicIntegrity = if (_autonomicRaw < 0) then {_autonomicBase} else {_autonomicRaw max 0.05 min 1};
+    private _autonomicRate = if (_autonomicTarget < _autonomicIntegrity) then {
+        missionNamespace getVariable ["ACME_tbi_autonomicFallPerSec", 0.022]
+    } else {
+        missionNamespace getVariable ["ACME_tbi_autonomicRecoverPerSec", 0.004]
+    };
+    private _autonomicStep = _autonomicRate * _dt;
+    _autonomicIntegrity = _autonomicIntegrity + (((_autonomicTarget - _autonomicIntegrity) max (-_autonomicStep)) min _autonomicStep);
+    _autonomicIntegrity = _autonomicIntegrity max 0.05 min 1;
+    _state set ["autonomicIntegrity", _autonomicIntegrity];
+    _state set ["autonomicTarget", _autonomicTarget];
+
     // head-of-bed elevation, at about 30 degrees. while elevated, ICP eases down through venous drainage, see
     // below, CPP eases down through a small MAP haircut, because gravity lowers cerebral arterial pressure, and
     // herniation is impossible, which is gated in the cascade below. everything else runs unchanged.
@@ -52,11 +124,20 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     // structural ICP and is sodium-capped, so it can blunt but never break a CPP-driven cascade, and only pressure
     // support does. the vasodilatory add rides on top of the severity-driven structural ceiling and is capped, at
     // ACME_tbi_vasoICPmax, so the spiral is dangerous and bounded.
-    private _autoUpper = missionNamespace getVariable ["ACME_tbi_autoregUpperCPP", 70];  // the CPP at or above which tone is normal.
-    private _autoLower = missionNamespace getVariable ["ACME_tbi_autoregLowerCPP", 40];  // the CPP at or below which dilation maxes out.
-    private _vasoFrac = linearConversion [_autoUpper, _autoLower, _cpp, 0, 1, true];  // 0 is a good CPP and 1 is maximum vasodilation.
-    private _vasoCeil = _vasoFrac * (missionNamespace getVariable ["ACME_tbi_vasoICPmax", 20]);  // the extra ICP from dilation.
-    _state set ["vasoFrac", _vasoFrac];  // a tell for the TBI computer and the aar.
+    private _autoUpper = missionNamespace getVariable ["ACME_tbi_autoregUpperCPP", 70];
+    private _autoLower = missionNamespace getVariable ["ACME_tbi_autoregLowerCPP", 40];
+    private _intactVasoFrac = linearConversion [_autoUpper, _autoLower, _cpp, 0, 1, true];
+    // Lost autoregulation blunts protective low-CPP dilation and becomes pressure-passive at high CPP.
+    private _vasoFrac = _intactVasoFrac * _autoreg;
+    private _pressurePassiveFrac = (linearConversion [
+        missionNamespace getVariable ["ACME_tbi_pressurePassiveCPPstart", 70],
+        missionNamespace getVariable ["ACME_tbi_pressurePassiveCPPfull", 100],
+        _cpp, 0, 1, true
+    ]) * (1 - _autoreg);
+    private _vasoCeil = (_vasoFrac * (missionNamespace getVariable ["ACME_tbi_vasoICPmax", 20]))
+        + (_pressurePassiveFrac * (missionNamespace getVariable ["ACME_tbi_pressurePassiveICPmax", 8]));
+    _state set ["vasoFrac", _vasoFrac];
+    _state set ["pressurePassiveFrac", _pressurePassiveFrac];
 
     // fluid overload gives cerebral edema, which raises ICP. over-resuscitation, where
     // ACM_circulation_Overload_Volume is above 0, drives ICP up hard, because the injured brain has no compliance
@@ -104,7 +185,7 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
         private _alpha = (_dt / (_tau max 0.1)) min 1;
         private _spontR = _spontPrev + ((_spontRaw - _spontPrev) * _alpha);
         _state set ["co2RRsmooth", _spontR];
-        private _bagFresh = (CBA_missionTime - (_patient getVariable ["ACME_bvm_lastBreath", -1e9]))
+        private _bagFresh = ((serverTime - (_patient getVariable ["ACME_bvm_lastBreathServer", -1e9])) max 0)
             < (missionNamespace getVariable ["ACME_tbi_bvmFreshSec", 12]);
         private _bagR = if (_bagFresh) then { _patient getVariable ["ACME_bvm_rate", 0] } else { 0 };
         private _effRate = _spontR max _bagR;
@@ -180,7 +261,7 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     };
     _state set ["mechCeil", _mechCeil];  // a tell for the HUD and the aar, a peer to co2ceil.
 
-    private _structCeil = (missionNamespace getVariable ["ACME_tbi_icpMax", 40]) * _severity;  // todo[ref].
+    private _structCeil = (missionNamespace getVariable ["ACME_tbi_baseICP", 10]) max ((missionNamespace getVariable ["ACME_tbi_icpMax", 40]) * _severity);  // acute burden can resolve, but ICP normalizes to baseline rather than zero.
     private _combinedCeil = (_structCeil + _vasoCeil + _overloadCeil + _co2Ceil + _mechCeil) max 0;
     private _baseRise = (missionNamespace getVariable ["ACME_tbi_icpRisePerSec", 0.05]) * _severity;  // todo[ref].
     private _vasoRise = _vasoFrac * (missionNamespace getVariable ["ACME_tbi_vasoRisePerSec", 0.035]);  // the active dilation push.
@@ -224,9 +305,10 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     _cpp = _map - _icp;
 
     // THE PERFUSION PREDICATE. ONE STATEMENT, READ BY EVERY GATE BELOW.
-    // the brain is being perfused well enough to stop losing ground when the MAP is at or above
-    // ACME_tbi_recoverMAPmin, 65, and the ICP is off the pressure, at or below ACME_tbi_recoverICPmax, 25.
-    // MAP is the gate rather than CPP because MAP is what the medic can see, target and treat. a CPP gate at 70
+    // the brain is being perfused well enough to stop losing ground when MAP satisfies the structural-grade floor
+    // and ICP is off the pressure, at or below ACME_tbi_recoverICPmax. Mild/moderate injuries retain the normal
+    // recovery band; severe/critical structural injury progressively requires more MAP. MAP is the gate rather
+    // than CPP because MAP is what the medic can see, target and treat. a CPP gate at 70
     // against a live ICP demanded a MAP of 70 plus the ICP, so a casualty carrying an ICP of 15 needed a MAP of 85
     // before anything healed, and the medic had no way to read that requirement off the panel.
     // THIS IS ALSO THE DEAD BAND. before r-59 the damage threshold and the recovery threshold were the same
@@ -234,10 +316,34 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     // drives the insult, the compensation budget and the recovery, so the three can no longer disagree and a
     // casualty held in the band simply holds.
     private _recovICPgate = missionNamespace getVariable ["ACME_tbi_recoverICPmax", 25];
-    private _recovMAPmin  = missionNamespace getVariable ["ACME_tbi_recoverMAPmin", 65];
-    private _perfusionOK = (_map >= _recovMAPmin) && {_icp <= _recovICPgate};
-    _state set ["perfusionOK", _perfusionOK];  // a tell for the TBI computer and the aar.
+    private _baseRecovMAPmin = missionNamespace getVariable ["ACME_tbi_recoverMAPmin", 65];
+    private _structMAPfloor = switch (true) do {
+        case (_structural <= _mildMax): { missionNamespace getVariable ["ACME_tbi_hypotensionMAPMild", 60] };
+        case (_structural <= _modMax): {
+            linearConversion [_mildMax, _modMax, _structural, missionNamespace getVariable ["ACME_tbi_hypotensionMAPMild", 60], missionNamespace getVariable ["ACME_tbi_hypotensionMAPModerate", 65], true]
+        };
+        case (_structural <= _sevMax): {
+            linearConversion [_modMax, _sevMax, _structural, missionNamespace getVariable ["ACME_tbi_hypotensionMAPModerate", 65], missionNamespace getVariable ["ACME_tbi_hypotensionMAPSevere", 75], true]
+        };
+        default {
+            linearConversion [_sevMax, 1, _structural, missionNamespace getVariable ["ACME_tbi_hypotensionMAPSevere", 75], missionNamespace getVariable ["ACME_tbi_hypotensionMAPCritical", 85], true]
+        };
+    };
+    private _recovMAPmin = _baseRecovMAPmin max _structMAPfloor;
+    // Mild and moderate TBI are not forced into a high CPP target simply because the injury exists. Severe and
+    // critical structural injury, where autoregulatory reserve is intentionally reduced, add a minimum CPP gate.
+    private _structCPPfloor = 0;
+    if (_structural > _modMax) then {
+        _structCPPfloor = if (_structural <= _sevMax) then {
+            missionNamespace getVariable ["ACME_tbi_perfusionCPPSevereMin", 55]
+        } else {
+            missionNamespace getVariable ["ACME_tbi_perfusionCPPCriticalMin", 60]
+        };
+    };
+    private _perfusionOK = (_map >= _recovMAPmin) && {_icp <= _recovICPgate} && {(_structCPPfloor <= 0) || {_cpp >= _structCPPfloor}};
+    _state set ["perfusionOK", _perfusionOK];
     _state set ["recoverMAPmin", _recovMAPmin];
+    _state set ["recoverCPPfloor", _structCPPfloor];
 
     // a secondary insult: a sustained low CPP worsens severity.
     private _cppTarget = missionNamespace getVariable ["ACME_tbi_cppTarget", 70];  // todo[ref].
@@ -252,7 +358,8 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     if (_cpp < _cppTarget) then {
         _lowTime = _lowTime + _dt;
         if (!_perfusionOK) then {
-            _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecLowCPP", 0.01]) * _dt)) min 1;  // todo[ref].
+            private _autoLowCPPMult = 1 + ((1 - _autoreg) * ((missionNamespace getVariable ["ACME_tbi_autoregLowCPPMultMax", 2.0]) - 1));
+            _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecLowCPP", 0.01]) * _autoLowCPPMult * _dt)) min 1;
         };
     } else {
         _lowTime = (_lowTime - (_dt * 0.5)) max 0;
@@ -291,29 +398,21 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     };
     _state set ["do2", _do2];
 
-    // the hypotension insult: why permissive hypotension is contraindicated in head injury.
-    // hypotension and hypoxia are the two classic secondary insults in traumatic brain injury, and they belong side
-    // by side. hypoxia was already modeled here and hypotension was not, which left the addon unable to express
-    // the single most important exception to hypotensive resuscitation.
-    // this is deliberately separate from the low-CPP insult above, and both can run at once. they are not the same
-    // statement. low CPP says the brain is not being perfused right now, and it recovers when CPP recovers. a
-    // hypotensive episode is a discrete event that does lasting harm: a single documented drop below roughly 90
-    // systolic is associated with a step change in outcome, and the damage does not unwind when the pressure comes
-    // back up. so this accumulates severity while low and pays none of it back afterwards, unlike the lowCPPTime
-    // clock, which decays.
-    // the floor is a MAP rather than a systolic, because everything here works in MAP. the default of 85 corresponds
-    // to roughly 110 systolic, which matches the raised target guidance for head injury rather than the 90 used for
-    // everyone else. that gap is the conflict: a casualty who is bleeding wants a low pressure and a casualty with
-    // a head injury wants a high one, and a casualty with both forces a real decision instead of a rule.
-    private _hypoFloor = missionNamespace getVariable ["ACME_tbi_hypotensionMAPFloor", 85];
+    // Pressure secondary injury now uses the same structural-grade floor as recovery, so stable mild/moderate TBI
+    // cannot be injured and healed by two contradictory gates in the same tick.
+    private _hypoFloor = _structMAPfloor;
     private _insultT = _state getOrDefault ["hypotensionTime", 0];
     if (_map < _hypoFloor) then {
         _insultT = _insultT + _dt;
-        _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecHypotension", 0.012]) * _dt)) min 1;
-        // deeper is worse, not merely longer. below the arrest-adjacent floor the insult runs at double rate.
+        private _deepFloor = ((missionNamespace getVariable ["ACME_tbi_hypotensionSevereMAP", 60]) - 10) min (_hypoFloor - 10);
+        private _depth = linearConversion [_hypoFloor, _deepFloor, _map, 0.25, 1, true];
+        private _autoHypoMult = 1 + ((1 - _autoreg) * 0.75);
+        _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecHypotension", 0.012]) * _depth * _autoHypoMult * _dt)) min 1;
         if (_map < (missionNamespace getVariable ["ACME_tbi_hypotensionSevereMAP", 60])) then {
-            _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecHypotension", 0.012]) * _dt)) min 1;
+            _severity = (_severity + ((missionNamespace getVariable ["ACME_tbi_severityPerSecHypotension", 0.012]) * 0.5 * _autoHypoMult * _dt)) min 1;
         };
+    } else {
+        _insultT = (_insultT - (_dt * 0.25)) max 0;
     };
     _state set ["hypotensionTime", _insultT];
     _state set ["hypotensionFloor", _hypoFloor];
@@ -333,7 +432,8 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     // it was ICP at or above cushing OR CPP under target, and the CPP half fired on a casualty at a MAP of 65 who
     // was otherwise fine, so the budget ran out and the decompensation term at 0.012 per second, four times the
     // base insult rate, took over.
-    private _compEngaged = !_perfusionOK;
+    private _compEligible = (_structural >= _modMax) || {_severity >= 0.65} || {_icp >= (missionNamespace getVariable ["ACME_tbi_cushingICP", 25])};
+    private _compEngaged = (!_perfusionOK) && {_compEligible};
     if (_compEngaged) then {
         _compTime = _compTime + _dt;
     } else {
@@ -350,11 +450,11 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     };
 
     // severity recovery: a treated brain heals.
-    // when every physiology gate is met, meaning ICP is off the pressure, CPP is at target, the patient is
-    // oxygenating, and ventilation is good enough that CO2 is not retained, the underlying insult is relieved and
-    // severity heals toward its damage floor. this is what makes osmotherapy and CPP management actually treat the
-    // ICP instead of the number rebounding: with severity falling, the structural ceiling, icpmax times severity,
-    // falls with it, so ICP stays down.
+    // when every physiology gate is met, meaning ICP is controlled, the structural-grade MAP floor is met, oxygen
+    // delivery is adequate, and ventilation is good enough that CO2 is not retained, the acute burden is relieved and
+    // severity heals toward its damage floor. This is what lets a stable mild/moderate TBI settle rather than
+    // deteriorate simply because its structural injury history still exists. ICP normalizes toward base ICP as
+    // acute burden falls, while structural severity continues to define reserve and future vulnerability.
     // achieving good physiology is sufficient on its own, and a recent HTS or mannitol bolus multiplies the heal
     // rate, because it actively pulls water out of the brain rather than merely moving the reading. it is gated so
     // a still-pressured, hypoxic or hypoventilated brain does not heal, and only recovers when the provider is
@@ -373,7 +473,7 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
     // _recovCPPmin is kept and published for the panel and the aar as the CPP the medic is aiming for. it no
     // longer gates the heal, because MAP is the number a medic can actually treat.
     _state set ["recoverCPPmin", _recovCPPmin];
-    private _insultRelieved = _perfusionOK && {_spo2now >= _recovSpO2min} && {_ventOK};
+    private _insultRelieved = _perfusionOK && {!_tbiDef} && {_spo2now >= _recovSpO2min} && {_ventOK};
     _state set ["insultRelieved", _insultRelieved];
     if (_insultRelieved) then {
         private _healRate = missionNamespace getVariable ["ACME_tbi_recoverPerSec", 0.0025];
@@ -388,8 +488,36 @@ ACME_tbi_activePatients = ACME_tbi_activePatients select {!isNull _x && {local _
         _severity = (_severity - (_healRate * _dt)) max _floor;
     };
 
+    // B119 systemic autonomic/vasomotor response. Rising ICP first produces a coherent sympathetic clamp. Once
+    // reserve is exhausted or herniation progresses, output becomes increasingly labile and then fails toward
+    // vasodilation/hypotension. Stable mild/moderate TBI sits near zero tone.
+    private _cushingTrigger = missionNamespace getVariable ["ACME_tbi_cushingICP", 25];
+    private _hernToneICP = missionNamespace getVariable ["ACME_tbi_herniationICP", 30];
+    private _pressureDrive = linearConversion [_cushingTrigger, _hernToneICP + 8, _icp, 0, 1, true];
+    private _stageForTone = (_state getOrDefault ["herniationStage", 0]) max 0 min 3;
+    private _stageDecomp = (missionNamespace getVariable ["ACME_tbi_herniationStageDecomp", [0,0.15,0.30,1.0]]) param [_stageForTone, 0];
+    private _reserveDecomp = linearConversion [0.85, 1.75, _compFrac, 0, 1, true];
+    private _decompDrive = _reserveDecomp max _stageDecomp;
+    private _sympatheticDrive = _pressureDrive * (1 - _decompDrive) * (0.55 + (0.45 * _autonomicIntegrity));
+    private _failureDrive = (linearConversion [0.35, 1, _decompDrive, 0, 1, true]) * (0.55 + (0.45 * (1 - _autonomicIntegrity)));
+    private _autoPhase = _state getOrDefault ["autonomicPhase", -1];
+    if (_autoPhase < 0) then { _autoPhase = random 360; _state set ["autonomicPhase", _autoPhase]; };
+    private _autoT = CBA_missionTime;
+    private _chaos = ((sin ((_autoT * 41) + _autoPhase)) + (0.65 * sin ((_autoT * 73) + 37 + _autoPhase)) + (0.45 * sin ((_autoT * 19) + 113))) / 2.1;
+    private _chaosGate = linearConversion [missionNamespace getVariable ["ACME_tbi_autonomicChaosStart", 0.35], 1, _decompDrive, 0, 1, true];
+    _chaosGate = _chaosGate * (0.35 + (0.65 * (1 - _autonomicIntegrity)));
+    private _toneTarget = _sympatheticDrive - _failureDrive + (_chaos * _chaosGate * (missionNamespace getVariable ["ACME_tbi_autonomicChaosAmp", 0.55]));
+    if (_stageForTone >= 3) then { _toneTarget = _toneTarget min -0.55; };
+    _toneTarget = _toneTarget max -1 min 1;
+    private _autonomicTone = (_state getOrDefault ["autonomicTone", 0]) max -1 min 1;
+    private _toneStep = (missionNamespace getVariable ["ACME_tbi_autonomicToneSlewPerSec", 0.35]) * _dt;
+    _autonomicTone = _autonomicTone + (((_toneTarget - _autonomicTone) max (-_toneStep)) min _toneStep);
+    _autonomicTone = _autonomicTone max -1 min 1;
+    _state set ["autonomicTone", _autonomicTone];
+    _state set ["autonomicToneTarget", _toneTarget];
+    _state set ["autonomicDecomp", _decompDrive];
+
     // the cushing reflex tell.
-    private _cushingTrigger = missionNamespace getVariable ["ACME_tbi_cushingICP", 25];  // todo[ref].
     private _cushing = _icp >= _cushingTrigger;
     _state set ["cushing", _cushing];
 

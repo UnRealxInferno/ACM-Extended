@@ -42,6 +42,13 @@ switch (_type) do {
     default {};
 };
 
+// NRB can coexist with OPA/NPA only. An i-gel needs a BVM or ventilator interface, so require the mask to be
+// removed before the SGA is inserted. The treatment consumed the item before this callback, so return it here.
+if (_type == "SGA" && {_patient getVariable ["ACME_nrb_on", false]}) exitWith {
+    ["Remove the NRB before inserting an i-gel. Use BVM or ventilator support after placement.", 2.5, _medic] call ACEFUNC(common,displayTextStructured);
+    [_medic, _classname] call ACEFUNC(common,addToInventory);
+};
+
 if (!(IS_UNCONSCIOUS(_patient)) && alive _patient) exitWith {
     private _hint = format [LLSTRING(Adjunct_Failed), _item];
     [format ["%1<br />%2", _hint, LLSTRING(Adjunct_Failed_Awake)], 2, _medic] call ACEFUNC(common,displayTextStructured);
@@ -60,7 +67,7 @@ if ((_patient getVariable [QGVAR(AirwayObstructionVomit_State), 0]) + (_patient 
 };
 
 if (_type == "SGA" && GET_AIRWAY_INFLAMMATION(_patient) > AIRWAY_INFLAMMATION_THRESHOLD_SERIOUS) exitWith {
-    private _hint = format [LLSTRING(Adjunct_Failed), _item]; 
+    private _hint = format [LLSTRING(Adjunct_Failed), _item];
     [format ["%1<br />%2", _hint, LLSTRING(Adjunct_Failed_Inflammation)], 2, _medic] call ACEFUNC(common,displayTextStructured);
     [_medic, _classname] call ACEFUNC(common,addToInventory);
 };

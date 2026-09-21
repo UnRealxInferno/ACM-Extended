@@ -42,11 +42,12 @@ _active = _active select {
     } else {
         // Short renewed reservations cover variable-length wrapping without
         // guessing the treatment duration or leaving a long leak-audio mute.
-        if (time >= _nextQuiet) then {
-            // Another provider may already own a longer important-sound window.
-            private _remaining = (_target getVariable ["ACME_SfxBusyUntil", 0]) - time;
+        private _audioNow = serverTime;
+        if (_audioNow >= _nextQuiet) then {
+            // Another provider may already own a longer important-sound window. Shared reservations use serverTime.
+            private _remaining = (_target getVariable ["ACME_SfxBusyUntil", 0]) - _audioNow;
             [_target, _remaining max 2.25] call ACME_fnc_markImportantSfx;
-            _x set [6, time + 2];
+            _x set [6, _audioNow + 2];
         };
     };
     _valid

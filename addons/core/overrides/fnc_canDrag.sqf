@@ -17,11 +17,16 @@
  */
 
 params ["_unit", "_target"];
+private _acmeReconcile = "B106:ace321Drag";
 
 private _alive = alive _target;
 private _isPerson = _target isKindOf "CAManBase";
 
-if !((_alive || _isPerson) && {_target getVariable [QACEGVAR(dragging,canDrag), false]} && {isNull objectParent _target}) exitWith {false};
+if !(
+    (_alive || _isPerson)
+    && {_target getVariable [QACEGVAR(dragging,canDrag), false]}
+    && {!_isPerson || {isNull objectParent _target}}
+) exitWith {false};
 
 if !([_unit, _target, ["isNotSwimming"]] call ACEFUNC(common,canInteractWith)) exitWith {false};
 

@@ -8,6 +8,9 @@
 // the params are [_target, _bodyPart, _iv, _site, _lineKey, _blood, _bloodAction, _saline, _salineAction].
 params ["_target", "_bodyPart", "_iv", "_site", "_lineKey", "_blood", "_bloodAction", "_saline", "_salineAction"];
 if (isNull _target) exitWith {};
+if !([_target,_bodyPart,_iv,_site] call ACME_fnc_transfusionAccessValid) exitWith {
+    ["An established IV/IO is required before hanging a Y-line.",2.5,ACE_player,13] call ace_common_fnc_displayTextStructured;
+};
 
 // hang both limbs on the line in one shot through the ivbag attach of ACE and ACM, with no 5 s addbag and no
 // double menu trip. the blood goes on first so it sits above the saline in the list. the blood flows normally

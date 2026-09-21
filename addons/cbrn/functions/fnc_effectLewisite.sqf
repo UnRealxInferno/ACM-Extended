@@ -44,11 +44,11 @@ if (_buildup < 30) exitWith {};
 
 if (_isExposed) then {
     if (!_filtered) then {
-        private _airwayInflammation = GET_AIRWAY_INFLAMMATION(_patient); 
+        private _airwayInflammation = GET_AIRWAY_INFLAMMATION(_patient);
 
         _patient setVariable [QGVAR(AirwayInflammation), (_airwayInflammation + 1), true];
     };
-    
+
     if (!_protectedEyes && GVAR(lewisiteCauseBlindness)) then {
         [_patient, true] call FUNC(setBlind);
     };

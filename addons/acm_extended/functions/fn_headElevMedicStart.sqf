@@ -9,14 +9,19 @@ missionNamespace setVariable ["ACME_headElev_TunePatient", _patient];
     _medic setVariable ["ACME_headElev_seqToken", _token];
     _medic setVariable ["ACME_headElev_seqActive", true];
     _medic setVariable ["ACME_headElev_seqPatient", _patient];
-    
+
     // B89: elevate intentionally uses the same provider Putdown sequence as lay-flat/supine.
     // The patient animation path is independent and untouched.
     [_medic, "elevate"] call ACME_fnc_headElevMedicSeq;
 
     // fn_headElevMedicSeq clears seqActive after the provider sequence completes.
 
-    ["Head Elevated 30°", 3, _medic] call ace_common_fnc_displayTextStructured;
+    private _placementMsg = if (missionNamespace getVariable ["ACME_hc_descriptors", false]) then {
+        format ["%1 was placed in Semi-Fowler's position", [_patient, false, true] call ace_common_fnc_getName]
+    } else {
+        "Head Elevated 30°"
+    };
+    [_placementMsg, 3, _medic] call ace_common_fnc_displayTextStructured;
     if (!isNil "ace_medical_treatment_fnc_addToLog") then {
         [_patient, "activity",
  "%1 elevated head 30 degrees",

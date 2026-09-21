@@ -32,7 +32,7 @@ _patient setVariable [QGVAR(ChestSeal_State), false, true];
 _patient setVariable [QGVAR(Thoracostomy_State), nil, true];
 _patient setVariable [QGVAR(Thoracostomy_UsedKit), false, true];
 
-_patient setVariable [QGVAR(PulseOximeter_Display), [[0,0],[0,0]], true]; 
+_patient setVariable [QGVAR(PulseOximeter_Display), [[0,0],[0,0]], true];
 _patient setVariable [QGVAR(PulseOximeter_Placement), [false,false], true];
 _patient setVariable [QGVAR(PulseOximeter_PFH), -1];
 _patient setVariable [QGVAR(PulseOximeter_LastSync), [-1,-1]];
@@ -47,6 +47,19 @@ _patient setVariable [QGVAR(BVM_ConnectedOxygen), false, true];
 
 _patient setVariable [QGVAR(BVM_lastBreath), nil, true];
 _patient setVariable [QGVAR(BVM_lastBreathOxygen), nil, true];
+
+// ACME aspiration is a breathing injury even though its runtime lives in acm_extended. Full-heal must retire the
+// persistent shunt/edema presentation as well as the native ACM chest states.
+_patient setVariable ["ACME_aspiration_load", 0, true];
+_patient setVariable ["ACME_aspiration_injury", 0, true];
+_patient setVariable ["ACME_aspiration_edema", 0, true];
+_patient setVariable ["ACME_aspiration_edemaActive", false, true];
+_patient setVariable ["ACME_aspiration_shunt", 0, true];
+_patient setVariable ["ACME_aspiration_RRDrive", 0, true];
+_patient setVariable ["ACME_aspiration_SpO2Penalty", 0, true];
+_patient setVariable ["ACME_aspiration_lastRRAdj", 0, false];
+_patient setVariable ["ACME_aspiration_lastEmesisKey", "", false];
+_patient setVariable ["ACME_aspiration_tickAt", nil, false];
 
 _patient setVariable [QGVAR(RespirationRate), (ACM_TARGETVITALS_RR(_patient)), true];
 

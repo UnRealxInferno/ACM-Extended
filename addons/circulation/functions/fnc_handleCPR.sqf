@@ -67,7 +67,7 @@ private _PFH = [{
     private _fentanyl = _cardiacMedication get "fentanyl";
     private _amiodarone = _cardiacMedication get "amiodarone";
     private _lidocaine = _cardiacMedication get "lidocaine";
-    
+
     switch (_rhythmState) do {
         case ACM_Rhythm_PVT: {
             _rhythmEffect = 0.9 * _shockEffect;

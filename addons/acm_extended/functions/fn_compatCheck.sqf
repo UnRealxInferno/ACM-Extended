@@ -20,6 +20,16 @@ missionNamespace setVariable ["ACME_compatChecked", true];
 private _missing = [];
 private _version = missionNamespace getVariable ["ACME_infusion_version", "?"];
 
+private _hasMarker = {
+    params ["_name", "_marker"];
+    private _code = missionNamespace getVariable [_name, {}];
+    _code isEqualType {} && {(toLowerANSI str _code find toLowerANSI _marker) >= 0}
+};
+
+// dropObject_carry is deliberately not a function fork anymore. ACE's stoppedCarry event carries ACME's
+// lying-state reconciliation, so ACE is free to own/recompile ace_dragging_fnc_dropObject_carry without a
+// compatibility warning or a load-order repair race.
+
 // functions we call directly. if one of these is gone, whatever calls it fails at the worst possible moment.
 {
     if (isNil _x) then { _missing pushBack format ["FUNCTION %1", _x]; };
@@ -32,6 +42,28 @@ private _version = missionNamespace getVariable ["ACME_infusion_version", "?"];
     "ACM_circulation_fnc_AED_CanAdministerShock",
     "ACM_circulation_fnc_AED_AdministerShock",
     "ACM_core_fnc_handleCriticalVitals"  // we no longer fork it, and our rhythm proxy depends on how it reasons.
+];
+
+// Verify the reconciled critical functions which must be ACME/ACM-owned at runtime.
+// Do not require the ACE medical-status volume symbol here: ACE may finalize that symbol, while ACME's
+// authoritative vitals path intentionally calls ACM_circulation_fnc_getBloodVolumeChange directly.
+{
+    _x params ["_name", "_marker"];
+    if !([_name, _marker] call _hasMarker) then { _missing pushBack format ["STALE/OVERRIDDEN %1", _name]; };
+} forEach [
+    ["ACM_circulation_fnc_getBloodVolumeChange", "B106:volumeCanonical"],
+    ["ace_medical_vitals_fnc_handleUnitVitals", "B106:vasoconstrictionPersist"],
+    ["ACM_circulation_fnc_setIV", "B106:setIVReconciled"],
+    ["ACM_airway_fnc_handleAirway", "B106:airwayWakeGuard"],
+    ["ACM_airway_fnc_handleAirwayCollapse", "B125:airwayCollapseWakeClear"],
+    ["ACM_core_fnc_getUpPrompt", "B106:getUpLifecycle"],
+    ["ACM_core_fnc_addVehiclePatientActions", "B106:vehicleUnloadGuard"],
+    ["ACM_disability_fnc_handleFracture", "B106:fracturePainChance"],
+    ["ACM_damage_fnc_wrapBodyPartLocal", "B106:wrappedWoundReopen"],
+    ["ace_dragging_fnc_canCarry", "B106:ace321Carry"],
+    ["ace_dragging_fnc_canDrag", "B106:ace321Drag"],
+    ["ace_interact_menu_fnc_compileMenuSelfAction", "B106:ace321SelfMenu"],
+    ["ace_zeus_fnc_moduleUnconscious", "B106:aiUnconsciousGuard"]
 ];
 
 // variable names we read off patients. these are stringly-typed in our overrides, because the macros are not
@@ -53,14 +85,16 @@ private _probe = [
 
 missionNamespace setVariable ["ACME_compatMissing", +_missing, false];
 if (_missing isEqualTo []) exitWith {
+    diag_log "[ACME COMPAT] OK: required runtime functions/markers verified";
 };
 
-{  } forEach _missing;
+diag_log format ["[ACME COMPAT] FAILED (%1): %2", count _missing, _missing joinString " | "];
 
 if (hasInterface) then {
     [{
-        params ["_n"];
-        [format ["ACM Extended: %1 compatibility problem(s). Missing required functions; some systems are unavailable. Details: ACME_compatMissing.", _n], 8]
+        params ["_issues"];
+        private _detail = _issues joinString " | ";
+        [format ["ACM Extended: %1 compatibility problem(s). Missing/stale required functions or overrides detected. %2", count _issues, _detail], 8]
             call ace_common_fnc_displayTextStructured;
-    }, [count _missing], 12] call CBA_fnc_waitAndExecute;
+    }, [+_missing], 12] call CBA_fnc_waitAndExecute;
 };

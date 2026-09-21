@@ -97,24 +97,13 @@ _ctrls = _ctrls select {!isNull (_x param [0,controlNull])};
 uiNamespace setVariable ["ACME_IV_PrepCtrls", _ctrls];
 uiNamespace setVariable ["ACME_IV_PrepCells", _cells];
 
-// Preserve prolonged-scrub bruising separately above the redness. Convert the
-// finer raster area to the previous coarse-cell area before counting passes.
-private _nCells = count _cells;
-if (_nCells > 0) then {
-    private _equivalentCells = (_nCells * _cell * _cell / (0.022 * 0.022)) max 1;
-    private _mean = _total / _equivalentCells;
-    private _bA = linearConversion [missionNamespace getVariable ["ACME_iv_prepBruiseMeanOn", 4], missionNamespace getVariable ["ACME_iv_prepBruiseMeanFull", 12], _mean, 0, missionNamespace getVariable ["ACME_iv_prepBruiseAlphaMax", 0.30], true];
-    if (_bA > 0.001) then {
-        private _rad = sqrt ((_nCells * _cell * _cell) / 3.14159) * (missionNamespace getVariable ["ACME_iv_prepBruiseSpread", 2.2]);
-        private _w = (_bw * _rad * 2) min (_bw * 0.9);
-        private _h = _w / _af;
-        private _bruise = uiNamespace getVariable ["ACME_IV_PrepBruise", controlNull];
-        if (!isNull _bruise) then {
-            _bruise ctrlSetPosition [_bx + _bw * (_sum select 0) / _total - _w / 2, _by + _bh * (_sum select 1) / _total - _h / 2, _w, _h];
-            _bruise ctrlSetTextColor [1,1,1,_bA];
-            _bruise ctrlCommit 0;
-            _bruise ctrlShow true;
-        };
-    };
+// Skin prep may leave transient antiseptic redness, but it is not an IV injury. A successful cannulation must not
+// acquire a bruise merely because the provider scrubbed the site. Bruising is reserved for a missed/blown stick,
+// infiltration or extravasation. Hide the legacy prep-bruise control if an older view cache created one.
+private _prepBruise = uiNamespace getVariable ["ACME_IV_PrepBruise", controlNull];
+if (!isNull _prepBruise) then {
+    _prepBruise ctrlSetTextColor [1,1,1,0];
+    _prepBruise ctrlShow false;
+    _prepBruise ctrlCommit 0;
 };
 _total

@@ -22,7 +22,7 @@ if (GET_BLOODTYPE(_patient) != -1) exitWith {GET_BLOODTYPE(_patient)};
 private _useList = GVAR(customBloodTypeList_enable);
 
 /*
-    O+ 39% 
+    O+ 39%
     A+ 28%
     B+ 18%
     O- 5%

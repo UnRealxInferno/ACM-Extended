@@ -4,7 +4,16 @@ class CfgPatches {
     class ADDON {
         name = COMPONENT_NAME;
         units[] = {};
-        weapons[] = {};
+        weapons[] = {
+            "ACM_ChestSeal",
+            "ACM_PulseOximeter",
+            "ACM_Stethoscope",
+            "ACM_NCDKit",
+            "ACM_ChestTubeKit",
+            "ACM_ThoracostomyKit",
+            "ACM_PocketBVM",
+            "ACM_BVM"
+        };
         requiredVersion = REQUIRED_VERSION;
         requiredAddons[] = {
             "cba_main",
@@ -26,6 +35,7 @@ class RscText;
 class RscLine;
 class RscStructuredText;
 class RscButtonMenu;
+class RscButton;
 class RscPicture;
 
 #include "\x\ACM\addons\core\UI_defines.hpp"

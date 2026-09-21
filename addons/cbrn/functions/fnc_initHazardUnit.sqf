@@ -143,7 +143,7 @@ private _PFH = [{
                 _patient setVariable [QGVAR(Filter_State), (_filterCondition - _filterDepletionRate) max 0];
             };
         };
-        
+
         if (_blocked) exitWith {};
         _exposed = !_filtered;
         _exposedExternal = true;
@@ -207,7 +207,7 @@ private _PFH = [{
 
     if (_buildup > 0) then {
         [_patient, _buildup, _exposed, _exposedExternal, [_filtered, _protectedBody, _protectedEyes, _filterLevel]] call _thresholdFunction;
-        
+
         if !(isPlayer _patient) then {
             [_patient, _buildup, _hazardType, _exposed, _exposedExternal, [_filtered, _protectedBody, _protectedEyes, _filterLevel]] call FUNC(handleAIEffects);
         };

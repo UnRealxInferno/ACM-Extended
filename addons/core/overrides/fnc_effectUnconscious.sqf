@@ -29,14 +29,14 @@ switch (_mode) do {
         if (_enable) then {
             private _oxygenDeprivation = GET_OXYGEN(ACE_player) < ACM_OXYGEN_UNCONSCIOUS;
             private _fadeInTime = [FX_UNCON_FADE_IN, 0.5] select _oxygenDeprivation;
-            
+
             ACE_player setVariable [QACEGVAR(medical_feedback,effectUnconsciousTimeout), CBA_missionTime + _fadeInTime];
             ACEGVAR(medical_feedback,ppUnconsciousBlur)     ppEffectEnable true;
             ACEGVAR(medical_feedback,ppUnconsciousBlackout) ppEffectEnable true;
 
             ACEGVAR(medical_feedback,ppUnconsciousBlur)     ppEffectAdjust [0];
             ACEGVAR(medical_feedback,ppUnconsciousBlur)     ppEffectCommit 0;
-            
+
             if (_oxygenDeprivation) then {
                 ACEGVAR(medical_feedback,ppUnconsciousBlackout) ppEffectAdjust [1, 1, 0, [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0], [0.25, 0.2, 0, 0, 0, 0, 1]];
                 ACEGVAR(medical_feedback,ppUnconsciousBlackout) ppEffectCommit 0;
@@ -48,11 +48,11 @@ switch (_mode) do {
 
                 ACEGVAR(medical_feedback,ppUnconsciousBlackout) ppEffectAdjust [1, 1, 0, [0, 0, 0, 1], [0, 0, 0, 1], [0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1]];
             };
-            
+
             ACEGVAR(medical_feedback,ppUnconsciousBlackout) ppEffectCommit _fadeInTime;
             ACEGVAR(medical_feedback,ppUnconsciousBlur)     ppEffectAdjust [5];
             ACEGVAR(medical_feedback,ppUnconsciousBlur)     ppEffectCommit _fadeInTime;
-            
+
             // Handle next fade in
             ACEGVAR(medical_feedback,nextFadeIn) = CBA_missionTime + 15 + random 5;
         } else {

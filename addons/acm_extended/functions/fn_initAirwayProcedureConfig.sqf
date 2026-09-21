@@ -74,3 +74,8 @@ ACME_roc_awakeResistClearRate = 1.2;  // SVR points/s after adequate sedation, a
 ACME_roc_postROSCStressDelay = 15;    // seconds after ROSC before acute awake-paralysis stress may build again.
 // ACME_sed_adequateThresh is initialized once with the shared sedation settings above.
 ACME_ettWakeGraceSec       = 5;  // seconds of bucking on a tube before they go back under
+// B120 procedural airway reactivity.  Values are normalized game-effect thresholds, not clinical dose guidance.
+ACME_laryngo_proceduralSedation = 0.75; // sedation load at/above this suppresses the persistent post-attempt irritation worker.
+ACME_laryngo_irritationSec = 45;        // duration after an awake/under-sedated tube attempt.
+ACME_laryngo_irritationPulseMin = 2.0;
+ACME_laryngo_irritationPulseMax = 3.5;

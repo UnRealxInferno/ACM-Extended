@@ -2,7 +2,7 @@
    Native analgesia is separate. An opioid is an adjunct, never a stand-alone hypnotic.
    Keep the six-field contract used by the debug/airway readers. */
 params [["_patient", objNull, [objNull]]];
-if (isNull _patient) exitWith {[0,0,0,0,1,0]};
+if (isNull _patient || {!alive _patient}) exitWith {[0,0,0,0,1,0]};
 private _ket = ([_patient] call ACME_fnc_ketamineOnBoard)
     / ((missionNamespace getVariable ["ACME_ket_induceThreshold", 7]) max 0.1);
 private _prop = [_patient] call ACME_fnc_propofolOnBoard;

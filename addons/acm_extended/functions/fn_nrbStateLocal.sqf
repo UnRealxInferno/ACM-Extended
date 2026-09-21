@@ -3,6 +3,9 @@ if (isNull _patient || {!local _patient}) exitWith {};
 if (_on && {_patient getVariable ["ACME_nrb_on", false]}) exitWith {
     ["NRB is already on this patient.", 2, _medic] call ACME_fnc_netNotice;
 };
+if (_on && {!([_patient] call ACME_fnc_nrbAirwayCompatible)}) exitWith {
+    ["Cannot apply NRB with an advanced airway in place. Use BVM or ventilator support.", 3, _medic] call ACME_fnc_netNotice;
+};
 if (!_on && {!(_patient getVariable ["ACME_nrb_on", false])}) exitWith {};
 [_patient, _on, (_on && _hasO2), false, true, false] call ACME_fnc_nrbStateCommit;
 _patient setVariable ["ACME_nrb_lastO2Uptake", nil, true];

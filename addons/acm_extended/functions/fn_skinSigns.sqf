@@ -23,6 +23,9 @@ private _map = _dia + ((_sys - _dia) / 3);
 private _bv = _patient getVariable ["ACM_circulation_Blood_Volume", 6];
 private _temp = _patient getVariable ["ACME_hypo_temp", 37];
 private _arrest = _patient getVariable ["ace_medical_inCardiacArrest", false];
+private _shockType = toLowerANSI (_patient getVariable ["ACME_shock_phenotype", "none"]);
+private _shockSev = (_patient getVariable ["ACME_shock_severity", 0]) max 0 min 1;
+private _warmShock = (_shockType in ["distributive","neurogenic"]) && {_shockSev >= 0.25} && {_temp >= 36};
 
 // the perfusion tier: 1 is severe or near-arrest, 2 is shock, 3 is mild or compensating and 4 is healthy.
 private _tier = switch (true) do {
@@ -32,23 +35,32 @@ private _tier = switch (true) do {
     default {4};
 };
 
-private _pallor = switch (_tier) do {
-    case 4: {"pink"};
-    case 3: {"slightly pale"};
-    case 2: {"pale"};
-    default {"mottled and gray"};
+private _pallor = if (_warmShock && {_shockType == "distributive"}) then {
+    "flushed"
+} else {
+    switch (_tier) do {
+        case 4: {"pink"};
+        case 3: {"slightly pale"};
+        case 2: {"pale"};
+        default {"mottled and gray"};
+    }
 };
 
 // the skin temperature you would feel: cold from hypothermia, then cool from shock vasoconstriction or mild cold,
 // then warm.
 private _feels = switch (true) do {
     case (_temp < 34): {"cold"};
+    case (_warmShock): {"warm"};
     case (_tier <= 2 || {_temp < 36}): {"cool"};
     default {"warm"};
 };
 
 private _hcDesc = ((missionNamespace getVariable ["ACME_hc_descriptors", false]) isEqualTo true);
-private _moisture = if (_tier <= 2) then {if (_hcDesc) then {"diaphoretic"} else {"clammy"}} else {"dry"};
+private _moisture = if (_warmShock && {_shockType == "neurogenic"}) then {
+    "dry"
+} else {
+    if (_tier <= 2) then {if (_hcDesc) then {"diaphoretic"} else {"clammy"}} else {"dry"}
+};
 
 // the color is the worse of the perfusion tier and the temperature band.
 private _tempScore = switch (true) do {

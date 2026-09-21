@@ -49,15 +49,6 @@ PREP_RECOMPILE_END;
 // Airway Management
 
 [
-    QGVAR(treatmentTimeRecoveryPosition),
-    "SLIDER",
-    [LSTRING(SETTING_TreatmentTime_RecoveryPosition), LSTRING(SETTING_TreatmentTime_RecoveryPosition_Desc)],
-    [ACM_SETTINGS_CATEGORY, LLSTRING(Category_AirwayManagement)],
-    [1, 30, 8, 1],
-    true
-] call CBA_fnc_addSetting;
-
-[
     QGVAR(allowSuctionBag),
     "LIST",
     [LSTRING(SETTING_Allow_SuctionBag), LSTRING(SETTING_Allow_SuctionBag_Desc)],
@@ -102,7 +93,7 @@ PREP_RECOMPILE_END;
     "SLIDER",
     [LSTRING(SETTING_TreatmentTime_NPA), LSTRING(SETTING_TreatmentTime_NPA_Desc)],
     [ACM_SETTINGS_CATEGORY, LLSTRING(Category_AirwayAdjunct)],
-    [1, 30, 5, 1],
+    [1, 30, 3, 1],
     true
 ] call CBA_fnc_addSetting;
 
@@ -111,7 +102,7 @@ PREP_RECOMPILE_END;
     "SLIDER",
     [LSTRING(SETTING_TreatmentTime_SGA), LSTRING(SETTING_TreatmentTime_SGA_Desc)],
     [ACM_SETTINGS_CATEGORY, LLSTRING(Category_AirwayAdjunct)],
-    [1, 30, 7, 1],
+    [1, 30, 5, 1],
     true
 ] call CBA_fnc_addSetting;
 

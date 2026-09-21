@@ -28,16 +28,26 @@ private _eh = _disp displayAddEventHandler ["MouseButtonDown", {
     private _dp   = _u getVariable ["ACME_DP_Active", false];
     if !(_hang || _dp) exitWith { false };  // no cancelable hold -> let RMB do its normal thing
 
+    // B127: capture the exact hold episode before deferring. Without this, an RMB from an ending hold could execute
+    // one frame later after a new hold started and cancel the new episode instead.
+    private _hangStart = _u getVariable ["ACME_hang_Start", -1];
+    private _dpToken = _u getVariable ["ACME_DP_PoseToken", -1];
+
     // fire the matching cancel next frame, so this handler returns, and swallows the RMB, cleanly first.
     [{
+        params ["_hangStart", "_dpToken"];
         private _u = ACE_player;
         if (isNull _u) exitWith {};
-        if (_u getVariable ["ACME_hang_Active", false]) exitWith { [false] call ACME_fnc_hangBagStop; };
-        if (_u getVariable ["ACME_DP_Active", false]) exitWith {
+        if (_u getVariable ["ACME_hang_Active", false]
+            && {(_u getVariable ["ACME_hang_Start", -2]) == _hangStart}) exitWith {
+            [false] call ACME_fnc_hangBagStop;
+        };
+        if (_u getVariable ["ACME_DP_Active", false]
+            && {(_u getVariable ["ACME_DP_PoseToken", -2]) == _dpToken}) exitWith {
             private _reopen = (_u getVariable ["ACME_DP_Mode", ""]) == "torso";
             [false, _u, _reopen] call ACME_fnc_directPressureStop;
         };
-    }, []] call CBA_fnc_execNextFrame;
+    }, [_hangStart, _dpToken]] call CBA_fnc_execNextFrame;
 
     true  // swallow RMB -> the weapon does not aim
 }];

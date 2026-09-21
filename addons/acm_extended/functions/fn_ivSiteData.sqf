@@ -49,8 +49,8 @@ private _map = createHashMapFromArray [
     // signals no band to the dialog. the veinu and veinv are estimates on body_background_ej_view, where screen-right
     // is the patient's left, so tune them in game.
     // the ej takes no midline, because the ej tilt is one fixed frame toward the worked side and reads no reference.
-    ["ej#left",  ["body_background_ej_view", "", 0.560, 0.405, 0.560, 0.405, 0.500]],
-    ["ej#right", ["body_background_ej_view", "", 0.460, 0.405, 0.460, 0.405, 0.500]]
+    ["ej#left",  ["body_background_ej_view", "", 0.560, 0.505, 0.560, 0.505, 0.500]],
+    ["ej#right", ["body_background_ej_view", "", 0.440, 0.505, 0.440, 0.505, 0.500]]
 ];
 
 private _entry = _map getOrDefault [format ["%1#%2", _bp, _s], []];

@@ -6,7 +6,10 @@ if (canSuspend) exitWith {isNil {[_medic, _patient, _quiet] call ACME_fnc_headEl
 [_patient] call ACME_fnc_headElevHoldClear;
 _patient setVariable ["ACME_headElev_treatments", createHashMap, true];
 if (!alive _patient) exitWith {[_patient] call ACME_fnc_headElevDeathRelease;};
-if !(_patient getVariable ["ACME_headElevated", false]) exitWith {[_patient] call ACME_fnc_headElevVestRestore;};
+if !(_patient getVariable ["ACME_headElevated", false]) exitWith {
+    [_patient] call ACME_fnc_headElevVestRestore;
+    [_patient] call ACME_fnc_chestAccessVestRestore;
+};
 _patient setVariable ["ACME_headElev_poseToken", "", true];
 _patient setVariable ["ACME_headElevated", false, true];
 _patient setVariable ["ACME_headElev_Suspended", false, true];
@@ -46,7 +49,10 @@ if (_visibleLower) then {
         if (isNull _patient || {!local _patient} || {!alive _patient}) exitWith {};
         [_patient, true] call ACME_fnc_headElevCollision;
         if (_patient getVariable ["ACME_headElevated", false]) exitWith {};
+        // This is a true Lower Head action: the support carrier may finally return to the body. A separate
+        // backpack-supported chest-access carrier still waits for its own action lease to end.
         [_patient] call ACME_fnc_headElevVestRestore;
+        [_patient] call ACME_fnc_chestAccessVestRestore;
         private _propObj = _patient getVariable ["ACME_headElev_propObj", objNull];
         if (!isNull _propObj) then {detach _propObj; deleteVehicle _propObj;};
         _patient setVariable ["ACME_headElev_propObj", objNull, true];
@@ -55,6 +61,7 @@ if (_visibleLower) then {
 } else {
     [_patient, true] call ACME_fnc_headElevCollision;
     [_patient] call ACME_fnc_headElevVestRestore;
+    [_patient] call ACME_fnc_chestAccessVestRestore;
     private _propObj = _patient getVariable ["ACME_headElev_propObj", objNull];
     if (!isNull _propObj) then {detach _propObj; deleteVehicle _propObj;};
     _patient setVariable ["ACME_headElev_propObj", objNull, true];

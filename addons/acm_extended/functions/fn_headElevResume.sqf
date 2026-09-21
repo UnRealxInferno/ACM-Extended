@@ -1,4 +1,6 @@
-// Restore the elevated animation after a maneuver, provided elevation was not canceled.
+// Restore the elevated animation after a temporary flat maneuver, provided elevation itself was not canceled.
+// B122: the Semi-Fowler support carrier was never re-worn during suspension, so resume only re-seats that same
+// prop. A backpack-supported temporary chest-access vest is restored separately after its final chest-access lease.
 params ["_patient"];
 if (isNull _patient) exitWith {};
 if (!local _patient) exitWith {[_patient, "headElevResume", [_patient]] call ACME_fnc_ownerDispatch;};
@@ -6,38 +8,19 @@ if (!alive _patient) exitWith {[_patient] call ACME_fnc_headElevDeathRelease;};
 if !(_patient getVariable ["ACME_headElevated", false]) exitWith {};
 if !(_patient getVariable ["ACME_headElev_Suspended", false]) exitWith {};
 
-private _suspendVest = +(_patient getVariable ["ACME_headElev_suspendVestLoadout", []]);
-_patient setVariable ["ACME_headElev_suspendKeepVestOut", false, true];
-if ((count _suspendVest) == 2) then {
-    private _vestClass = _suspendVest param [0, "", [""]];
-    if (_vestClass != "") then {
-        // The flat-treatment phase intentionally put the carrier back on the chest. Take that exact carrier back
-        // into elevation custody, then rebuild the non-simulated bolster before the lift animation starts.
-        if ((vest _patient) == _vestClass) then {
-            private _items = vestItems _patient;
-            removeVest _patient;
-            if ((vest _patient) == "") then {
-                _patient setVariable ["ACME_headElev_vestLoadout", +_suspendVest, true];
-                _patient setVariable ["ACME_headElev_vestRemoved", true, true];
-                _patient setVariable ["ACME_headElev_propVest", _vestClass, true];
-                _patient setVariable ["ACME_headElev_propVestItems", _items, true];
+// If the elevated patient uses a backpack, a chest-access action may have temporarily parked the worn carrier.
+// Restore it only when no chest-access owner still needs the chest clear. This is independent of the elevation
+// support carrier, which remains removed for the entire logical Semi-Fowler placement when no backpack exists.
+[_patient] call ACME_fnc_chestAccessVestRestore;
 
-                private _model = getText (configFile >> "CfgWeapons" >> _vestClass >> "model");
-                private _prop = objNull;
-                if (_model != "") then {_prop = createSimpleObject [_model, [0,0,0], false];};
-                if (isNull _prop) then {
-                    _prop = createVehicle ["GroundWeaponHolder", getPosATL _patient, [], 0, "CAN_COLLIDE"];
-                    _prop addItemCargoGlobal [_vestClass, 1];
-                };
-                _patient setVariable ["ACME_headElev_propObj", _prop, true];
-            };
-        };
-    };
-};
+_patient setVariable ["ACME_headElev_suspendKeepVestOut", false, true];
 _patient setVariable ["ACME_headElev_suspendVestLoadout", [], false];
 _patient setVariable ["ACME_headElev_suspendReadyAt", -1, false];
 _patient setVariable ["ACME_headElev_Suspended", false, true];
 _patient setVariable ["ACME_headElev_basePosASL", getPosASL _patient, true];
 _patient setVariable ["ACME_headElev_baseDir", getDir _patient, true];
+
+// No-backpack Semi-Fowler: move the same support carrier from its parked position back behind the upper back.
+// Backpack Semi-Fowler: there is no head-elevation carrier prop and this is intentionally a no-op.
 [_patient] call ACME_fnc_headElevPropApply;
 [_patient] call ACME_fnc_headElevApplyTilt;

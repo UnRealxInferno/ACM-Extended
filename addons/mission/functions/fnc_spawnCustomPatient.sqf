@@ -121,7 +121,7 @@ if (_bloodVolumeArray isNotEqualTo [6,0,0,3]) then {
     _patient setVariable [QEGVAR(circulation,Plasma_Volume), _plasmaVolume, true];
     _patient setVariable [QEGVAR(circulation,Saline_Volume), _salineVolume, true];
     _patient setVariable [QEGVAR(circulation,Platelet_Count), _plateletCount, true];
-}; 
+};
 
 [_patient] call ACEFUNC(medical_engine,updateDamageEffects);
 [_patient, true, true, true, true] call ACEFUNC(medical_engine,updateBodyPartVisuals);
@@ -159,7 +159,7 @@ _patient setVariable [QEGVAR(core,WasWounded), true, true];
 
         _patient setVariable [QEGVAR(breathing,Stethoscope_LungState), ([[1,0], [0,1]] select _chestInjuryTarget), true];
         [_patient] call EFUNC(breathing,updateLungState);
-        
+
     };
 }, [_patient, _airwayStateArray, _chestInjuryArray], 3] call CBA_fnc_waitAndExecute;
 

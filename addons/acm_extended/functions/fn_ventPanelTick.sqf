@@ -4,6 +4,10 @@
 disableSerialization;
 private _dlg = uiNamespace getVariable ["ACME_vent_dlg", displayNull];
 if (isNull _dlg) exitWith {};
+private _provider = _dlg getVariable ["ACME_vent_viewer", objNull];
+if (isNull _provider || {!alive _provider} || {_provider isNotEqualTo ACE_player}
+    || {_provider getVariable ["ACE_isUnconscious", false]}
+    || {isNull (uiNamespace getVariable ["ACME_vent_target", objNull])}) exitWith {_dlg closeDisplay 2;};
 if !([ACE_player, "ventilator", true] call ACME_fnc_procedureAllowed) exitWith {
     [87700] call ACME_fnc_minigameClose;
 };
@@ -11,7 +15,7 @@ if !([ACE_player, "ventilator", true] call ACME_fnc_procedureAllowed) exitWith {
 private _custodyTarget = uiNamespace getVariable ["ACME_vent_target", objNull];
 private _tgtM = uiNamespace getVariable ["ACME_vent_target", ACE_player];
 if (!isNull _custodyTarget && {_custodyTarget isNotEqualTo ACE_player}
-    && {!alive _custodyTarget || {!(_custodyTarget getVariable ["ACME_vent_onPatient", false])} || {_custodyTarget getVariable ["ACME_vent_recovering", false]}}) exitWith {
+    && {!(_custodyTarget getVariable ["ACME_vent_onPatient", false]) || {_custodyTarget getVariable ["ACME_vent_recovering", false]}}) exitWith {
     [87700] call ACME_fnc_minigameClose;
 };
 
@@ -89,7 +93,7 @@ if (diag_tickTime > (uiNamespace getVariable ["ACME_vent_measBpmNextT", 0])) the
     private _alarms = if (isNull _tgtM) then {[]} else {_tgtM getVariable ["ACME_vent_alarms", []]};
     private _nAlarm = count _alarms;
     private _silUntil = if (isNull _tgtM) then {0} else {_tgtM getVariable ["ACME_vent_alarmSilencedUntil", 0]};
-    private _silenced = (_nAlarm > 0) && {CBA_missionTime < _silUntil};
+    private _silenced = (_nAlarm > 0) && {serverTime < _silUntil};
     // keep the retired status control empty and invisible, so it can never paint into the gap again.
     private _stCtrl = _dlg displayCtrl 87766;
     if (!isNull _stCtrl) then { _stCtrl ctrlSetText ""; _stCtrl ctrlShow false; };
@@ -435,7 +439,7 @@ if (!isNull _alarmBox) then {
     private _anyA = if (isNull _tgtA) then {[]} else {_tgtA getVariable ["ACME_vent_alarms", []]};
     private _statA = if (isNull _tgtA) then {""} else {_tgtA getVariable ["ACME_vent_status", ""]};
     private _silA = if (isNull _tgtA) then {0} else {_tgtA getVariable ["ACME_vent_alarmSilencedUntil", 0]};
-    private _showRed = (count _anyA > 0) && {CBA_missionTime >= _silA};
+    private _showRed = (count _anyA > 0) && {serverTime >= _silA};
     if (_showRed) then {
         // the highest-priority active alarm wins the box. severity 3, HIGH, beats 2, which beats 1, and within a tier
         // the first in the list wins. its letter goes on the red field.

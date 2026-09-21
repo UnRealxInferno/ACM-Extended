@@ -108,7 +108,7 @@ private _PFH = [{
                     EGVAR(core,ppAnestheticEffect_chrom) ppEffectEnable false;
                 };
             }, [_patient, _anestheticEffect], 10] call CBA_fnc_waitAndExecute;
-        };        
+        };
     };
 
     if (GVAR(AnestheticEffect_NextPulse) > CBA_missionTime) exitWith {};

@@ -47,5 +47,5 @@ if ((ACEGVAR(medical_treatment,consumeSurgicalKit) == 2 || _useSuture) && {_targ
     ([_medic, _patient, ["ACE_suture"]] call ACEFUNC(medical_treatment,useItem)) params ["_user"];
     !isNull _user;
 } else {
-    true;  
+    true;
 };

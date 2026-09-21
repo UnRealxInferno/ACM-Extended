@@ -16,8 +16,5 @@ if !(_medic isEqualTo _localPlayer) exitWith {};
 _medic setVariable ["ACME_emma_lastContactPatient", _patient, false];
 _medic setVariable ["ACME_emma_lastContactTime", CBA_missionTime, false];
 
-// also write a patient-side breadcrumb keyed by UID, for debugging and future multiplayer use.
-private _uid = getPlayerUID _medic;
-if (_uid isNotEqualTo "") then {
-    _patient setVariable [format ["ACME_emma_contact_%1", _uid], CBA_missionTime, true];
-};
+// EMMA routing stays provider-local. The old patient-side per-UID public timestamp had no reader,
+// added network traffic on every contact, and unnecessarily exposed a stable player identifier in patient state.

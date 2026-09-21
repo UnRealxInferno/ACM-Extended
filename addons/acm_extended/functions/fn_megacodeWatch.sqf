@@ -60,14 +60,18 @@ if (_pulseless) then {
     private _last = _d getVariable ["ACME_MC_arrestLast", _now];
     private _elapsed = _d getVariable ["ACME_MC_arrestElapsed", 0];
     private _cpr = alive (_d getVariable ["ace_medical_CPR_provider", objNull]);
-    _d setVariable ["ACME_MC_arrestLast", _now, true];
+    // Scheduler bookkeeping is server-local. Publishing it once per second was
+    // pure traffic; only the final scenario state needs replication.
+    _d setVariable ["ACME_MC_arrestLast", _now, false];
     if (!_cpr) then { _elapsed = _elapsed + (_now - _last); };
-    _d setVariable ["ACME_MC_arrestElapsed", _elapsed, true];
+    _d setVariable ["ACME_MC_arrestElapsed", _elapsed, false];
 
     private _limit = missionNamespace getVariable ["ACME_megacode_deathTime", 240];
     if (_limit > 0 && {_elapsed >= _limit}) then { [_d] call ACME_fnc_megacodeDie; };
 } else {
     // perfusing again, so clear the clock.
-    _d setVariable ["ACME_MC_arrestElapsed", 0, true];
-    _d setVariable ["ACME_MC_arrestLast", _now, true];
+    _d setVariable ["ACME_MC_arrestElapsed", 0, false];
+    // Scheduler bookkeeping is server-local. Publishing it once per second was
+    // pure traffic; only the final scenario state needs replication.
+    _d setVariable ["ACME_MC_arrestLast", _now, false];
 };

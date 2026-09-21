@@ -22,14 +22,23 @@ private _severity = (_state getOrDefault ["severity", 0]) max 0 min 1;
 private _stage    = _state getOrDefault ["herniationStage", 0];
 private _cushing  = _state getOrDefault ["cushing", false];
 private _compFrac = _state getOrDefault ["compFrac", 0];
+private _autonomicIntegrity = (_state getOrDefault ["autonomicIntegrity", 1]) max 0.05 min 1;
+private _autonomicTone = (_state getOrDefault ["autonomicTone", 0]) max -1 min 1;
 
 private _cushICP  = missionNamespace getVariable ["ACME_tbi_vitalsCushICP", 25];
 private _hernICP  = missionNamespace getVariable ["ACME_tbi_herniationICP", 30];
 
-// it engages once the cushing reflex fires or any herniation stage exists. otherwise it stands the pattern down,
-// restores what we borrowed, and lets ACM own the vitals completely.
+// The full Cushing/brainstem vital pattern engages once pressure is high or herniation has started. B119 also
+// allows a resistance-only autonomic path after severe perfusion reserve has failed. That path deliberately does
+// not manufacture Cushing bradycardia, abnormal respirations or a hypertensive target when ICP is still low; it
+// only lets the already-computed signed autonomic tone alter systemic vascular resistance.
 private _engaged = _cushing || {_stage > 0} || {_icp >= _cushICP};
-if (!_engaged) exitWith {
+private _autonomicDecomp = (_state getOrDefault ["autonomicDecomp", 0]) max 0 min 1;
+private _vascularOnly = (!_engaged)
+    && {!(_patient getVariable ["ace_medical_inCardiacArrest", false])}
+    && {_autonomicDecomp >= (missionNamespace getVariable ["ACME_tbi_autonomicChaosStart", 0.35])}
+    && {abs _autonomicTone >= 0.05};
+if (!_engaged && {!_vascularOnly}) exitWith {
     [_patient, "ACME_hrTarget_tbi", -1] call ACME_fnc_setVarNet;
     [_patient, "ACME_rrDrive_tbi", -1] call ACME_fnc_setVarNet;
     [_patient, "ACME_tbi_bpDiaOffset", 0] call ACME_fnc_setVarNet;
@@ -42,9 +51,37 @@ if (!_engaged) exitWith {
         [_patient, "ACME_cs_active", false] call ACME_fnc_setVarNet;
     };
     if !(isNil {_patient getVariable "ACME_tbi_savedRRTarget"}) then {
-
         [_patient, "ACME_tbi_savedRRTarget", nil] call ACME_fnc_setVarNet;
     };
+    _state set ["termClock", 0];
+};
+
+if (_vascularOnly) exitWith {
+    // Release every pressure-pattern output and leave only the systemic resistance contribution active.
+    [_patient, "ACME_hrTarget_tbi", -1] call ACME_fnc_setVarNet;
+    [_patient, "ACME_rrDrive_tbi", -1] call ACME_fnc_setVarNet;
+    [_patient, "ACME_tbi_bpDiaOffset", 0] call ACME_fnc_setVarNet;
+    [_patient, "ACME_tbi_bpSysOffset", 0] call ACME_fnc_setVarNet;
+    [_patient, "ACME_tbi_pulsePressureTarget", -1] call ACME_fnc_setVarNet;
+    if ((_patient getVariable ["ACME_cs_active", false]) && {isNil {_patient getVariable "ACME_cs_savedRR"}}) then {
+        [_patient, "ACME_cs_active", false] call ACME_fnc_setVarNet;
+    };
+    if !(isNil {_patient getVariable "ACME_tbi_savedRRTarget"}) then {
+        [_patient, "ACME_tbi_savedRRTarget", nil] call ACME_fnc_setVarNet;
+    };
+
+    private _curTbiResist = _patient getVariable ["ACME_tbi_resistAdd", 0];
+    private _baseR = ((_patient getVariable ["ace_medical_peripheralResistance", 100])
+        - (_patient getVariable ["ACME_resistanceApplied_tbi", 0])) max 1;
+    private _gain = if (_autonomicTone >= 0) then {
+        missionNamespace getVariable ["ACME_tbi_autonomicVasoGain", 0.30]
+    } else {
+        missionNamespace getVariable ["ACME_tbi_autonomicVasodilGain", 0.45]
+    };
+    private _wantTbiResist = (_baseR * _autonomicTone * _gain) max (1 - _baseR);
+    private _resistStep = (missionNamespace getVariable ["ACME_tbi_resistStepPerSec", 40]) * _dt;
+    private _nextTbiResist = _curTbiResist + (((_wantTbiResist - _curTbiResist) max (-_resistStep)) min _resistStep);
+    [_patient, "ACME_tbi_resistAdd", _nextTbiResist] call ACME_fnc_setVarNet;
     _state set ["termClock", 0];
 };
 
@@ -85,6 +122,7 @@ _ci = _ci max 0 min 1;
 // a continuous decline.
 private _hernDecomp = missionNamespace getVariable ["ACME_tbi_herniationStageDecomp", [0, 0.15, 0.30, 1.0]];
 private _decomp = (((_compFrac - 1) max 0) min 1) max (_hernDecomp param [((_stage min 3) max 0), 0]);
+_decomp = _decomp max (((-_autonomicTone) max 0) * 0.85);
 _decomp = _decomp max 0 min 1;
 
 // oscillation, with a per-unit phase so casualties do not pulse in lockstep.
@@ -94,7 +132,7 @@ private _ws   = (missionNamespace getVariable ["ACME_tbi_waveSpeed", 0.16]) * (1
 private _tDeg = ((CBA_missionTime * _ws * 57.2958) + _phase) % 360;
 private _wave  = sin _tDeg;  // the primary slow wave.
 private _wave2 = sin (_tDeg * 1.7 + 40);  // a faster secondary wave, the respiratory irregularity.
-private _instab = 0.30 + (0.45 * _decomp);  // the swing grows as it destabilizes, and it is gentler than before. it was 0.35+0.65*decomp, reaching a full 1.0 at terminal, which made the numbers thrash.
+private _instab = (0.22 + (0.43 * _decomp) + (0.35 * (1 - _autonomicIntegrity))) min 1;
 
 // heart rate.
 // cushing bradycardia, where a deeper surge gives a lower hr, sliding to a terminal arrest-range hr as it
@@ -126,7 +164,8 @@ private _diaT = linearConversion [0, 1, _ci, (missionNamespace getVariable ["ACM
 _sysT = linearConversion [0, 1, _decomp, _sysT, (missionNamespace getVariable ["ACME_tbi_collapseSys", 70])];
 _diaT = linearConversion [0, 1, _decomp, _diaT, (missionNamespace getVariable ["ACME_tbi_collapseDia", 44])];
 // plateau-wave swings on the systolic, with a smaller share on the diastolic.
-private _bpWave = _wave * (missionNamespace getVariable ["ACME_tbi_bpWaveAmp", 20]) * _instab;
+private _toneLability = 0.65 + (0.55 * (1 - _autonomicIntegrity)) + (0.20 * abs _autonomicTone);
+private _bpWave = _wave * (missionNamespace getVariable ["ACME_tbi_bpWaveAmp", 20]) * _instab * _toneLability;
 _sysT = (_sysT + _bpWave) max 40 min 260;
 _diaT = (_diaT + (_bpWave * 0.4)) max 25 min (_sysT - 12);
 
@@ -159,6 +198,17 @@ private _slope = (_probeMAP - _tbiMAPnative) / 100;
 private _wantTbiResist = 0;
 if (_slope > 0.001 && {finite _slope}) then {
     _wantTbiResist = (_tbiMAPdelta / _slope) max (1 - _baseR);
+};
+// The desired pressure says what the brain wants; autonomic integrity/tone says how coherently it can achieve it
+// through systemic vascular resistance. This still feeds the single native peripheral-resistance composition path.
+if (_wantTbiResist >= 0) then {
+    private _symp = _autonomicTone max 0;
+    private _capacity = ((0.60 + (0.40 * _autonomicIntegrity)) * (0.55 + (0.45 * _symp))) max 0.20 min 1;
+    _wantTbiResist = _wantTbiResist * _capacity;
+} else {
+    private _failure = (-_autonomicTone) max 0;
+    private _collapseCapacity = (0.25 + (0.55 * _failure) + (0.35 * (1 - _autonomicIntegrity))) min 1;
+    _wantTbiResist = _wantTbiResist * _collapseCapacity;
 };
 // ease the resistance add at the same visible rate as the bp tells, and let it go negative in decompensated
 // collapse, where the failing brain drops MAP below native and gives vasodilation and hypotension, so

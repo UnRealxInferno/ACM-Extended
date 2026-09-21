@@ -37,7 +37,7 @@ _patient setVariable [QGVAR(AED_MotionDetected_LastMotion), CBA_missionTime];
     _args params ["_medic", "_patient"];
 
     private _motionCeased = (_patient getVariable [QGVAR(AED_MotionDetected_LastMotion), -1]) + 2 < CBA_missionTime;
-    
+
     if (!([_patient] call FUNC(hasAED)) || _motionCeased || !(_patient getVariable [QGVAR(AED_Analyze_Busy), false])) exitWith {
         if (_motionCeased) then {
             [{

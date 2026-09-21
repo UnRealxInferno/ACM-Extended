@@ -1,6 +1,14 @@
 /* Registered on every machine. The server owns device allocation; unit owners own inventory. */
 if (missionNamespace getVariable ["ACME_vent_custodyInitialized", false]) exitWith {};
 missionNamespace setVariable ["ACME_vent_custodyInitialized", true];
+["ACME_ventManualAccepted", {
+    params ["_patient", "_medic", "_custody"];
+    if (hasInterface && {_medic isEqualTo ACE_player}
+        && {(uiNamespace getVariable ["ACME_vent_target", objNull]) isEqualTo _patient}
+        && {_custody == (_patient getVariable ["ACME_vent_custodyId", ""])}) then {
+        uiNamespace setVariable ["ACME_vent_manualGaugeT", diag_tickTime];
+    };
+}] call CBA_fnc_addEventHandler;
 ["ACME_ventSimpleManualAccepted", {
     params ["_patient", "_medic", "_custody"];
     if (hasInterface && {_medic isEqualTo ACE_player}

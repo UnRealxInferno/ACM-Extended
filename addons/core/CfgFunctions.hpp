@@ -240,15 +240,22 @@ class CfgFunctions {
             };
         };
     };
+    class overwrite_ace_zeus {
+        tag = "ace_zeus";
+        class ace_zeus {
+            class moduleUnconscious { // Preserve ACE AI unconsciousness ownership semantics
+                file = QPATHTOF(overrides\fnc_moduleUnconscious.sqf); //ace/addons/zeus/functions/fnc_moduleUnconscious.sqf
+            };
+        };
+    };
     class overwrite_ace_dragging {
         tag = "ace_dragging";
         class ace_dragging {
             class startCarryLocal { // Assist carry action
                 file = QPATHTOF(overrides\fnc_startCarryLocal.sqf); //ace/addons/dragging/functions/fnc_startCarryLocal.sqf
             };
-            class dropObject_carry { // Handle dropping animation
-                file = QPATHTOF(overrides\fnc_dropObject_carry.sqf); //ace/addons/dragging/functions/fnc_dropObject_carry.sqf
-            };
+            // dropObject_carry is intentionally not overridden. ACE prepares that function from its own source
+            // during startup; ACME preserves the lying-state behavior through ace_dragging_stoppedCarry instead.
             class handleUnconscious { // Cancel carrying prompt, prevent dropping woken-up casualties
                 file = QPATHTOF(overrides\fnc_handleUnconscious.sqf); //ace/addons/dragging/functions/fnc_handleUnconscious.sqf
             };

@@ -93,6 +93,7 @@ _patient setVariable [QGVAR(AED_Placement_Pads), false, true];
 _patient setVariable [QGVAR(AED_Pads_LastSync), CBA_missionTime];
 _patient setVariable [QGVAR(AED_Pads_Display), 0, true];
 _patient setVariable [QGVAR(AED_LastShock), nil, true];
+_patient setVariable ["ACME_sync_armed", false, true];
 _patient setVariable [QGVAR(AED_ShockTotal), 0, true];
 
 _patient setVariable [QGVAR(AED_Placement_PulseOximeter), -1, true];

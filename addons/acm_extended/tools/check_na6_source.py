@@ -17,7 +17,6 @@ LABELS = {
  'ACME_hc_hpmk':'[HARDCORE] Rewarming',
  'ACME_hc_tbi':'[HARDCORE] TBI',
  'ACME_hc_circ':'[HARDCORE] Shock',
- 'ACME_hc_transfusion':'[HARDCORE] Transfusion',
  'ACME_hc_vesicant':'[HARDCORE] Extravasation',
  'ACME_hc_hypothermia':'[HARDCORE] Hypothermia',
  'ACME_hc_flight':'[HARDCORE] Flight Physiology',

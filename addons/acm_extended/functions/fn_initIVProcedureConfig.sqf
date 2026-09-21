@@ -38,9 +38,12 @@ ACME_iv_padTiltSpan   = 0.030;
 ACME_iv_prepSpacing     = 0.011;  // body fractions of travel before the next dab lands.
 
 // THE LIFE OF A MISS BRUISE. a puncture HOLE is permanent for the life of the body. a bruise resolves.
-// it darkens over the first 15 s, holds, then fades out across the last stretch and is gone at the life.
-ACME_iv_bruiseLifeSec     = 1200;  // twenty minutes of mission time from the stick to fully gone.
-ACME_iv_bruiseFadeOutSec  = 300;   // the last five minutes of that life are the fade.
+// it darkens over the configured fade-in, holds, then fades out across the last stretch and is gone at the life.
+ACME_iv_bruiseLifeSec       = 1200;  // twenty minutes of mission time from the stick to fully gone.
+ACME_iv_bruiseFadeOutSec    = 300;   // the last five minutes of that life are the fade.
+ACME_iv_bruiseFadeInSec     = 5.0;   // the larger immediate IV-site haematoma develops over a few seconds instead of popping in.
+ACME_iv_newBruiseFadeInSec  = 2.5;   // newer scattered contusions/track marks are smaller and surface faster.
+ACME_iv_extravasationFadeInSec = 4.0; // first visible infiltration/extravasation is broader, so it develops a little more slowly.
 // THE BRUISE. keep working one patch and the red stops being antiseptic and becomes a mark in the skin. the
 // trigger is the MEAN passes per cell, so a long single-pass scrub over a wide area never bruises and a hard
 // scrub over one small patch does. the SIZE comes from the wiped area, as the cell count times the cell area.

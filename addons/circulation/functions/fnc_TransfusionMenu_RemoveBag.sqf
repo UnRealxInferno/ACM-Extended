@@ -19,81 +19,39 @@
 private _display = uiNamespace getVariable [QGVAR(TransfusionMenu_DLG), displayNull];
 private _ctrlBagPanel = _display displayCtrl IDC_TRANSFUSIONMENU_LEFTLISTPANEL;
 private _selectionIndex = lbCurSel _ctrlBagPanel;
-
 if (_selectionIndex < 0) exitWith {};
 
-private _fnc_completeRemoval = {
-    params ["_IVBags", "_IVBagsOnBodyPart", "_targetIndex", "_itemClassName", "_type", "_returnVolume", "_totalVolume"];
-
-    private _returnedItem = [true];
-
-    if (_returnVolume > 0) then {
-        if (_type == "FBTK" && _returnVolume >= 250) then {
-            // B96: the donor registry and unique bag ID are owned by the server. Client-side ID generation was
-            // vulnerable to JIP clients having no FreshBloodList yet and to two medics allocating the same ID.
-            // Delivery is acknowledged back to this medic by the server event registered in XEH_postInit.
-            [QGVAR(requestFreshBloodBag), [ACE_player, GVAR(TransfusionMenu_Target), _returnVolume]] call CBA_fnc_serverEvent;
-            _returnedItem = [true];
-        } else {
-            _returnedItem = [ACE_player, _itemClassName] call ACEFUNC(common,addToInventory);
-        };
-    } else {
-        if (_type == "FBTK") then {
-            _returnedItem = [ACE_player, (format ["ACM_FieldBloodTransfusionKit_%1", _totalVolume])] call ACEFUNC(common,addToInventory);
-        };
-    };
-
-    private _returned = (_returnedItem select 0);
-
-    if !(_returned) then {
-        [ACELLSTRING(common,Inventory_Full), 1.5, ACE_player] call ACEFUNC(common,displayTextStructured);
-    };
-
-    _IVBagsOnBodyPart deleteAt _targetIndex;
-    _IVBags set [GVAR(TransfusionMenu_Selected_BodyPart), _IVBagsOnBodyPart];
-
-    GVAR(TransfusionMenu_Target) setVariable [QGVAR(IV_Bags), _IVBags, true];
-};
-
+private _patient = GVAR(TransfusionMenu_Target);
+private _part = GVAR(TransfusionMenu_Selected_BodyPart);
 private _targetIndex = (GVAR(TransfusionMenu_Selection_IVBags) select _selectionIndex) select 8;
+private _map = _patient getVariable [QGVAR(IV_Bags), createHashMap];
+private _arr = _map getOrDefault [_part, []];
+if (_targetIndex < 0 || {_targetIndex >= count _arr}) exitWith {};
+private _bag = +(_arr select _targetIndex);
+_bag params ["_type", "_remainingVolume", "_accessType", "_accessSite", "_iv", "_bloodType", "_volume"];
+private _bagUid = _bag param [8, "", [""]];
+private _expectedSig = +(_bag select [0, 8]);
 
-private _IVBags = GVAR(TransfusionMenu_Target) getVariable [QGVAR(IV_Bags), createHashMap];
-private _IVBagsOnBodyPart = _IVBags getOrDefault [GVAR(TransfusionMenu_Selected_BodyPart), []];
-
-private _bagContents = +(_IVBagsOnBodyPart select _targetIndex);
-
-_bagContents params ["_type", "_remainingVolume", "_accessType", "_accessSite", "_iv", "_bloodType", "_volume"];
-
+// Progress text is presentation-only. Inventory return happens only after the patient owner accepts the exact bag.
 private _returnVolume = [_remainingVolume] call FUNC(getReturnVolume);
+if (_type == "FBTK") then {
+    private _tol = missionNamespace getVariable ["ACME_fbtk_fullToleranceMl", 1];
+    if (!(_tol isEqualType 0) || {!finite _tol}) then {_tol = 1;};
+    _tol = (_tol max 0) min 5;
+    if (_remainingVolume >= ((_volume - _tol) max 0)) then {_returnVolume = _volume;};
+};
+private _itemClass = if (_type == "FBTK" && {_returnVolume <= 0}) then {format ["ACM_FieldBloodTransfusionKit_%1", _volume]} else {[_type, _returnVolume, _bloodType] call FUNC(formatFluidBagName)};
+private _itemName = getText (configFile >> "CfgWeapons" >> _itemClass >> "displayName");
+private _epoch = [_patient] call ACME_fnc_clinicalEpoch;
+private _requestId = format ["txrm:%1:%2:%3", clientOwner, diag_frameNo, floor (diag_tickTime * 1000)];
 
-private _itemClassName = [_type, _returnVolume, _bloodType] call FUNC(formatFluidBagName);
-private _itemClassNameString = getText (configFile >> "CfgWeapons" >> _itemClassName >> "displayName");
-
-private _funcParams = [_IVBags, _IVBagsOnBodyPart, _targetIndex, _itemClassName, _type, _returnVolume, _volume];
-
-[[ACE_player, GVAR(TransfusionMenu_Target), _type, _returnVolume, _bloodType, _fnc_completeRemoval, _funcParams], {
-    params ["_medic", "_patient", "_type", "_returnVolume", "_bloodType", "_fnc_completeRemoval", "_funcParams"];
-    
-    _funcParams call _fnc_completeRemoval;
-
-    private _fluidBagString = "";
-
-    if (_type == "FBTK") then {
-        _fluidBagString = format ["%1 %2ml", "FBTK", _returnVolume];
-    } else {
-        _fluidBagString = [([_type, _returnVolume, _bloodType, true] call FUNC(formatFluidBagName))] call FUNC(getFluidBagString);
-    };
-    [_patient, "activity", LSTRING(TransfusionMenu_RemoveBag_ActionLog), [[_medic, false, true] call ACEFUNC(common,getName), (_fluidBagString), ([GVAR(TransfusionMenu_Selected_BodyPart)] call EFUNC(core,getBodyPartString))]] call ACEFUNC(medical_treatment,addToLog);
+[[ACE_player, _patient, _part, _bagUid, _targetIndex, _expectedSig, _epoch, _requestId], {
+    params ["_medic", "_patient", "_part", "_bagUid", "_targetIndex", "_expectedSig", "_epoch", "_requestId"];
+    uiNamespace setVariable ["ACME_txRemovePending", _requestId];
+    [_patient, "transfusionRemoveBag", [_patient, _medic, _part, _bagUid, _targetIndex, _expectedSig, _epoch, _requestId]] call ACME_fnc_ownerDispatch;
     closeDialog 0;
-    
-    [{
-        params ["_medic", "_patient"];
-
-        [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart)] call FUNC(openTransfusionMenu);
-    }, [_medic, _patient], 0.05] call CBA_fnc_waitAndExecute;
 }, {
-    params ["_medic", "_patient"];
+    params ["_medic", "_patient", "_part"];
     closeDialog 0;
-    
-    [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart)] call FUNC(openTransfusionMenu);
-}, (format [LLSTRING(TransfusionMenu_RemoveBag_Progress), _itemClassNameString]), 2.5] call EFUNC(core,progressBarAction);
+    [_medic, _patient, _part] call FUNC(openTransfusionMenu);
+}, (format [LLSTRING(TransfusionMenu_RemoveBag_Progress), _itemName]), 2.5] call EFUNC(core,progressBarAction);

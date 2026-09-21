@@ -29,25 +29,27 @@ private _id = [{
     _args params ["_patient", ["_fromTXA", false]];
 
     private _plateletCount = _patient getVariable [QEGVAR(circulation,Platelet_Count), 3];
+    private _clotStrength = (_patient getVariable ["ACME_coag_clotStrength", 1]) max 0.08 min 1.15;
 
     if !(alive _patient) exitWith {
         _patient setVariable [QGVAR(IBCoagulation_PFH), -1];
         _patient setVariable [QGVAR(IBCoagulation_Active), false, true];
         [_idPFH] call CBA_fnc_removePerFrameHandler;
     };
-    
+
     private _txaCount = ([_patient, "TXA_IV", false] call ACEFUNC(medical_status,getMedicationCount)) min 2.2;
 
     if ((_patient getVariable [QGVAR(IBCoagulation_NextAttempt), 0]) > CBA_missionTime) exitWith {};
-    _patient setVariable [QGVAR(IBCoagulation_NextAttempt), (CBA_missionTime + 9 - ((_txaCount * 3) + _plateletCount))];
+    private _interval = ((9 - ((_txaCount * 3) + _plateletCount)) max 1.5) / (0.35 + (0.65 * _clotStrength));
+    _patient setVariable [QGVAR(IBCoagulation_NextAttempt), CBA_missionTime + _interval];
 
-    if (GET_HEART_RATE(_patient) < 20 || (_plateletCount < 0.1 && _txaCount < 0.1) || (GET_EFF_BLOOD_VOLUME(_patient) < 3.6)) exitWith {};
+    if (GET_HEART_RATE(_patient) < 20 || (_plateletCount < 0.1 && _txaCount < 0.1) || (GET_EFF_BLOOD_VOLUME(_patient) < 3.6) || {_clotStrength < 0.10 && {_txaCount < 0.5}}) exitWith {};
 
     private _exit = true;
 
     private _clotEffectiveness = 1;
 
-    if (_plateletCount > 4 || _txaCount > 0.35) then {
+    if ((_plateletCount > 4 || _txaCount > 0.35) && {_clotStrength >= 0.70}) then {
         _clotEffectiveness = 2;
     };
 
@@ -63,17 +65,19 @@ private _id = [{
             _exit = false;
             continue;
         };
-        
+
         private _woundIndex = _internalWoundsOnPart findIf {(_x select 1) > 0};
 
         if (_woundIndex != -1) exitWith {
             (_internalWoundsOnPart select _woundIndex) params ["_woundType", "_woundCount", "_woundBleeding"];
-            
+
             private _woundSeverity = _woundType % 10;
             private _txaEffect = 1 + (2 min _txaCount);
             private _bloodVolumEffect = (GET_EFF_BLOOD_VOLUME(_patient) / 4.5) min 1;
 
-            if (_woundSeverity == 1 || {_woundSeverity == 2 && (random 1 < 0.3 * _txaEffect * _bloodVolumEffect)}) then {
+            private _minorChance = (0.30 + (0.70 * _clotStrength)) min 1;
+            private _majorChance = (0.3 * _txaEffect * _bloodVolumEffect * _clotStrength) min 1;
+            if ((_woundSeverity == 1 && {random 1 < _minorChance}) || {_woundSeverity == 2 && {random 1 < _majorChance}}) then {
                 private _newWoundCount = _woundCount - _clotEffectiveness;
 
                 if (_newWoundCount < 1) then {

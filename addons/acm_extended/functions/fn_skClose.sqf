@@ -4,7 +4,10 @@ disableSerialization;
 params ["_display"];
 private _restore = uiNamespace getVariable ["ACME_SK_RestoreMouse", []];
 private _switch = (_restore isEqualType []) && {count _restore == 2};
-if (!_switch && {(uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "compound"}) then {
+private _infusion = !((_display getVariable ["ACME_SK_Return", []]) isEqualTo []);
+// Infusion prep borrows the Narc Box compound plunger engine, but its contents are committed only by Inject Into Bag.
+// Never let the Narc Box close handler auto-save that transient infusion syringe as a stored compound syringe.
+if (!_switch && {!_infusion} && {(uiNamespace getVariable ["ACME_SK_WasteStage", ""]) == "compound"}) then {
     call ACME_fnc_skPendingTagCommit;
     call ACME_fnc_skCompoundCommit;
 };
@@ -14,6 +17,7 @@ uiNamespace setVariable ["ACME_SK_TagEditMode", false];
 uiNamespace setVariable ["ACME_SK_CarouselZoneHover", false];
 uiNamespace setVariable ["ACME_SK_PendingInjection", []];
 uiNamespace setVariable ["ACME_SK_DiscardArmedId", ""];
+[ACE_player] call ACME_fnc_vialLeaseRelease;
 {
     private _h = uiNamespace getVariable [_x, -1];
     if (_h >= 0) then {[_h] call CBA_fnc_removePerFrameHandler;};
@@ -27,6 +31,10 @@ call ACME_fnc_restoreMedicationList;
 private _return = _display getVariable ["ACME_SK_Return", []];
 private _patient = _display getVariable ["ACME_SK_ReturnPatient", objNull];
 private _suppressReturn = uiNamespace getVariable ["ACME_SK_suppressReturn", false];
+// B121: closing the Narc Box during a one-handed push means genuinely closing the UI. Do not force the ACE
+// medical menu back open underneath the corner syringe. The persistent push PFH is deliberately untouched.
+private _hcPushClose = missionNamespace getVariable ["ACME_HCMedPushJob",createHashMap];
+if (_hcPushClose isEqualType createHashMap && {count _hcPushClose > 0} && {_hcPushClose getOrDefault ["flowing",false]}) then {_suppressReturn = true;};
 ACME_infusion_pendingContext = nil;
 missionNamespace setVariable ["ACME_infusion_bagTally", []];
 uiNamespace setVariable ["ACME_SK_suppressReturn", false];

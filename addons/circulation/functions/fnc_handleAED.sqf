@@ -35,7 +35,9 @@ _patient setVariable [QGVAR(AED_EKGRhythm), -2, true];
 _patient setVariable [QGVAR(AED_PORhythm), -2, true];
 _patient setVariable [QGVAR(AED_CORhythm), -2, true];
 
-if (_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Asystole,ACM_Rhythm_VF,ACM_Rhythm_PVT,ACM_Rhythm_VT]) then {
+private _initialTorsadesPulseless = (_patient getVariable ["ACME_rhythm_active",0]) == 102
+    && {_patient getVariable ["ACME_rhythm_torsadesNonPerfusing",false]};
+if ((_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Asystole,ACM_Rhythm_VF,ACM_Rhythm_PVT,ACM_Rhythm_VT]) || {_initialTorsadesPulseless}) then {
     _patient setVariable [QGVAR(AED_Alarm_CardiacArrest_State), true];
     _patient setVariable [QGVAR(AED_Alarm_State), true];
 
@@ -98,6 +100,9 @@ private _PFH = [{
         // one-second cadence.  Every consumer below reads that same cached value.
         private _ekgHR = [_patient] call FUNC(updateEKGHeartRate);
         private _rhythmState = _patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus];
+        private _effectiveRhythm = [_patient] call ACME_fnc_rhythmGet;
+        private _torsadesPulseless = _effectiveRhythm == 102
+            && {_patient getVariable ["ACME_rhythm_torsadesNonPerfusing",false]};
 
         // Restore ACM's monitor sampling behavior: the large numeric HR updates once per monitor sample rather than
         // visually racing through every intermediate value while the physiologic HR is moving.
@@ -115,7 +120,6 @@ private _PFH = [{
             if (_ekgHR > 0) then {
                 private _lastBeep = _patient getVariable [QGVAR(AED_Pads_LastBeep), -1];
                 private _nominalRR = 60 / _ekgHR;
-                private _effectiveRhythm = [_patient] call ACME_fnc_rhythmGet;
                 private _afibClock = _effectiveRhythm in [100, 103];
                 // One selected R-R interval owns BOTH the next audible beat and the next rendered R wave. Keep that
                 // interval fixed for the duration of a beat instead of recalculating the due time every frame from a
@@ -138,13 +142,15 @@ private _PFH = [{
                 };
                 if (!(_hrDelay isEqualType 0) || {!finite _hrDelay} || {_hrDelay <= 0}) then {_hrDelay = _nominalRR;};
 
-                if (!(_patient getVariable [QGVAR(AED_Alarm_State), false]) && {_rhythmState in [ACM_Rhythm_VF,ACM_Rhythm_PVT]}) then {
+                if (!(_patient getVariable [QGVAR(AED_Alarm_State), false]) && {(_rhythmState in [ACM_Rhythm_VF,ACM_Rhythm_PVT]) || {_torsadesPulseless}}) then {
                     _patient setVariable [QGVAR(AED_Alarm_State), true];
 
                     [{
                         params ["_patient"];
 
-                        if !(_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Sinus,ACM_Rhythm_PEA]) then {
+                        private _torsadesPulselessNow = ([_patient] call ACME_fnc_rhythmGet) == 102
+                            && {_patient getVariable ["ACME_rhythm_torsadesNonPerfusing",false]};
+                        if (_torsadesPulselessNow || {!(_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Sinus,ACM_Rhythm_PEA])}) then {
                             [_patient] call FUNC(AED_PlayAlarm);
                             _patient setVariable [QGVAR(AED_Alarm_CardiacArrest_State), true];
                         } else {
@@ -154,7 +160,7 @@ private _PFH = [{
                 };
 
                 if (_patient getVariable [QGVAR(AED_Alarm_CardiacArrest_State), false]) exitWith {
-                    if (_rhythmState in [0,5]) then {
+                    if (_rhythmState in [0,5] && {!_torsadesPulseless}) then {
                         _patient setVariable [QGVAR(AED_Alarm_CardiacArrest_State), false];
                         _patient setVariable [QGVAR(AED_Alarm_State), false];
                         playSound3D [QPATHTO_R(sound\aed_3beep.wav), _patient, false, getPosASL _patient, 15, 1, 15]; // 0.369s
@@ -197,7 +203,9 @@ private _PFH = [{
                     [{
                         params ["_patient"];
 
-                        if !(_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Sinus,ACM_Rhythm_PEA]) then {
+                        private _torsadesPulselessNow = ([_patient] call ACME_fnc_rhythmGet) == 102
+                            && {_patient getVariable ["ACME_rhythm_torsadesNonPerfusing",false]};
+                        if (_torsadesPulselessNow || {!(_patient getVariable [QGVAR(Cardiac_RhythmState), ACM_Rhythm_Sinus] in [ACM_Rhythm_Sinus,ACM_Rhythm_PEA])}) then {
                             [_patient] call FUNC(AED_PlayAlarm);
                             _patient setVariable [QGVAR(AED_Alarm_CardiacArrest_State), true];
                         } else {
@@ -217,7 +225,9 @@ private _PFH = [{
 
             (GET_BLOOD_PRESSURE(_patient)) params ["", "_BPSystolic"];
 
-            if (!(HAS_TOURNIQUET_APPLIED_ON(_patient,_pulseOximeterPlacement)) && _BPSystolic >= 80 && HAS_PULSE_P(_patient)) then {
+            private _torsadesPulselessPO = ([_patient] call ACME_fnc_rhythmGet) == 102
+                && {_patient getVariable ["ACME_rhythm_torsadesNonPerfusing",false]};
+            if (!(HAS_TOURNIQUET_APPLIED_ON(_patient,_pulseOximeterPlacement)) && _BPSystolic >= 80 && HAS_PULSE_P(_patient) && {!_torsadesPulselessPO}) then {
                 _patient setVariable [QGVAR(AED_PulseOximeter_Display), round([_patient] call EFUNC(breathing,getSpO2)), true];
                 if !(_padsStatus) then {
                     _patient setVariable [QGVAR(AED_Pads_Display), round(GET_HEART_RATE(_patient)), true];
@@ -263,11 +273,11 @@ if (_inVehicle) then {
 } else {
     [{
         params ["_patient", "_medic"];
-    
+
         (((objectParent _medic) isNotEqualTo (objectParent _patient)) || ((_patient distance _medic) > GVAR(AEDDistanceLimit)));
     }, {
         params ["_patient", "_medic"];
-        
+
         if !(isNull _patient) then {
             [_medic, _patient, "body", 0, false, true] call FUNC(setAED);
             [_medic, _patient, "body", 1, false, true] call FUNC(setAED);

@@ -1,0 +1,37 @@
+**ACM Extended 1.2.1-rc1 | Cumulative hotfixes | 1/3**
+
+18–19 September 2026. Combined current behavior, including the latest corrections.
+
+**Build, debug and settings**
+
+- Fixed the duplicate ACE_Actions declaration and invalid inheritance that stopped HEMTT with L-C03/L-C04. Drag-handle actions now share the existing patient action tree, preserving Get Up and release actions.
+- The debug overlay identifies this build as 1.2.1-rc1. The HEMTT project version remains 1.4.5.0.
+- Separated shared gameplay settings from client preferences. Gameplay rules remain globally controlled; presentation, accessibility, interface and debug preferences are client-owned and cannot be overridden by the server or mission.
+
+**Medication pushes and IV tray**
+
+- Restored typing and keyboard focus in the push-duration seconds box. The duration row follows the Push button layout.
+- A blank seconds field defaults to a 3-second push in both normal and Hardcore medication modes. Gray suggested times are guidance; entering a duration selects that duration, within 1–300 seconds.
+- Restored continuous syringe-plunger movement during Hardcore pushes, following the actual remaining medication volume.
+- Corrected the IV tray catheter fan's visual anchoring.
+
+**Transfusions and access selection**
+
+- Removed the separate Hardcore Transfusion setting. Bag preparation, Y-lines, flushing, infusion and access-site management are now the standard workflow.
+- Removed the 250 mL saline-bag minimum. Y-lines still require compatible saline and retain the configured flush-volume rule.
+- Retained the standard calcium/citrate and hypothermic coagulation values. Old exported Hardcore Transfusion values no longer select an alternate model.
+- Fixed IV/IO access selection so clicking a site updates the selected access, top-left name, artwork and bag lists together.
+- Added the normal button sound to access-site clicks and removed the top-left IV/IO toggle. The inventory-source switch remains available.
+
+**Field Blood Transfusion Kit**
+
+- Blood collection now requires IV access. IO collection is disabled with an IV required message and is rejected before consuming the kit.
+- Corrected collected-volume yield and recognition of a full bag.
+- Collection respects bag capacity and available donor blood, with consistent volume accounting. Existing fresh-blood metadata and multiplayer transfer are retained.
+
+**PEA and the AED monitor**
+
+- Default PEA now uses a narrow, sinus-like P-QRS-T tracing, including obstructive PEA without severe uncovered transfusion burden.
+- The existing wide-complex PEA tracing is reserved for a severe transfusion burden not covered by calcium. ACME uses its current transfusion/calcium model as a gameplay proxy for this appearance; it does not simulate a measured potassium level.
+- At an 80 BPM resting baseline, more than 2 L of uncovered burden selects the wide tracing. Calcium coverage can narrow it while another unresolved cause keeps the patient in PEA.
+- The monitor detects this morphology change while open and when reopened, preserving electrical beat timing. Both forms remain pulseless and nonshockable; arrest-entry and ROSC rules are unchanged.

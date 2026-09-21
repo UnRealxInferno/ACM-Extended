@@ -1,7 +1,5 @@
-// "Save" in the compound flow. take the accumulated components, generate the label, with named products such as
-// ketofol recognized by their exact recipe, consume the vials, store one compound syringe in the drawn list, and
-// reopen the dialog fresh. at least one component is required.
-// call ACME_fnc_skCompoundSave.
+// Save the current compound immediately, then reset the existing Narc Box page in place.
+// No delayed dialog teardown/reopen: this prevents cursor focus/magnetization and makes Save feel immediate.
 disableSerialization;
 private _dlg = findDisplay 84000;
 if (isNull _dlg) exitWith {};
@@ -12,43 +10,34 @@ if (_components isEqualTo []) exitWith {
     ["Draw at least one drug before saving.", 2.5, ACE_player, 13] call ace_common_fnc_displayTextStructured;
 };
 
-private _cap = uiNamespace getVariable ["ACME_SK_WasteCap", 10];
-private _label = [_cap, _components, 0] call ACME_fnc_skCompoundLabel;
 call ACME_fnc_skPendingTagCommit;
-
-// commit through the shared path, which the auto-save on close also uses, then report and reopen fresh.
 if !(call ACME_fnc_skCompoundCommit) exitWith {};
-
-
-// B73: make Save visibly acknowledge the commit before the fresh preparation dialog replaces this one.
 call ACME_fnc_skRefreshDrawn;
-private _size = ACM_circulation_SyringeDraw_Size;
-private _patient = uiNamespace getVariable ["ACME_SK_Patient", objNull];
-private _bodyPart = uiNamespace getVariable ["ACME_SK_BodyPart", ""];
-private _restoreMouse = getMousePosition;
-private _token = format ["%1:%2",clientOwner,diag_tickTime];
-_dlg setVariable ["ACME_SK_SaveFeedbackToken",_token];
+call ACME_fnc_skPendingTagReset;
+
+// Fresh syringe preparation is initialized immediately on the same controls.
+[] call ACME_fnc_skCompoundBegin;
+call ACME_fnc_skListRefresh;
+call ACME_fnc_skPendingTagRender;
+
+// Acknowledge Save without blocking input. Only the label/color flash is delayed; the next draw can start now.
 private _saveBtn = _dlg displayCtrl 84004;
-private _drawBtn = _dlg displayCtrl 84003;
 if (!isNull _saveBtn) then {
     _saveBtn ctrlSetText "Saved!";
     _saveBtn ctrlSetBackgroundColor (["success",0.88] call ACME_fnc_a11yColor);
-    _saveBtn ctrlEnable false;
+    _saveBtn ctrlEnable true;
     _saveBtn ctrlCommit 0;
+    private _token = format ["%1:%2",clientOwner,diag_tickTime];
+    _dlg setVariable ["ACME_SK_SaveFeedbackToken",_token];
+    [{
+        params ["_display","_tok"];
+        if (isNull _display || {!(_display isEqualTo findDisplay 84000)} || {(_display getVariable ["ACME_SK_SaveFeedbackToken",""]) != _tok}) exitWith {};
+        private _b = _display displayCtrl 84004;
+        if (!isNull _b) then {
+            _b ctrlSetText "Save";
+            _b ctrlSetBackgroundColor [0.05,0.05,0.05,0.65];
+            _b ctrlEnable true;
+            _b ctrlCommit 0.08;
+        };
+    },[_dlg,_token],0.45] call CBA_fnc_waitAndExecute;
 };
-if (!isNull _drawBtn) then {_drawBtn ctrlEnable false;};
-[{
-    params ["_oldDisplay","_tok","_size","_patient","_bodyPart","_mouse"];
-    private _live = findDisplay 84000;
-    if (isNull _live || {!(_live isEqualTo _oldDisplay)} || {(_live getVariable ["ACME_SK_SaveFeedbackToken",""]) != _tok}) exitWith {};
-    // Reset the visible controls before teardown so a delayed frame can never retain the green success state.
-    private _save = _live displayCtrl 84004;
-    private _draw = _live displayCtrl 84003;
-    if (!isNull _save) then {_save ctrlSetText "Save"; _save ctrlSetBackgroundColor [0.05,0.05,0.05,0.65];};
-    if (!isNull _draw) then {_draw ctrlSetText "Draw"; _draw ctrlSetBackgroundColor [0.05,0.05,0.05,0.65];};
-    [true] call ACME_fnc_skAfterSaveOpenBody;
-    [] call ACME_fnc_skWasteEnd;
-    uiNamespace setVariable ["ACME_SK_RestoreMouse", _mouse];
-    closeDialog 0;
-    [{ _this call ACME_fnc_skOpenDraw; }, [_size, _patient, _bodyPart], 0.05] call CBA_fnc_waitAndExecute;
-},[_dlg,_token,_size,_patient,_bodyPart,_restoreMouse],1.10] call CBA_fnc_waitAndExecute;

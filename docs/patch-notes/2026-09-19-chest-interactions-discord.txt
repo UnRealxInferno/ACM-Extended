@@ -1,0 +1,13 @@
+ACM Extended 1.2.1-rc1 | Chest interactions and patient motion
+
+• Dress Junctional Wound now uses the Pressure Bandage icon.
+• Seizure animations reduced to 1.05x. Debug seizures on already-unconscious patients keep their existing posture.
+• Drag handles now use the native rope and helpers used by ACE fast-roping. Removed the prone reset and changed ragdoll entry to native force.
+• Chest-seal burping has a shared 10-second patient cooldown, one activity entry per accepted burp and a provider treatment animation. Applies to traumatic and thoracostomy seals.
+• Chest-seal Flip waits for the provider's actual roll animation, after weapon/crouch transitions.
+• Auscultation bell starts at your cursor and is slightly larger. Hold left mouse to listen and drag with resistance; pressing shrinks the bell.
+• Separate lung and heart channels fade while dragging. No lung sounds below the diaphragm; lower cardiac sound is confined to a fading centerline field.
+
+Current open finger T: continues venting air without a timed open-wound penalty. Continuous blood drainage still requires a chest tube. Inadequate incision prep sets an infection flag.
+
+Source checks completed. HEMTT, pytest and in-game validation are still pending because the command runner was unavailable. Please test dragging, animation timing and audio transitions on local and dedicated servers.

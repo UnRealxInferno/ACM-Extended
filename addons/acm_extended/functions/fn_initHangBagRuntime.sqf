@@ -76,3 +76,58 @@ ACME_hang_linePatientEuler = [-186.934, -84.1472, 180];  // patient-side endpoin
 ACME_hang_linePatientOffset_250 = [0.35404, -0.0718271, 0.12404];
 ACME_hang_linePatientEuler_250  = [-173.23, -84.1472, 180];
 ACME_hang_lineTipOffset = [0, 0.04, 0.06];  // oriented local tip. it gives the line-end rotation a visible, live effect.
+
+// Register on every client; dedicated servers do not create presentation objects.
+["ACME_hangBagVisualSync", {_this call ACME_fnc_hangBagVisualSync}] call CBA_fnc_addEventHandler;
+// One-shot owner-routed gear recovery. This is deliberately valid for dead units and non-player local owners.
+["ACME_hangRestoreWeapons", {
+    params [["_medic", objNull, [objNull]], ["_episodeStart", -1, [0]]];
+    if (!isNull _medic && {local _medic}) then {
+        [_medic, _episodeStart] call ACME_fnc_hangBagRestoreWeapons;
+    };
+}] call CBA_fnc_addEventHandler;
+if (hasInterface) then {
+    ["unit", {
+        params ["_unit", "_previous"];
+        if (!isNull _previous && {_previous getVariable ["ACME_hang_Active", false]}) then {
+            [true, _previous] call ACME_fnc_hangBagStop;
+        };
+    }] call CBA_fnc_addPlayerEventHandler;
+};
+if (isServer) then {
+    addMissionEventHandler ["HandleDisconnect", {
+        params ["_unit"];
+        private _epoch = _unit getVariable ["ACME_hang_VisualEpoch", -1];
+        if (_epoch >= 0) then {
+            _unit setVariable ["ACME_hang_VisualEpisode", [_epoch, false], true];
+            [format ["ACME_hangVisual_%1_%2", netId _unit, _epoch]] call CBA_fnc_removeGlobalEventJIP;
+            ["ACME_hangBagVisualSync", [_unit, _epoch, "hide"]] call CBA_fnc_globalEvent;
+        };
+        private _patient = _unit getVariable ["ACME_hang_Patient", objNull];
+        if (!isNull _patient && {(_patient getVariable ["ACME_hang_Medic", objNull]) isEqualTo _unit}) then {
+            _patient setVariable ["ACME_hang_Medic", objNull, true];
+            _patient setVariable ["ACME_hang_flowMult", 1, true];
+        };
+        private _episodeStart = _unit getVariable ["ACME_hang_Start", -1];
+        _unit setVariable ["ACME_hang_Active", false, true];
+
+        // The two weapon slots were published at prep time. Ownership normally transfers to the server immediately
+        // after disconnect; wait for that handoff, then restore the exact loadout. If another owner receives the unit,
+        // fall back to an object-targeted event instead of dropping the gear snapshot.
+        if !((_unit getVariable ["ACME_hang_savedWeaponSlots", []]) isEqualTo []) then {
+            [{
+                params ["_u"];
+                isNull _u || {local _u}
+            }, {
+                params ["_u", "_ep"];
+                if (!isNull _u) then {[_u, _ep] call ACME_fnc_hangBagRestoreWeapons;};
+            }, [_unit, _episodeStart], 2, {
+                params ["_u", "_ep"];
+                if (!isNull _u) then {
+                    ["ACME_hangRestoreWeapons", [_u, _ep], _u] call CBA_fnc_targetEvent;
+                };
+            }] call CBA_fnc_waitUntilAndExecute;
+        };
+        false
+    }];
+};

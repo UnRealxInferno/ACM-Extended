@@ -116,7 +116,7 @@
 
 #undef GET_BLOOD_LOSS
 #define GET_BLOOD_LOSS(unit)     ([unit] call ACEFUNC(medical_status,getBloodLoss))
-#undef GET_BLOOD_PRESSURE       
+#undef GET_BLOOD_PRESSURE
 #define GET_BLOOD_PRESSURE(unit) ([unit] call ACEFUNC(medical_status,getBloodPressure))
 #undef VAR_BLOOD_PRESS
 #define VAR_BLOOD_PRESS       QACEGVAR(medical,bloodPressure)

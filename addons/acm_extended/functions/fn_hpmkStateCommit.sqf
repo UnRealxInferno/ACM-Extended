@@ -11,6 +11,10 @@ params [
 ];
 if (isNull _patient) exitWith {_state};
 if !(_state in ["", "prepped", "wrapped", "exposed"]) exitWith {_patient getVariable ["ACME_hpmk_state", ""]};
+if (!local _patient) exitWith {
+    [_patient, "hpmkState", [_patient, _state, _public, _deduplicate]] call ACME_fnc_ownerDispatch;
+    _state
+};
 private _on = _state in ["wrapped", "exposed"];
 if (_public && {_deduplicate}) then {
     [_patient, "ACME_hpmk_state", _state] call ACME_fnc_setVarNet;

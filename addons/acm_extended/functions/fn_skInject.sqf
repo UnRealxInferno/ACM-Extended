@@ -174,22 +174,34 @@ if (!isNull _patientHeader) then {_display setVariable ["ACME_SK_PatientHeaderNa
 private _viewY  = safeZoneY + (safeZoneH / 1.08);  // restored to the original low Draw Syringe / Body Map row.
 private _routeY = safeZoneY + (safeZoneH * 0.748);
 
-// a pulsing backing behind the view toggle. it is a plain RscText, with no focus or hover state, so the pulse is
-// always visible, even right after you click the toggle. the toggle button on top is transparent, so only its
-// label shows over this. it is created before the button so it sits behind it.
+// Three-page navigation. On the Narc Box page the left button goes to Transfuse and the right button to Body Map.
+// Body Map reverses the local page on the left and continues to Transfuse on the right. Both backings pulse without
+// owning focus, so switching pages never magnetizes the cursor to a newly recreated control.
+private _navGap = 4 * pixelW;
+private _navW = _tw * 0.72;
+private _navLeftX = (_uiX + (_uiW/2)) - (_navGap/2) - _navW;
+private _navRightX = (_uiX + (_uiW/2)) + (_navGap/2);
 private _pulseBack = _display ctrlCreate ["RscText", 84153];
-_pulseBack ctrlSetPosition [_tx, _viewY, _tw, _th];
+_pulseBack ctrlSetPosition [_navLeftX, _viewY, _navW, _th];
 _pulseBack ctrlSetBackgroundColor (["info", 0.45] call ACME_fnc_a11yColor);
 _pulseBack ctrlCommit 0;
+private _pulseBackR = _display ctrlCreate ["RscText", 84157];
+_pulseBackR ctrlSetPosition [_navRightX, _viewY, _navW, _th];
+_pulseBackR ctrlSetBackgroundColor (["info", 0.45] call ACME_fnc_a11yColor);
+_pulseBackR ctrlCommit 0;
 
-// the view toggle, between the syringe and the body map. it is a transparent button over the pulsing backing,
-// visible in both views.
 private _toggleBtn = _display ctrlCreate ["ACME_SK_PulseButton", 84150];
-_toggleBtn ctrlSetPosition [_tx, _viewY, _tw, _th];
-_toggleBtn ctrlSetText "Body Map >";
-_toggleBtn ctrlSetTooltip "Open the body injection map or return to the prepared-syringe carousel";
-_toggleBtn ctrlAddEventHandler ["ButtonClick", { call ACME_fnc_skToggleView }];
+_toggleBtn ctrlSetPosition [_navLeftX, _viewY, _navW, _th];
+_toggleBtn ctrlSetText "< Transfuse";
+_toggleBtn ctrlSetTooltip "Previous page";
+_toggleBtn ctrlAddEventHandler ["ButtonClick", {["left"] call ACME_fnc_skPageNavigate;}];
 _toggleBtn ctrlCommit 0;
+private _toggleBtnR = _display ctrlCreate ["ACME_SK_PulseButton", 84152];
+_toggleBtnR ctrlSetPosition [_navRightX, _viewY, _navW, _th];
+_toggleBtnR ctrlSetText "Body Map >";
+_toggleBtnR ctrlSetTooltip "Next page";
+_toggleBtnR ctrlAddEventHandler ["ButtonClick", {["right"] call ACME_fnc_skPageNavigate;}];
+_toggleBtnR ctrlCommit 0;
 
 // B76 contextual action directly above Draw Syringe. The backing owns the blinking red/green color so hover/focus
 // cannot freeze it; the transparent button owns only text/input.
@@ -361,13 +373,17 @@ _pushStatus ctrlCommit 0;
 
 
 // A/D controls the same stable syringe selection in either the full carousel or Body Map mini-carousel. The keys
-// remain ordinary text input when one of the three tag fields owns focus.
+// remain ordinary text input whenever an edit control, including push duration, owns focus.
 _display displayAddEventHandler ["KeyDown", {
     params ["_d","_key"];
     private _view = uiNamespace getVariable ["ACME_SK_View", "syringe"];
     if (_view != "body") exitWith {false};
     private _focus = focusedCtrl _d;
-    if (!isNull _focus && {(ctrlIDC _focus) in [84460,84461,84462,84601,84602,84603]}) exitWith {false};
+    if (!isNull _focus && {ctrlType _focus == 2}) exitWith {
+        uiNamespace setVariable ["ACME_SK_CarouselHeldDir",0];
+        uiNamespace setVariable ["ACME_SK_CarouselRepeatAt",0];
+        false
+    };
     if (uiNamespace getVariable ["ACME_SK_TagEditMode",false]) exitWith {_key in [30,32]};
     private _dir = switch (_key) do {case 30: {-1}; case 32: {1}; default {0};};
     if (_dir == 0) exitWith {false};
@@ -381,6 +397,12 @@ _display displayAddEventHandler ["KeyDown", {
 }];
 _display displayAddEventHandler ["KeyUp", {
     params ["_d","_key"];
+    private _focus = focusedCtrl _d;
+    if (!isNull _focus && {ctrlType _focus == 2}) exitWith {
+        uiNamespace setVariable ["ACME_SK_CarouselHeldDir",0];
+        uiNamespace setVariable ["ACME_SK_CarouselRepeatAt",0];
+        false
+    };
     if (uiNamespace getVariable ["ACME_SK_TagEditMode",false]) exitWith {_key in [30,32]};
     private _dir = switch (_key) do {case 30: {-1}; case 32: {1}; default {0};};
     if (_dir == 0) exitWith {false};
@@ -414,7 +436,15 @@ private _routeIM = _display ctrlCreate ["ACME_SK_PulseButton", 84154];
 _routeIM ctrlSetPosition [_tx + _routeHalf + _routeGap, _routeY, _routeHalf, _th];
 _routeIM ctrlSetText "IM";
 _routeIM ctrlSetTooltip "Use an intramuscular injection site";
-_routeIM ctrlAddEventHandler ["ButtonClick", {uiNamespace setVariable ["ACME_SK_Route", "im"]; uiNamespace setVariable ["ACME_SK_PendingInjection",[]]; call ACME_fnc_skBuildHotspots; call ACME_fnc_skBodyActionRender;}];
+_routeIM ctrlAddEventHandler ["ButtonClick", {
+    // IM cannot use a saline-flush route. Clear any stale flush selection before changing route so a previous
+    // preparation session cannot immediately force the body map back to vascular mode.
+    uiNamespace setVariable ["ACME_SK_SelFlush", ""];
+    uiNamespace setVariable ["ACME_SK_Route", "im"];
+    uiNamespace setVariable ["ACME_SK_PendingInjection",[]];
+    call ACME_fnc_skBuildHotspots;
+    call ACME_fnc_skBodyActionRender;
+}];
 _routeIM ctrlShow false;
 _routeIM ctrlCommit 0;
 
@@ -495,6 +525,11 @@ if (_afterSaveId != "") then {
         };
     };
 };
+private _requestedView = uiNamespace getVariable ["ACME_SK_RequestedView",""];
+if (_requestedView in ["syringe","body"]) then {
+    uiNamespace setVariable ["ACME_SK_RequestedView",""];
+    uiNamespace setVariable ["ACME_SK_View",_requestedView];
+};
 uiNamespace setVariable ["ACME_SK_Route", "vascular"];
 _display setVariable ["ACME_SK_NextRefresh", 0];
 _display setVariable ["ACME_SK_NextStockRefresh", 0];
@@ -506,6 +541,10 @@ call ACME_fnc_skListRefresh;
 // fn_skPendingTagEnsure then creates them idempotently with artwork -> selector -> dropdown z-order.
 
 call ACME_fnc_skSetView;
+// B121: if a one-handed Hardcore push survived this dialog being closed, reopening the Narc Box is only a
+// presentation change. Rebuild the exact patient/site/syringe context without touching the running PFH.
+private _hcPushJobB121 = missionNamespace getVariable ["ACME_HCMedPushJob",createHashMap];
+if (_hcPushJobB121 isEqualType createHashMap && {count _hcPushJobB121 > 0}) then {call ACME_fnc_hardcorePushRestoreUi;};
 // Native syringe controls can finish their first layout a frame after our runtime controls are created.
 // Repaint the always-present Select Syringe Tag control again after that layout so it cannot disappear on first open.
 [{if (!isNull (findDisplay 84000)) then {call ACME_fnc_skPendingTagRender;};}, [], 0.03] call CBA_fnc_waitAndExecute;

@@ -7,8 +7,8 @@ private _rr = _patient getVariable ["ACM_breathing_RespirationRate", 0];
 if (!_cpr && {_rr < 1}) exitWith {0};
 
 private _value = call {
-    /* mmHg 
-        Cardiac Arrest - 0 
+    /* mmHg
+        Cardiac Arrest - 0
         Effective CPR - 10-20
         Unconscious - 30-35
         Conscious (Normal) - 35-45
@@ -21,18 +21,18 @@ private _value = call {
     private _value = 0;
     private _minTo = 0;
     private _maxTo = 0;
-    
+
     private _airwayState = (GET_AIRWAYSTATE(_patient) / 0.95) min 1;
     private _breathingState = (GET_BREATHINGSTATE(_patient) / 0.85) min 1;
-    
+
     private _bloodVolumeEffect = 1 min (GET_EFF_BLOOD_VOLUME(_patient) / 5.9);
-    
+
     if (_timeSinceROSC < 45) exitWith {
         linearConversion [0, 30, _timeSinceROSC, 50 * _bloodVolumeEffect, 30 * _bloodVolumeEffect, true];
     };
-    
+
     private _desiredRespirationRate = _patient getVariable [QEGVAR(core,TargetVitals_RespirationRate), 16];
-    
+
     if ((GET_HEART_RATE(_patient) < 20) || IN_CRDC_ARRST(_patient) || !(alive _patient)) then {
         if (alive (_patient getVariable [QACEGVAR(medical,CPR_provider), objNull])) then {
             _minFrom = 100;
@@ -67,9 +67,9 @@ private _value = call {
             };
         };
     };
-    
+
     if (_exit) exitWith {0};
-    
+
     linearConversion [_minFrom, _maxFrom, (_value * (_airwayState min _breathingState)), _minTo * _bloodVolumeEffect, _maxTo * _bloodVolumeEffect, true];
 };
 if (!finite _value || {_value <= 0}) exitWith {0};

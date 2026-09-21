@@ -30,7 +30,7 @@ private _PFH = [{
         if (HAS_PULSEOX(_patient,_x)) then {
             _pulseOxStatusArray pushBack _x;
         };
-        
+
     } forEach [0,1];
 
     if (count _pulseOxStatusArray < 1) exitWith {
@@ -57,11 +57,11 @@ private _PFH = [{
                 };
 
                 _displayArray set [_x, [round(_displayedSPO2), round(_pr)]];
-                _patient setVariable [QGVAR(PulseOximeter_Display), _displayArray, true]; 
+                _patient setVariable [QGVAR(PulseOximeter_Display), _displayArray, true];
             } else {
                 if (((_patient getVariable [QGVAR(PulseOximeter_Display), [[0,0],[0,0]]] select _x) select 0) != 0) then {
                    _displayArray set [_x, [0,0]];
-                   _patient setVariable [QGVAR(PulseOximeter_Display), _displayArray, true]; 
+                   _patient setVariable [QGVAR(PulseOximeter_Display), _displayArray, true];
                 };
             };
 

@@ -18,24 +18,8 @@
 if (ACEGVAR(interact_menu,menuBackground) == 1) then {[QACEGVAR(medical_gui,id), false] call ACEFUNC(common,blurScreen)};
 if (ACEGVAR(interact_menu,menuBackground) == 2) then {(uiNamespace getVariable [QACEGVAR(interact_menu,menuBackground), displayNull]) closeDisplay 0};
 
-// Snapshot ACE's reopen intent. A timed treatment deliberately replaces this display with the progress dialog,
-// and ACE reopens the medical menu from ace_treatmentSucceded only while pendingReopen is still true. Do not clear
-// that request here. A manual ESC/H/RMB close arrives with pendingReopen false and still releases Direct Pressure.
-private _pendingReopen = ACEGVAR(medical_gui,pendingReopen);
-private _dpMedic = ACE_player;
-private _dpWasActive = !isNull _dpMedic && {_dpMedic getVariable ["ACME_DP_Active", false]};
-
-ACEGVAR(medical_gui,pendingReopen) = _pendingReopen;
+// Keep the medical-menu lifecycle identical to ACE. Treatment buttons arm pendingReopen after their statement;
+// manual closes never do. Direct Pressure no longer participates in this lifecycle at all.
+ACEGVAR(medical_gui,pendingReopen) = false;
 ACEGVAR(medical_gui,menuPFH) call CBA_fnc_removePerFrameHandler;
 ACEGVAR(medical_gui,menuPFH) = -1;
-
-if (_dpWasActive && {!_pendingReopen}) then {
-    // Defer one frame so a treatment that replaced the menu synchronously can expose its progress display first.
-    [{
-        params ["_m"];
-        if (isNull _m || {!local _m} || {!(_m getVariable ["ACME_DP_Active", false])}) exitWith {};
-        private _progress = uiNamespace getVariable ["ace_common_dlgProgress", displayNull];
-        private _menu = uiNamespace getVariable ["ace_medical_gui_menuDisplay", displayNull];
-        if (isNull _progress && {isNull _menu}) then {[false, _m, false] call ACME_fnc_directPressureStop;};
-    }, [_dpMedic]] call CBA_fnc_execNextFrame;
-};

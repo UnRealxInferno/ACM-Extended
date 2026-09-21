@@ -8,11 +8,7 @@ if ((_lockedUntil isEqualType 0) && {_lockedUntil > _now}) exitWith {};
 if (isNull _patient) exitWith {};
 
 private _uiCurrent = uiNamespace getVariable ["ACME_CS_Side", "front"];
-private _actualSide = [_patient, _uiCurrent] call ACME_fnc_chestSealActualSide;
-_patient setVariable ["ACME_CS_facing", _actualSide, true];
-private _virtualLocked = uiNamespace getVariable ["ACME_CS_VirtualFlip", false];
-private _baseSide = if (_virtualLocked) then {_uiCurrent} else {_actualSide};
-private _newSide = if (_baseSide == "front") then {"back"} else {"front"};
+private _newSide = if (_uiCurrent == "front") then {"back"} else {"front"};
 
 uiNamespace setVariable ["ACME_CS_Dragging", false];
 uiNamespace setVariable ["ACME_CS_DragPt", []];
@@ -22,82 +18,54 @@ uiNamespace setVariable ["ACME_CS_FingerGlow", []];
 
 private _dead = (!alive _patient) || {(lifeState _patient) isEqualTo "DEAD"};
 private _self = _patient isEqualTo (uiNamespace getVariable ["ACME_CS_Medic", objNull]);
-private _isUncon = (_patient getVariable ["ACE_isUnconscious", false]) || {_patient getVariable ["ace_medical_unconscious", false]};
-private _isObtunded = _patient getVariable ["ACME_obtunded", false];
-private _isGrounded = _isUncon || _isObtunded || {(stance _patient) == "PRONE"} || {_patient getVariable ["ACM_core_Lying_State", false]};
-private _willAnimate = (!_dead) && {!_self} && {_isGrounded} && {isNull objectParent _patient};
+// Physical control belongs only to a genuinely unconscious casualty or an awake casualty that
+// is still inside ACM's authored Lying State. Ordinary prone/obtunded/mobile players are view-only.
+private _willAnimate = (!_dead) && {!_self} && {[_patient] call ACME_fnc_chestSealCanPhysicalRoll};
 
-// An awake casualty who is standing/crouched under their own control must never be forced to the floor just so
-// the medic can inspect the opposite chest surface. Flip the diagnostic canvas only and briefly lock the UI side
-// so the live orientation classifier does not immediately snap it back. Dead/vehicle cases retain the actual side.
+// When the body cannot be physically controlled (including ANY ordinary conscious prone/mobile state),
+// Flip remains only a procedural view change. It never forces the casualty into a new animation.
 if (!_willAnimate) exitWith {
-    if (!_dead && {!_isUncon} && {!_isObtunded} && {isNull objectParent _patient}) then {
-        uiNamespace setVariable ["ACME_CS_Side", _newSide];
-        uiNamespace setVariable ["ACME_CS_FlipTarget", ""];
-        uiNamespace setVariable ["ACME_CS_FlipLockedUntil", 0];
-        uiNamespace setVariable ["ACME_CS_VirtualFlip", true];
-    } else {
-        uiNamespace setVariable ["ACME_CS_Side", _actualSide];
-        uiNamespace setVariable ["ACME_CS_FlipTarget", ""];
-    };
+    uiNamespace setVariable ["ACME_CS_Side", _newSide];
+    uiNamespace setVariable ["ACME_CS_FlipTarget", ""];
+    uiNamespace setVariable ["ACME_CS_FlipLockedUntil", 0];
+    uiNamespace setVariable ["ACME_CS_VirtualFlip", true];
     [] call ACME_fnc_chestSealRender;
 };
 
-// B57: the diagram follows the requested endpoint once. Do not let intermediate roll geometry flip the UI back
-// and forth while the casualty is between supine and prone.
-uiNamespace setVariable ["ACME_CS_VirtualFlip", false];
-uiNamespace setVariable ["ACME_CS_Side", _newSide];
-uiNamespace setVariable ["ACME_CS_FlipTarget", _newSide];
-
-private _rollTime = missionNamespace getVariable ["ACME_CS_rollTime", 1.85];
-if (!(_rollTime isEqualType 0) || {_rollTime < 0}) then {_rollTime = 1.85;};
-private _providerTime = missionNamespace getVariable ["ACME_rollProviderDuration", 2.2];
-if (!(_providerTime isEqualType 0) || {_providerTime < 0}) then {_providerTime = 2.2;};
-
-// Provider theatre starts once, locally. B73 routes the exact requested medic4 RTM through an ACME wrapper whose
-// move graph explicitly connects to/from empty-handed crouch, so the Flip can enter and exit without a snap.
+// Keep the current side until the provider actually enters the roll RTM.
 private _provider = uiNamespace getVariable ["ACME_CS_Medic", objNull];
-if (!isNull _provider && {local _provider}) then {
-    if ((_provider getVariable ["ACME_DP_Active", false])
-        && {(_provider getVariable ["ACME_DP_Patient", objNull]) isEqualTo _patient}) then {
-        _provider setVariable ["ACME_DP_Paused", true, false];
-        _provider setVariable ["ACME_DP_PauseTreatmentClass", "chestsealflip", false];
-        _provider setVariable ["ACME_dah_gen", (_provider getVariable ["ACME_dah_gen", 0]) + 1, false];
-        _provider setVariable ["ACME_DP_InPose", false, false];
-    };
-    [_provider, "chestSealFlip", _patient] call ACME_fnc_rollProviderStart;
-};
-
-private _until = _now + (_rollTime max _providerTime);
-uiNamespace setVariable ["ACME_CS_FlipLockedUntil", _until];
 private _display = uiNamespace getVariable ["ACME_CS_DLG", displayNull];
-if (!isNull _display) then {
-    private _btn = _display displayCtrl 86426;
-    if (!isNull _btn) then {
-        _btn ctrlEnable false;
-        _btn ctrlSetText "Flipping...";
-        [{
-            disableSerialization;
-            private _display = uiNamespace getVariable ["ACME_CS_DLG", displayNull];
-            if (!isNull _display) then {
-                private _btn = _display displayCtrl 86426;
-                if (!isNull _btn) then {
-                    _btn ctrlEnable true;
-                    _btn ctrlSetText "Flip";
-                };
-            };
-            uiNamespace setVariable ["ACME_CS_FlipLockedUntil", 0];
-            uiNamespace setVariable ["ACME_CS_FlipTarget", ""];
-            private _provider = uiNamespace getVariable ["ACME_CS_Medic", objNull];
-            if (!isNull _provider && {local _provider}
-                && {(_provider getVariable ["ACME_DP_PauseTreatmentClass", ""]) == "chestsealflip"}) then {
-                _provider setVariable ["ACME_DP_Paused", false, false];
-                _provider setVariable ["ACME_DP_PauseTreatmentClass", "", false];
-                _provider setVariable ["ACME_DP_IdleStart", CBA_missionTime, false];
-            };
-        }, [], (_rollTime max _providerTime)] call CBA_fnc_waitAndExecute;
-    };
-};
+if (isNull _provider || {!local _provider} || {isNull _display}) exitWith {};
+private _session = uiNamespace getVariable ["ACME_CS_SessionToken", ""];
+private _token = format ["flip:%1:%2:%3",clientOwner,_session,diag_tickTime];
+uiNamespace setVariable ["ACME_CS_FlipPendingToken",_token];
+uiNamespace setVariable ["ACME_CS_VirtualFlip",false];
+uiNamespace setVariable ["ACME_CS_FlipLockedUntil",_now + 7];
+private _button = _display displayCtrl 86426;
+_button ctrlEnable false;
+_button ctrlSetText "Flipping...";
 
-[_patient, _newSide, false, _provider] call ACME_fnc_chestSealRoll;
-[] call ACME_fnc_chestSealRender;
+if ((_provider getVariable ["ACME_DP_Active",false])
+    && {(_provider getVariable ["ACME_DP_Patient",objNull]) isEqualTo _patient}) then {
+    _provider setVariable ["ACME_DP_Paused",true];
+    _provider setVariable ["ACME_DP_PauseTreatmentClass","chestsealflip"];
+    _provider setVariable ["ACME_DP_TreatmentBusy",true];
+    _provider setVariable ["ACME_DP_PoseToken",(_provider getVariable ["ACME_DP_PoseToken",0]) + 1];
+    _provider setVariable ["ACME_dah_gen",(_provider getVariable ["ACME_dah_gen",0]) + 1];
+    _provider setVariable ["ACME_DP_InPose",false];
+    _provider setVariable ["ACME_DP_LastPoseAssert",0];
+};
+private _started = [_provider,"chestSealFlip",_patient] call ACME_fnc_rollProviderStart;
+if (_started) then {
+    _provider setVariable ["ACME_CS_providerHoldEpoch", -1, false];
+    uiNamespace setVariable ["ACME_CS_ProviderHoldEpoch", -1];
+};
+private _pose = _provider getVariable ["ACME_treatmentPoseState",[]];
+private _epoch = if (_started) then {_pose param [0,-1]} else {-1};
+private _rollToken = if (_started) then {_provider getVariable ["ACME_rollProviderToken",""]} else {""};
+private _rollTime = missionNamespace getVariable ["ACME_CS_rollTime",1.85];
+if !(_rollTime isEqualType 0 && {finite _rollTime}) then {_rollTime = 1.85;};
+_rollTime = (_rollTime max 0.1) min 5;
+private _args = [_patient,_provider,_display,_session,_token,_epoch,_rollToken,_newSide,_rollTime,-1,_now + 5.5];
+private _flipPFH = [{_this call ACME_fnc_chestSealFlipTick;},0,_args] call CBA_fnc_addPerFrameHandler;
+uiNamespace setVariable ["ACME_CS_FlipPFH", _flipPFH];

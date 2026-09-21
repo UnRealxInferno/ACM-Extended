@@ -23,10 +23,12 @@ if (_patient getVariable [QGVAR(SurgicalAirway_InProgress), false]) exitWith {
     [LLSTRING(SurgicalAirway_AlreadyInProgress), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
 };
 
-_patient setVariable [QGVAR(SurgicalAirway_InProgress), true, true];
-
 [[_medic, _patient], { // On Start
     params ["_medic", "_patient"];
+
+    private _session = _medic getVariable [QEGVAR(core,ContinuousAction_Session), []];
+    _patient setVariable [QGVAR(SurgicalAirway_InProgress_Session), +_session, true];
+    _patient setVariable [QGVAR(SurgicalAirway_InProgress), true, true];
 
     GVAR(SurgicalAirway_Target) = _patient;
 
@@ -109,9 +111,16 @@ _patient setVariable [QGVAR(SurgicalAirway_InProgress), true, true];
     GVAR(SurgicalAirway_IsCutting) = false;
     GVAR(SurgicalAirway_IncisionStartPos) = nil;
 
-    _patient setVariable [QGVAR(SurgicalAirway_InProgress), false, true];
+    private _session = _patient getVariable [QGVAR(SurgicalAirway_InProgress_Session), []];
+    private _providerSession = _medic getVariable [QEGVAR(core,ContinuousAction_Session), []];
+    if ((_session isEqualType []) && {count _session == 2}
+        && {(_session select 0) isEqualTo _medic}
+        && {_providerSession isEqualTo []}) then {
+        _patient setVariable [QGVAR(SurgicalAirway_InProgress), false, true];
+        _patient setVariable [QGVAR(SurgicalAirway_InProgress_Session), [], true];
+    };
 
-    private _incisionCount = _patient getVariable [QGVAR(SurgicalAirway_IncisionCount), 0]; 
+    private _incisionCount = _patient getVariable [QGVAR(SurgicalAirway_IncisionCount), 0];
 
     if (GVAR(SurgicalAirway_Failed)) exitWith {
         [LLSTRING(SurgicalAirway_Failed), 1.5, _medic] call ACEFUNC(common,displayTextStructured);
@@ -144,7 +153,7 @@ _patient setVariable [QGVAR(SurgicalAirway_InProgress), true, true];
 
         if (_patient getVariable [QGVAR(SurgicalAirway_StrapSecure), false]) then {
             if (_patient getVariable [QGVAR(SurgicalAirway_Strap_PFH), -1] != -1) exitWith {};
-            
+
             private _PFH = [{
                 params ["_args", "_idPFH"];
                 _args params ["_patient"];
@@ -175,7 +184,12 @@ _patient setVariable [QGVAR(SurgicalAirway_InProgress), true, true];
 }, { // PerFrame
     params ["_medic", "_patient"];
 
-    if (GVAR(SurgicalAirway_Failed) || (!(IS_UNCONSCIOUS(_patient)) && alive _patient) || !(_patient getVariable [QGVAR(SurgicalAirway_InProgress), false])) exitWith {
+    private _session = _patient getVariable [QGVAR(SurgicalAirway_InProgress_Session), []];
+    private _providerSession = _medic getVariable [QEGVAR(core,ContinuousAction_Session), []];
+    if (GVAR(SurgicalAirway_Failed)
+        || {(!(IS_UNCONSCIOUS(_patient)) && alive _patient)}
+        || {!(_patient getVariable [QGVAR(SurgicalAirway_InProgress), false])}
+        || {!(_session isEqualTo _providerSession)}) exitWith {
         EGVAR(core,ContinuousAction_Active) = false;
     };
 

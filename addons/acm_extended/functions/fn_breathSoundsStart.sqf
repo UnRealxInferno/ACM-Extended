@@ -8,7 +8,7 @@
 // whose depth crescendos from 20 percent to 100 percent and back to 20 percent across the cycle, then a 10 to 20 s
 // apnea, and repeat. it ends when the cheyne-stokes phase clears, when ACME_cs_active is false.
 // both patterns pause while the patient is actively being bagged, meaning a BVM squeeze within ACME_bs_bvmHold
-// seconds, because ACM stamps ACM_breathing_BVM_lastBreath on every squeeze, so stopping the BVM or right-click
+// seconds, using ACME_bvm_lastBreathServer so every observer evaluates the same squeeze age. stopping the BVM or right-click
 // pausing it lets the sounds resume on their own. both stop outright in cardiac arrest.
 // _this is [_patient, _mode].
 // _mode is "biot" for the clustered, irregular post-ROSC pattern, or "steady" for a regular one.
@@ -58,7 +58,7 @@ private _pfh = [{
     private _now = CBA_missionTime;
     // active ventilation: hold the pattern in place. it resumes by itself once the squeezes stop, whether the BVM is
     // removed, stopped, or paused with a right click.
-    if ((_now - (_u getVariable ["ACM_breathing_BVM_lastBreath", -99])) < (missionNamespace getVariable ["ACME_bs_bvmHold", 6.5])) exitWith {
+    if (((serverTime - (_u getVariable ["ACME_bvm_lastBreathServer", -99])) max 0) < (missionNamespace getVariable ["ACME_bs_bvmHold", 6.5])) exitWith {
         _u setVariable ["ACME_bs_stageAt", ((_u getVariable ["ACME_bs_stageAt", _now]) max (_now + 0.8)), false];
     };
 
@@ -134,7 +134,7 @@ private _pfh = [{
                         [{
                             params ["_u"];
                             if (isNull _u || {!alive _u} || {(_u getVariable ["ACME_bs_mode", ""]) != "biot"}) exitWith {};
-                            if ((CBA_missionTime - (_u getVariable ["ACM_breathing_BVM_lastBreath", -99])) < (missionNamespace getVariable ["ACME_bs_bvmHold", 6.5])) exitWith {};
+                            if (((serverTime - (_u getVariable ["ACME_bvm_lastBreathServer", -99])) max 0) < (missionNamespace getVariable ["ACME_bs_bvmHold", 6.5])) exitWith {};
                             private _dist = missionNamespace getVariable ["ACME_bs_distance", 15];
                             private _tg = allPlayers inAreaArray [ASLToAGL getPosASL _u, _dist, _dist, 0, false, _dist];
                             if !(_tg isEqualTo []) then {

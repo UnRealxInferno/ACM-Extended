@@ -8,13 +8,13 @@ if (!local _patient) exitWith {[_patient, "treatmentPatientSettle", [_patient, _
 if (!alive _patient || {!isNull objectParent _patient}) exitWith {};
 if (_patient getVariable ["ACME_headElevated", false] || {_patient getVariable ["ACME_headElev_Suspended", false]}) exitWith {};
 if (_patient getVariable ["ACM_airway_RecoveryPosition_State", false]) exitWith {};
-if (_patient getVariable ["ACME_seizure_active", false] || {_patient getVariable ["ACME_Seizure_Active", false]}) exitWith {};
+if ((_patient getVariable ["ACME_lido_seizureState", ""]) == "active") exitWith {};
 if ((_patient getVariable ["ACME_CS_rollToken", ""]) != "") exitWith {};
 if ([_patient] call ACM_core_fnc_cprActive) exitWith {};
 if (alive (_patient getVariable ["ACM_breathing_BVM_Medic", objNull])) exitWith {};
 
 private _lock = _patient getVariable ["ACME_patientAnimLock", []];
-if ((count _lock) >= 5 && {(_lock param [4, -1]) > CBA_missionTime}) exitWith {};
+if ((count _lock) >= 5 && {(_lock param [4, -1]) > serverTime}) exitWith {};
 
 private _lyingRaw = _patient getVariable ["ACM_core_Lying_State", false];
 private _lying = if (_lyingRaw isEqualType true) then {_lyingRaw} else {_lyingRaw > 0};

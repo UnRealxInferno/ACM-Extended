@@ -5,7 +5,11 @@ if (isNull _patient) exitWith {};
 if !(_duration isEqualType 0) then { _duration = 0; };
 if !(finite _duration) then { _duration = 0; };
 
-private _until = time + (_duration max 0);
+// These timestamps are public and are consumed by both the casualty owner and the server-side wrapping
+// sound watchdog. Use the shared server clock so a provider/client clock offset cannot prematurely unmute or
+// suppress junctional leak audio. Never shorten a reservation already established by another important action.
+private _now = serverTime;
+private _until = (_patient getVariable ["ACME_SfxBusyUntil", -1]) max (_now + (_duration max 0));
 _patient setVariable ["ACME_SfxBusyUntil", _until, true];
 
 private _src = _patient getVariable ["ACME_JuncLeakSfxSrc", objNull];

@@ -1,6 +1,11 @@
 // Release only the matching episode; stale callbacks cannot end a newer action.
 // Every ACME-owned treatment pose exits to a movable, unarmed crouch. Weapons are never automatically reselected.
-params [["_medic", objNull, [objNull]], ["_mode", "", [""]], ["_epoch", -1, [0]]];
+params [
+    ["_medic", objNull, [objNull]],
+    ["_mode", "", [""]],
+    ["_epoch", -1, [0]],
+    ["_handoff", false, [false]]
+];
 if (isNull _medic) exitWith {};
 private _state = _medic getVariable ["ACME_treatmentPoseState", []];
 if (_state isEqualTo []) exitWith {};
@@ -56,9 +61,12 @@ private _ownsEntry = _stage <= 1 && {
 
 // Use playMoveNow through the move graph, never switchMove, so the work state blends back into the normal
 // unarmed crouch. Weapon selection is not touched here; the start preflight already cleared it exactly once.
-if (local _medic && {alive _medic} && {!(_medic getVariable ["ACE_isUnconscious", false])}
+if (!_handoff
+    && {local _medic}
+    && {alive _medic}
+    && {!(_medic getVariable ["ACE_isUnconscious", false])}
     && {!([_medic] call ACME_fnc_animBlocked)}
-    && {_current == toLower _main || {_ownsEntry} || {_stage >= 2} || {_currentMode in ["stethoscope","pulse"]}}) then {
+    && {_current == toLower _main || {_ownsEntry} || {_stage >= 2} || {_currentMode in ["stethoscope","pulse","chestSealWorkspace"]}}) then {
     // B56: a standing medicUp episode exits to the unarmed standing idle; every kneeling episode exits to
     // the unarmed crouch.
     _medic setUnitPos (["MIDDLE", "UP"] select _exitUpright);
@@ -85,6 +93,9 @@ if (local _medic && {alive _medic} && {!(_medic getVariable ["ACE_isUnconscious"
                 if (isNull _u || {!local _u} || {!alive _u} || {!isNull objectParent _u}) exitWith {};
                 if ((_u getVariable ["ACME_treatmentPoseState", []]) isNotEqualTo []) exitWith {};
                 if ((_u getVariable ["ACME_treatmentPoseEpoch", 0]) != _ep) exitWith {};
+                // A different controller may have acquired the provider after this treatment ended without touching
+                // treatmentPoseEpoch. Never let the old delayed stance release break that newer pose.
+                if ([_u] call ACME_fnc_providerStanceOwned) exitWith {};
                 _u setUnitPos "AUTO";
             }, [_unit, _endedEpoch], 0.85] call CBA_fnc_waitAndExecute;
         }, [_medic, _currentEpoch], 0.12] call CBA_fnc_waitAndExecute;

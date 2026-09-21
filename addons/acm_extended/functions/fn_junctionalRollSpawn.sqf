@@ -1,17 +1,46 @@
-// roll to spawn a junctional wound off an incoming wound. it is fired on ace_medical_woundReceived, where _this is
-// [_unit, _allDamages, _source, _projectile].
-// junctional wounds have a high chance off medium and large velocity wounds and a low chance off large avulsions,
-// on the chest, arms and legs. we read the freshly-applied open wounds, because ACE has populated them by the
-// time this fires, and resolve the class and size of each wound from its id:
-// classindex is floor(id/10), size is id mod 10, where 0 is small, 1 medium and 2 large, and classname is
-// ace_medical_damage_woundClassNames select classindex.
-params ["_unit", ["_newWounds", createHashMap]];
+// Roll a junctional hemorrhage from one ACE woundReceived event.
+//
+// Supported/native path:
+//   [_unit, _allDamages, _ammo] call ACME_fnc_junctionalRollSpawn
+// where _allDamages is ACE's woundReceived array. ACME registers this handler after ACE's own wound handler, so
+// GET_OPEN_WOUNDS already contains the wound produced by the hit. Only parts named by this event are inspected;
+// old wounds on unrelated limbs are never re-rolled.
+//
+// Legacy/internal path:
+//   [_unit, _newWoundsHashMap] call ACME_fnc_junctionalRollSpawn
+// remains accepted for scripted/tests that already provide the exact new-wound map.
+//
+// Eligible native wounds are medium/large VelocityWound and large Avulsion. The configured appearance-frequency
+// multiplier still controls the same velocity/avulsion probabilities.
+params ["_unit", ["_woundData", []], ["_ammo", ""]];
 if (isNull _unit || {!local _unit} || {!alive _unit}) exitWith {};
 if !(missionNamespace getVariable ["ACME_sys_junc", true]) exitWith {};
 
 private _names = missionNamespace getVariable ["ace_medical_damage_woundClassNames", []];
 if (_names isEqualTo []) exitWith {};
-private _openWounds = _newWounds;
+
+private _openWounds = createHashMap;
+private _candidateParts = [];
+if (_woundData isEqualType createHashMap) then {
+    _openWounds = _woundData;
+    _candidateParts = ["leftarm", "rightarm", "leftleg", "rightleg"] select {
+        !((_openWounds getOrDefault [_x, []]) isEqualTo [])
+    };
+} else {
+    // ACE woundReceived body-part names are case-insensitive. Ignore head/body here; penetrating chest trauma has
+    // its own chest-seal/pneumothorax path and junctionals are limb anchored.
+    {
+        if (_x isEqualType [] && {count _x >= 2}) then {
+            private _part = toLower (_x param [1, ""]);
+            if (_part in ["leftarm", "rightarm", "leftleg", "rightleg"]) then {
+                _candidateParts pushBackUnique _part;
+            };
+        };
+    } forEach _woundData;
+    private _allOpen = _unit getVariable ["ace_medical_openWounds", createHashMap];
+    { _openWounds set [_x, +(_allOpen getOrDefault [_x, []])]; } forEach _candidateParts;
+};
+if (_candidateParts isEqualTo []) exitWith {};
 
 private _pVel = missionNamespace getVariable ["ACME_junctionalChanceVelocity", 0.6];  // high.
 private _pAvl = missionNamespace getVariable ["ACME_junctionalChanceAvulsion", 0.15];  // low.
@@ -36,18 +65,28 @@ private _curJunc = { (_unit getVariable [format ["ACME_Junc_%1", _x], ""]) != ""
     if ((_unit getVariable [format ["ACME_Junc_%1", _part], ""]) != "") then { continue };  // already junctional.
 
     private _chance = 0;
+    private _sourceWoundId = -1;
+    private _sourceScore = -1;
     {
-        _x params ["_id", "_amountOf"];
+        _x params ["_id", "_amountOf", ["_bleeding", 0]];
         if (_amountOf <= 0) then { continue };
         private _classIndex = floor (_id / 10);
         private _size = _id % 10;  // 0 small, 1 medium, 2 large.
         private _cn = if (_classIndex >= 0 && _classIndex < count _names) then { _names select _classIndex } else { "" };
-        if (_cn == "VelocityWound" && _size >= 1) then { _chance = _chance max _pVel };  // a medium or large velocity wound.
-        if (_cn == "Avulsion"     && _size >= 2) then { _chance = _chance max _pAvl };  // a large avulsion.
+        private _candidateChance = 0;
+        if (_cn == "VelocityWound" && _size >= 1) then { _candidateChance = _pVel; };  // a medium or large velocity wound.
+        if (_cn == "Avulsion"     && _size >= 2) then { _candidateChance = _pAvl; };  // a large avulsion.
+        if (_candidateChance > 0) then {
+            _chance = _chance max _candidateChance;
+            // Bind the junctional device state to the native wound that most plausibly created it. This lets later
+            // packing/XStat/wrapping control the same native source rather than only ACME's additional arterial channel.
+            private _score = (_amountOf max 0) * ((_bleeding max 0.001)) * (1 + _size);
+            if (_score > _sourceScore) then {_sourceScore = _score; _sourceWoundId = _id;};
+        };
     } forEach (_openWounds getOrDefault [_part, []]);
 
     if (_chance > 0 && {random 1 < _chance}) then {
-        [_unit, _part, true] call ACME_fnc_junctionalInflict;
+        [_unit, _part, true, -1, _sourceWoundId] call ACME_fnc_junctionalInflict;
         _curJunc = _curJunc + 1;
     };
-} forEach _allParts;
+} forEach _candidateParts;

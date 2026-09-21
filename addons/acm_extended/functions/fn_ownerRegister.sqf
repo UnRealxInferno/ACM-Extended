@@ -3,6 +3,8 @@
 params ["_patient"];
 if (isNull _patient || {!local _patient} || {_patient getVariable ["ACME_clinicalRestoring", false]}) exitWith {};
 
+[_patient] call ACME_fnc_transientStateReconcile;
+
 // Migrate old bilateral inguinal AAJT saves exactly once. The physical AAJT-S has one wedge, so an old
 // ACME_AAJT_legs=[leftleg,rightleg] state must become one deterministic side instead of silently retaining
 // bilateral control. Prefer the only recorded leg, then the only leg with junctional evidence, otherwise left.
@@ -19,7 +21,12 @@ if ((_patient getVariable ["ACME_AAJT_inguinal", false]) && {(_patient getVariab
 private _headState = (_patient getVariable ["ACME_headElevated", false])
     || {_patient getVariable ["ACME_headElev_vestRemoved", false]}
     || {(_patient getVariable ["ACME_headElev_propVest", ""]) != ""};
-if (!alive _patient) exitWith {if (_headState) then {[_patient] call ACME_fnc_headElevDeathRelease;};};
+if (!alive _patient) exitWith {
+    [_patient] call ACME_fnc_deadPhysiologyFreeze;
+    if (_headState) then {[_patient] call ACME_fnc_headElevDeathRelease;};
+};
+// Same-object recovery/debug resurrection must be able to arm a future death freeze again.
+_patient setVariable ["ACME_deadPhysiologyFrozenLocal", false, false];
 if (_patient getVariable ["ACME_headElevated", false]) then {[_patient] call ACME_fnc_headElevWatch;};
 {
     _x params ["_listName", "_flag"];
@@ -69,7 +76,8 @@ private _needs = (_patient getVariable ["ace_medical_inCardiacArrest", false])
     || {count (_patient getVariable ["ACME_yFlushJobs", createHashMap]) > 0}
     || {count (_patient getVariable ["ACME_suctionSessions", []]) > 0}
     || {(_patient getVariable ["ACME_suctionExposure", 0]) > 0}
-    || {(_patient getVariable ["ACME_o2Drain_suction", 0]) > 0};
+    || {(_patient getVariable ["ACME_o2Drain_suction", 0]) > 0}
+    || {(_patient getVariable ["ACME_laryngo_irritationUntil", 0]) > CBA_missionTime};
 private _registry = missionNamespace getVariable ["ACME_clinical_activePatients", []];
 if (_needs) then {_registry pushBackUnique _patient;} else {_registry = _registry - [_patient];};
 missionNamespace setVariable ["ACME_clinical_activePatients", _registry];

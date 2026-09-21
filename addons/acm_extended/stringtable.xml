@@ -1,22 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project name="ACME">
     <Package name="acm_extended">
+        <Container name="B12Epinephrine">
+            <Key ID="STR_ACM_Circulation_Medication_EpinephrineCardiac">
+                <Original>Epinephrine 1:10,000</Original>
+                <English>Epinephrine 1:10,000</English>
+            </Key>
+        </Container>
+        <Container name="ClinicalAndRuntimeFixes">
+            <Key ID="STR_ACME_Disability_InspectForFracture_Indeterminate">
+                <Original>Patient&apos;s %1 requires reassessment; contusion and crepitus findings are indeterminate.</Original>
+                <English>Patient&apos;s %1 requires reassessment; contusion and crepitus findings are indeterminate.</English>
+            </Key>
+            <Key ID="STR_ACME_Disability_InspectForFracture_Indeterminate_Short">
+                <Original>Limb findings indeterminate; reassess</Original>
+                <English>Limb findings indeterminate; reassess</English>
+            </Key>
+            <Key ID="STR_ACME_Disability_InspectForFracture_Stabilized">
+                <Original>Patient&apos;s %1 has been stabilized; crepitus was not reassessed.</Original>
+                <English>Patient&apos;s %1 has been stabilized; crepitus was not reassessed.</English>
+            </Key>
+            <Key ID="STR_ACME_Disability_InspectForFracture_Stabilized_Short">
+                <Original>Limb stabilized; crepitus not reassessed</Original>
+                <English>Limb stabilized; crepitus not reassessed</English>
+            </Key>
+            <Key ID="STR_ACM_Breathing_BVM_UsingBVM_OxygenTankDepleted">
+                <Original>Portable oxygen tank depleted.</Original>
+                <English>Portable oxygen tank depleted.</English>
+            </Key>
+        </Container>
         <Container name="Medications">
-            <Key ID="STR_ACM_Circulation_Medication_Norepinephrine">
-                <Original>Norepinephrine</Original>
-                <English>Norepinephrine</English>
+            <Key ID="STR_ACM_Circulation_Medication_CalciumGluconate">
+                <Original>Calcium Gluconate</Original>
+                <English>Calcium Gluconate</English>
             </Key>
             <Key ID="STR_ACM_Circulation_Medication_Ceftriaxone">
                 <Original>Ceftriaxone</Original>
                 <English>Ceftriaxone</English>
             </Key>
-            <Key ID="STR_ACM_Circulation_Medication_CalciumGluconate">
-                <Original>Calcium Gluconate</Original>
-                <English>Calcium Gluconate</English>
-            </Key>
             <Key ID="STR_ACM_Circulation_Medication_Midazolam">
                 <Original>Midazolam</Original>
                 <English>Midazolam</English>
+            </Key>
+            <Key ID="STR_ACM_Circulation_Medication_Norepinephrine">
+                <Original>Norepinephrine</Original>
+                <English>Norepinephrine</English>
             </Key>
             <Key ID="STR_ACM_Circulation_Medication_Propofol">
                 <Original>Propofol</Original>
@@ -29,10 +57,5 @@
                 <English>Elevate Head 30 deg</English>
             </Key>
         </Container>
-        <Container name="B12Epinephrine">
-      <Key ID="STR_ACM_Circulation_Medication_EpinephrineCardiac">
-        <Original>Epinephrine 1:10,000</Original><English>Epinephrine 1:10,000</English>
-      </Key>
-    </Container>
-</Package>
+    </Package>
 </Project>

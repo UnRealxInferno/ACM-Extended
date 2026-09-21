@@ -41,4 +41,5 @@ if (local _patient) then {
     if (!isNull _leakSrc) then { deleteVehicle _leakSrc; };
     _patient setVariable ["ACME_JuncLeakSfxSrc", objNull, true];
     _patient setVariable ["ACME_JuncLeakNext", -1, true];
+    _patient setVariable ["ACME_junctionalBleedLPS", 0, false];
 };

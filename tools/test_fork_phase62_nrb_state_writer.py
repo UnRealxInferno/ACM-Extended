@@ -21,4 +21,13 @@ for p in FUN.rglob('*.sqf'):
         if re.search(r'setVariable\s*\[\s*["\']'+keys+r'["\']',code): viol.append((p,i,raw.strip()))
         if 'ACME_fnc_setVarNet' in code and re.search(keys,code): viol.append((p,i,raw.strip()))
 assert not viol, '\n'.join(f'{p.relative_to(ROOT)}:{i}: {s}' for p,i,s in viol)
+
+gui = read('addons/gui/overrides/fnc_updateInjuryList.sqf')
+assert 'ACME_nrb_on' in gui
+assert 'ACME_nrb_hasO2' in gui
+assert 'NRB [%1 L/min O2]' in gui
+assert 'NRB [No O2]' in gui
+assert 'if (_selectionN == -1)' in gui
+assert 'if (_selectionN in [0,1] && {_nrbOn})' in gui
+
 print('fork phase 62 NRB state-writer checks: PASS')

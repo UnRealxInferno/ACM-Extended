@@ -6,5 +6,6 @@ private _side = uiNamespace getVariable ["ACME_Thora_Side", "right"];
 _side = ["right", "left"] select (_side == "right");
 uiNamespace setVariable ["ACME_Thora_Side", _side];
 uiNamespace setVariable ["ACME_Thora_OnZone", false];
+uiNamespace setVariable ["ACME_Thora_Burp", ["", 0, 0, false]];
 [] call ACME_fnc_thoraRender;
 [] call ACME_fnc_thoraUpdateTrayIcons;

@@ -31,6 +31,17 @@ private _ketDepression = (linearConversion [1.6, 3.2, _ket, 0, 0.3, true])
     + (linearConversion [0.8, 2.0, _rapid, 0, 0.15, true]);
 _co2 = _co2 - (_ketDepression min 0.4);
 private _rr = (_interactions select 2) - 4 * (_ketDepression min 0.4);
+// B121 Hardcore Medications: rapid propofol/benzodiazepine/opioid delivery produces a sharper short-lived
+// depressant peak than the same admitted mass pushed slowly. Native medication effects still own the base dose.
+if (missionNamespace getVariable ["ACME_hcEff_medications",false]) then {
+    private _rProp = (_patient getVariable ["ACME_hcMed_rapidPropofol",0]) max 0 min 2;
+    private _rMid = (_patient getVariable ["ACME_hcMed_rapidMidazolam",0]) max 0 min 2;
+    private _rOp = (_patient getVariable ["ACME_hcMed_rapidOpioid",0]) max 0 min 2;
+    private _rapidDep = ((_rProp*1.0)+(_rMid*0.65)+(_rOp*0.75)) min 2;
+    _svr = _svr - (16*_rProp + 7*_rMid + 7*_rOp);
+    _rr = _rr - (3.5*_rProp + 2*_rMid + 2.5*_rOp);
+    _co2 = _co2 - (0.10*_rapidDep);
+};
 if (_patient getVariable ["ace_medical_inCardiacArrest", false]) then {_hr = 0;};
 [_patient, "ACME_ket_sympatheticEffect", _symp * _reserve] call ACME_fnc_setVarNet;
 [_patient, "ACME_sedation_hrAdjust", _hr] call ACME_fnc_setVarNet;

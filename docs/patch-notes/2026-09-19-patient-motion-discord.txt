@@ -1,0 +1,12 @@
+**ACM Extended 1.2.1-rc1 | Patient motion follow-up**
+
+- Seizure debug action runs directly, without weapon/stance preflight or a treatment timer.
+- Active seizures block spontaneous wake-up and yield cleanly between collapse, gestures and transport.
+- Fixed unconscious-pose handlers conflicting with drag-handle ragdoll physics.
+- Dragging wakes a settled body before pulling and allows brief startup tether stretch.
+- Wider drag tether visual.
+- Semi-Fowler's is unavailable on standing or crouching patients, including patients with stale lying flags.
+- Ketamine water distortion is 25% weaker. Timing and other visual layers are unchanged.
+- Added regression checks and protected deferred ragdoll work against resets, wake-up, vehicle entry and stale drag sessions.
+
+**Validation:** Source checks completed. HEMTT and in-game verification are still pending.

@@ -68,6 +68,7 @@ switch (_type) do {
         _patient setVariable [QGVAR(AED_ShockTotal), 0, true];
 
         if !(_state) then {
+            _patient setVariable ["ACME_sync_armed", false, true];
             _patient setVariable [QGVAR(AED_StartTime), -1, true];
             _patient setVariable [QGVAR(AED_EKGDisplay), [], true];
             _patient setVariable [QGVAR(AED_EKGRefreshDisplay), [], true];

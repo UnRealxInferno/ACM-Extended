@@ -2,6 +2,8 @@
 call ACME_fnc_initForkStartupRuntime;
 // Phase 37: debug-menu PFH plus EachFrame fallback registration.
 call ACME_fnc_registerDebugWatchdogRuntime;
+// B114: rebindable two-page debug navigation.
+call ACME_fnc_registerDebugPageKeybindRuntime;
 
 // Medical-menu rendering is owned at compile time by addons/gui.
 call ACME_fnc_initMedicationRegistry;
@@ -119,6 +121,19 @@ call ACME_fnc_initTbiCoreState;
 
 // Phase 20: Circulation, acid-base, hypothermia and custom-rhythm tunables.
 call ACME_fnc_initCirculationConfig;
+call ACME_fnc_initVisualEffectsConfig;
+if (hasInterface) then {
+    // Local medication receipt is authoritative for the five-minute analgesic ketamine perception window. Any new
+    // IV/IM/esketamine dose refreshes the window without changing ACM/ACE pharmacokinetics.
+    ["ace_medical_treatment_medicationLocal", {
+        params ["_patient", "_bodyPart", "_medication", "_dose", "_injection"];
+        if (isNull _patient || {_patient != player} || {!(_medication isEqualType "")}) exitWith {};
+        if ((toLowerANSI _medication) in ["ketamine","ketamine_iv","esketamine"]) then {
+            uiNamespace setVariable ["ACME_VFX_KetLastDoseAt",diag_tickTime];
+        };
+    }] call CBA_fnc_addEventHandler;
+    [{call ACME_fnc_visualFxTick}, (missionNamespace getVariable ["ACME_visualFx_updateSec",0.12]), []] call CBA_fnc_addPerFrameHandler;
+};
 
 // Phase 20: Obtundation, impaired-consciousness and recovery/input-lock tunables.
 call ACME_fnc_initConsciousnessConfig;
@@ -208,9 +223,6 @@ call ACME_fnc_initNarcBoxConfig;
 
 // Phase 47: shared network publication tolerance.
 call ACME_fnc_initNetworkSyncConfig;
-
-// Phase 24: ACRE2 obtunded speech-pulse configuration and delayed language registration.
-call ACME_fnc_initAcreBabbleRuntime;
 
 // Phase 24: Intubation geometry plus procedure darkness, adaptation and cyanosis presentation tunables.
 call ACME_fnc_initProcedureEnvironmentConfig;
@@ -312,6 +324,9 @@ call ACME_fnc_registerTreatmentRollRuntime;
 
 // Phase 34: paired treatment-start/end ownership for head-elevation treatment suspension.
 call ACME_fnc_registerHeadElevationTreatmentRuntime;
+
+// B122: exact-class chest-access vest leases for backpack-supported patients.
+call ACME_fnc_registerChestAccessVestRuntime;
 
 // Phase 34: Megacode laptop control-panel and debug cable-tuner interaction registration.
 call ACME_fnc_registerMegacodeInteractionRuntime;

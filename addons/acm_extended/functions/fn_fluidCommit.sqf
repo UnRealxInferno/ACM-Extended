@@ -3,6 +3,34 @@
 params ["_patient", "_part", "_index", "_bag", "_drained", "_admitted", "_dt", ["_flush", false]];
 if (isNull _patient || {!local _patient} || {_drained <= 0}) exitWith {};
 _admitted = (_admitted max 0) min _drained;
+// Keep a compact, owner-authored visual record of carrier fluid that actually went into tissue.
+// The owner updates exact accumulated volume locally and publishes the compact state at most once per second
+// unless severity changes. The last published total also survives patient locality transfer.
+private _acmeLeakMl = (_drained - _admitted) max 0;
+private _acmeLeakSite = if (_bag param [4, false]) then {_bag param [3, -1]} else {-1};
+private _acmeLeakPart = toLowerANSI (_part);
+if (_acmeLeakMl > 0.001 && {_acmeLeakSite in [0,1,2]}
+    && {_acmeLeakPart in ["leftarm","rightarm","leftleg","rightleg"]}) then {
+    private _visualKey = format ["ACME_ivInfiltrationVisual_%1_%2", _acmeLeakPart, _acmeLeakSite];
+    private _priorVisual = _patient getVariable [_visualKey, [0, -1, 0, -1]];
+    private _priorSeverity = _priorVisual param [0, 0];
+    private _priorFlowAt = _priorVisual param [1, -1];
+    private _totalMl = _priorVisual param [2, 0];
+    private _lastPublishedAt = _priorVisual param [3, -1];
+    private _life = missionNamespace getVariable ["ACME_iv_bruiseLifeSec", 1200];
+    if !(_life isEqualType 0 && {finite _life} && {_life > 1}) then {_life = 1200;};
+    if !(_totalMl isEqualType 0 && {finite _totalMl} && {_totalMl >= 0}) then {_totalMl = 0;};
+    if (_priorFlowAt >= 0 && {(serverTime - _priorFlowAt) > _life}) then {_totalMl = 0;};
+    _totalMl = _totalMl + _acmeLeakMl;
+    private _severity = ceil (linearConversion [0.01, 50, _totalMl, 1, 10, true]);
+    _severity = (_severity max 1) min 10;
+    private _state = [_severity, serverTime, _totalMl, _lastPublishedAt];
+    _patient setVariable [_visualKey, _state, false];
+    if (_severity != _priorSeverity || {_lastPublishedAt < 0} || {(serverTime - _lastPublishedAt) >= 1}) then {
+        _state set [3, serverTime];
+        _patient setVariable [_visualKey, _state, true];
+    };
+};
 private _type = _bag param [0, ""];
 if (_type == "Saline" || {_flush}) then {
     [_patient, "ACME_circ_salineGivenMl", (_patient getVariable ["ACME_circ_salineGivenMl", 0]) + _admitted] call ACME_fnc_setVarNet;

@@ -24,7 +24,7 @@ _patient setVariable [QGVAR(AED_PressureCuffBusy), true, true];
     params ["_medic", "_patient"];
 
     !([_patient, "", 3] call FUNC(hasAED));
-}, {}, [_medic, _patient], (4 + (random 4)), 
+}, {}, [_medic, _patient], (4 + (random 4)),
 {
     params ["", "_patient"];
 
@@ -56,7 +56,7 @@ private _sound = playSound3D [QPATHTO_R(sound\aed_pressurecuff.wav), _patient, f
 
     stopSound _sound;
     _patient setVariable [QGVAR(AED_PressureCuffBusy), false, true];
-}, [_medic, _patient, _sound], 10, 
+}, [_medic, _patient, _sound], 10,
 {
     params ["", "_patient"];
 

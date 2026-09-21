@@ -61,7 +61,9 @@ _led ctrlSetText (missionNamespace getVariable ["ACME_sync_ledTexture", "#(argb,
 _led ctrlSetTextColor (["success", 1] call ACME_fnc_a11yColor);
 _led ctrlCommit 0;
 private _tgt = missionNamespace getVariable ["ACM_circulation_AED_Monitor_Target", objNull];
-_led ctrlShow (!isNull _tgt && {_tgt getVariable ["ACME_sync_armed", false]});
+private _initialArmed = !isNull _tgt && {_tgt getVariable ["ACME_sync_armed", false]};
+uiNamespace setVariable ["ACME_sync_localArmed", _initialArmed];
+_led ctrlShow _initialArmed;
 
 // the flag pool. each QRS carrot is a small downward triangle generated from stacked procedural-fill rows, with the
 // top row widest, narrowing to a point, because the solid-fill picture renders reliably where the structured-text

@@ -1,0 +1,19 @@
+**ACM Extended: Transfusion and Thoracostomy Fixes**
+
+**Transfusions**
+- Removed the separate Hardcore Transfusion setting. The current transfusion workflow is now the standard behavior.
+- Removed the outdated 250 mL saline-bag requirement.
+- Preserved the normal Y-line preparation and flushing workflow.
+- Fixed IV/IO selection so clicking an access site updates the selected line, header, and bag lists.
+- Restored the default click sound when selecting an access site.
+- Removed the top-left IV/IO toggle.
+
+**Thoracostomy**
+- Chest seals placed over finger-thoracostomy incisions can now be removed or burped.
+- With empty hands, RMB the seal to remove it. Scroll over it to lift a corner; reverse the wheel to lay it down.
+- After removing the seal, use the finger on the existing tract to repeat the sweep without another kit.
+- Aftercare preserves unrelated chest seals and any chest tube on the opposite side.
+- Pressure can still build again if a sealed tract has a remaining internal leak.
+
+**Validation status**
+Source reviewed and regression checks added. Full HEMTT build and in-game testing are pending.

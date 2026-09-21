@@ -73,7 +73,7 @@ private _fnc_sliderMove = {
     if (isNull _logic) exitWith {};
 
     private _patient = attachedTo _logic;
-    
+
     private _currentValue = (GET_PAIN(_patient) toFixed 2);
 
     _slider ctrlSetTooltip format ["%1 (was %2)", (sliderPosition _slider), _currentValue];

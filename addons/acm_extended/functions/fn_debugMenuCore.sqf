@@ -7,7 +7,7 @@ private _cleanup = {
         private _c = uiNamespace getVariable [_x, controlNull];
         if (!isNull _c) then {ctrlDelete _c;};
         uiNamespace setVariable [_x, controlNull];
-    } forEach ["ACME_DebugMenuCtrlL", "ACME_DebugMenuCtrlR", "ACME_DebugMenuCtrl"];
+    } forEach ["ACME_DebugMenuCtrlL", "ACME_DebugMenuCtrlR", "ACME_DebugMenuCtrlS", "ACME_DebugMenuCtrl"];
 };
 
 private _debugEnabled = false;
@@ -36,6 +36,10 @@ private _ctrlR = uiNamespace getVariable ["ACME_DebugMenuCtrlR", controlNull];
 if (!isNull _ctrlR) then {
     if !((ctrlParent _ctrlR) isEqualTo _display) then {ctrlDelete _ctrlR; _ctrlR = controlNull;};
 };
+private _ctrlS = uiNamespace getVariable ["ACME_DebugMenuCtrlS", controlNull];
+if (!isNull _ctrlS) then {
+    if !((ctrlParent _ctrlS) isEqualTo _display) then {ctrlDelete _ctrlS; _ctrlS = controlNull;};
+};
 
 if (isNull _ctrlL) then {
     _ctrlL = _display ctrlCreate ["RscStructuredText", -1];
@@ -54,22 +58,42 @@ if (isNull _ctrlR) then {
     _ctrlR ctrlSetFade 0;
     uiNamespace setVariable ["ACME_DebugMenuCtrlR", _ctrlR];
 };
+if (isNull _ctrlS) then {
+    _ctrlS = _display ctrlCreate ["RscStructuredText", -1];
+    _ctrlS ctrlSetBackgroundColor [0.043, 0.082, 0.188, 0.86];
+    _ctrlS ctrlShow false;
+    _ctrlS ctrlSetFade 0;
+    uiNamespace setVariable ["ACME_DebugMenuCtrlS", _ctrlS];
+};
 
 private _userScale = missionNamespace getVariable ["ACME_debug_scale", 1];
 // a readability-first stacked debug layout.
 // it uses larger monospaced text, paired-value rows and section breathing room.
 private _scale = (((_userScale max 0.50) min 1.15) * 0.68) max 0.48 min 0.78;
 private _gap = 0.004;
-private _x0 = _uiX + 0.004;
+// safeZoneX is still centered on some ultrawide/triple-head layouts. safeZoneXAbs is the true physical left edge.
+private _x0 = safeZoneXAbs + 0.002;
 private _y0 = safeZoneY + 0.020;
 private _h = (safeZoneH - 0.028) max 0.20;
 private _w = ((_uiW - 0.012 - _gap) / 2) min 0.497;
+private _stateX = _x0 + (2 * (_w + _gap));
+private _stateAvailW = (safeZoneXAbs + safeZoneWAbs - 0.002) - _stateX;
+private _stateW = _w min _stateAvailW;
+private _useStateColumn = _stateW >= (_w * 0.72);
 _ctrlL ctrlSetPosition [_x0, _y0, _w, _h];
 _ctrlL ctrlCommit 0;
 _ctrlR ctrlSetPosition [_x0 + _w + _gap, _y0, _w, _h];
 _ctrlR ctrlCommit 0;
+if (_useStateColumn) then {
+    _ctrlS ctrlSetPosition [_stateX, _y0, _stateW, _h];
+    _ctrlS ctrlCommit 0;
+    _ctrlS ctrlShow true;
+} else {
+    _ctrlS ctrlShow false;
+};
 _ctrlL ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro' color='#D9A441'>ACME DEBUG loading</t>", _scale];
 _ctrlR ctrlSetStructuredText parseText "";
+_ctrlS ctrlSetStructuredText parseText "";
 
 // THE PILLAR PALETTE, ADAPTED FOR A DARK HUD.
 // the print palette is navy 0B1530, red BE1818, cream F0E7D2, amber D9A441 and green 3B8F4A. two of those cannot
@@ -269,13 +293,16 @@ if (isNull _patient) then {
 
 private _ver = getText (configFile >> "CfgPatches" >> "ACM_Extended" >> "version");
 if (_ver == "") then { _ver = missionNamespace getVariable ["ACME_infusion_version", "?"]; };
-private _debugRevision = missionNamespace getVariable ["ACME_debugRevision", "r1"];
+private _rc = missionNamespace getVariable ["ACME_debugRevision", ""];
+if (_rc isEqualType "" && {_rc != ""}) then {_ver = format ["%1-%2", _ver, _rc];};
 private _linesL = [];
 private _linesR = [];
+private _linesS = [];
 private _pName = if (isNull _patient) then {"none"} else {[name _patient] call _fnSafe};
 private _targetMode = if (_patient isEqualTo (missionNamespace getVariable ["ACME_debug_lastTreatmentTarget", objNull])) then {"treating"} else {"auto"};
 
-_linesL pushBack format ["<t color='%1' size='1.00'>ACME DEBUG v%2-%6</t> %3 <t color='%4'>%5</t>", _cTitle, _ver, _pName, _cMute, _targetMode, _debugRevision];
+_linesL pushBack format ["<t color='%1' size='1.00'>ACME DEBUG v%2</t> <t color='%3'>DETAILS 2/2</t>", _cTitle, _ver, _cSect];
+_linesL pushBack format ["<t color='%1'>%2 | %3 | Ctrl+PgUp/PgDn</t>", _cMute, _pName, _targetMode];
 _linesL pushBack format ["<t color='%1'>dbg on | force %2 | tick %3</t>", _cMute, missionNamespace getVariable ["ACME_debug_forceOverlay", false], diag_tickTime toFixed 1];
 _linesL pushBack format ["<t color='%1'>trk i%2 t%3 c%4 bp%5</t>", _cMute, count (["ACME_infusion_activePatients"] call _fnArray), count (["ACME_tbi_activePatients"] call _fnArray), count (["ACME_circ_activePatients"] call _fnArray), count (["ACME_autoBP_patients"] call _fnArray)];
 
@@ -283,16 +310,25 @@ if (isNull _patient) exitWith {
     _linesL pushBack format ["<t color='%1'>no patient available</t>", _cWarn];
     _ctrlL ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _scale, _linesL joinString "<br/>"];
     _ctrlR ctrlSetStructuredText parseText "";
+    _ctrlS ctrlSetStructuredText parseText "";
 };
 
 private _aliveTxt = if (alive _patient) then {format ["<t color='%1'>alive</t>", _cGood]} else {format ["<t color='%1'>dead</t>", _cBad]};
-private _hr = round ([_patient, "ace_medical_heartRate", 0] call _fnNum);
+private _hr = if (alive _patient) then {round ([_patient, "ace_medical_heartRate", 0] call _fnNum)} else {0};
 private _rr = round ([_patient, "ACM_breathing_RespirationRate", 0] call _fnNum);
 private _spo2 = round ([_patient, "ace_medical_spo2", 0] call _fnNum);
-private _bv = [_patient, "ACM_circulation_Blood_Volume", -1] call _fnNum;
+// B103: do not label ACM's Blood_Volume compartment as the patient's total volume.
+// ACE bloodVolume is the immediately hemodynamically available circulating sum. Effective
+// blood volume remains ACM's distinct weighted value.
 private _normalBlood = missionNamespace getVariable ["ACME_hypo_bloodNormal", 6];
-private _bloodDeficit = if (_bv >= 0) then {(_normalBlood - _bv) max 0} else {-1};
-private _bloodPct = if (_bv >= 0 && {_normalBlood > 0}) then {round ((_bv / _normalBlood) * 100)} else {-1};
+private _circVol = [_patient, "ace_medical_bloodVolume", (_patient getVariable ["ACME_circulatingVolume", _normalBlood])] call _fnNum;
+private _bloodComp = [_patient, "ACM_circulation_Blood_Volume", _normalBlood] call _fnNum;
+private _plasmaComp = [_patient, "ACM_circulation_Plasma_Volume", 0] call _fnNum;
+private _salineComp = [_patient, "ACM_circulation_Saline_Volume", 0] call _fnNum;
+private _overloadComp = [_patient, "ACM_circulation_Overload_Volume", 0] call _fnNum;
+private _effVol = ((_bloodComp + (_plasmaComp * 0.3) - _overloadComp) min _normalBlood) max 0;
+private _bloodDeficit = if (_circVol >= 0) then {(_normalBlood - _circVol) max 0} else {-1};
+private _bloodPct = if (_circVol >= 0 && {_normalBlood > 0}) then {round ((_circVol / _normalBlood) * 100)} else {-1};
 private _sys = 0;
 private _dia = 0;
 if (!isNil "ace_medical_status_fnc_getBloodPressure") then {
@@ -320,12 +356,20 @@ _linesL pushBack ([
     ["SpO2", format ["%1%%", _spo2], [_spo2] call _fnColorSpO2, 6, 7] call _fnKV
 ] joinString "     " );
 _linesL pushBack ([
-    ["Blood", format ["%1L", _bv toFixed 2], [_bv] call _fnColorBlood, 6, 7] call _fnKV,
-    ["Pct", format ["%1%%", _bloodPct], [_bv] call _fnColorBlood, 6, 7] call _fnKV
+    ["Circ", format ["%1L", _circVol toFixed 2], [_circVol] call _fnColorBlood, 6, 7] call _fnKV,
+    ["Eff", format ["%1L", _effVol toFixed 2], [_effVol] call _fnColorBlood, 6, 7] call _fnKV
 ] joinString "     " );
 _linesL pushBack ([
-    ["Def", format ["%1L", _bloodDeficit toFixed 2], [_bv] call _fnColorBlood, 6, 7] call _fnKV,
-    ["Tgt", format ["%1L", _normalBlood toFixed 1], _cMute, 6, 7] call _fnKV
+    ["Blood", format ["%1L", _bloodComp toFixed 2], _cMute, 6, 7] call _fnKV,
+    ["Plasma", format ["%1L", _plasmaComp toFixed 2], _cMute, 6, 7] call _fnKV
+] joinString "     " );
+_linesL pushBack ([
+    ["Cryst", format ["%1L", _salineComp toFixed 2], _cMute, 6, 7] call _fnKV,
+    ["Over", format ["%1L", _overloadComp toFixed 2], _cMute, 6, 7] call _fnKV
+] joinString "     " );
+_linesL pushBack ([
+    ["Def", format ["%1L", _bloodDeficit toFixed 2], [_circVol] call _fnColorBlood, 6, 7] call _fnKV,
+    ["Pct", format ["%1%%", _bloodPct], [_circVol] call _fnColorBlood, 6, 7] call _fnKV
 ] joinString "     " );
 
 // Show each admitted drug effect separately from the shared hypnotic/adjunct result.
@@ -650,10 +694,10 @@ _linesR pushBack ([
 
 if (missionNamespace getVariable ["ACME_debug_showCirc", true]) then {
     private _circState = _patient getVariable ["ACME_circ_State", createHashMap];
-    private _shock = [_patient, "ACME_circ_shockSeverity", 0] call _fnNum;
+    private _shock = _circState getOrDefault ["shockSeverity", 0];
     private _bpOffset = [_patient, "ACME_circ_bpOffset", 0] call _fnNum;
     private _hrPin = [_patient, "ACME_rhythm_HRPin", 0] call _fnNum;
-    private _pressor = [_patient, "ACME_circ_pressorSupport", 0] call _fnNum;
+    private _pressor = _circState getOrDefault ["pressorSupport", 0];
     private _pde = [_patient, "ACME_pde_support", 0] call _fnNum;
     private _distal = [_patient, "ACME_circ_distalPressorSpike", 0] call _fnNum;
     private _ca = [_patient, "ACME_calciumCredit", 0] call _fnNum;
@@ -835,7 +879,8 @@ _linesR pushBack "";
 _linesR pushBack format ["<t color='%1'>RHYTHM / AED</t>", _cSect];
 private _nativeRhythm = round ([_patient, "ACM_circulation_Cardiac_RhythmState", 0] call _fnNum);
 private _customRhythm = round ([_patient, "ACME_rhythm_active", 0] call _fnNum);
-private _visualRhythm = round ([_patient, "ACME_AED_VisualRhythm", 0] call _fnNum);
+private _aedRhythm = round ([_patient, "ACM_circulation_AED_EKGRhythm", _nativeRhythm] call _fnNum);
+private _visualRhythm = if (_customRhythm >= 100 && {!(_aedRhythm in [-1,1,2])}) then {_customRhythm} else {_aedRhythm};
 private _rhColor = [_nativeRhythm, _customRhythm] call _fnColorRhythm;
 _linesR pushBack ([
     ["Active", _customRhythm, _rhColor, 7, 7] call _fnKV,
@@ -867,6 +912,155 @@ if (missionNamespace getVariable ["ACME_debug_showAutoBP", true]) then {
     _linesR pushBack ([
         ["Tracked", count (["ACME_autoBP_patients"] call _fnArray), _cMute, 7, 7] call _fnKV
     ] joinString "        " );
+};
+
+// B110: readable ACM state surface. The pause-menu dump carries every raw ACM/ACME/ACE-medical variable;
+// this column keeps the high-value state machine fields visible in real time without burying them in a raw dump.
+private _boolWord = {
+    params ["_v"];
+    if (_v) then {"yes"} else {"no"}
+};
+private _boolColor = {
+    params ["_v", ["_trueBad", false]];
+    if (_trueBad) exitWith {if (_v) then {_cBad} else {_cGood}};
+    if (_v) then {_cGood} else {_cMute}
+};
+private _shortItem = {
+    params ["_v"];
+    if !(_v isEqualType "") exitWith {str _v};
+    if (_v == "") then {"none"} else {_v}
+};
+
+_linesS pushBack format ["<t color='%1' size='1.00'>ACM STATES</t>", _cTitle];
+_linesS pushBack format ["<t color='%1'>CORE</t>", _cSect];
+private _acmUnc = _patient getVariable ["ACE_isUnconscious", false];
+private _acmArrest = _patient getVariable ["ace_medical_inCardiacArrest", false];
+private _acmCrit = _patient getVariable ["ACM_core_CriticalVitals_State", false];
+private _acmKO = _patient getVariable ["ACM_core_KnockOut_State", false];
+_linesS pushBack ([
+    ["Uncon", [_acmUnc] call _boolWord, [_acmUnc, true] call _boolColor, 7, 7] call _fnKV,
+    ["Arrest", [_acmArrest] call _boolWord, [_acmArrest, true] call _boolColor, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Critical", [_acmCrit] call _boolWord, [_acmCrit, true] call _boolColor, 7, 7] call _fnKV,
+    ["KO", [_acmKO] call _boolWord, [_acmKO, true] call _boolColor, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Lying", [(_patient getVariable ["ACM_core_Lying_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["Sitting", [(_patient getVariable ["ACM_core_Sitting_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["TgtHR", round (_patient getVariable ["ACM_core_TargetVitals_HeartRate", 0]), _cMute, 7, 7] call _fnKV,
+    ["TgtRR", round (_patient getVariable ["ACM_core_TargetVitals_RespirationRate", 0]), _cMute, 7, 7] call _fnKV
+] joinString "        ");
+
+_linesS pushBack "";
+_linesS pushBack format ["<t color='%1'>AIRWAY</t>", _cSect];
+private _airReflex = _patient getVariable ["ACM_airway_AirwayReflex_State", true];
+_linesS pushBack ([
+    ["Reflex", [_airReflex] call _boolWord, if (_airReflex) then {_cGood} else {_cBad}, 7, 7] call _fnKV,
+    ["Collapse", _patient getVariable ["ACM_airway_AirwayCollapse_State", 0], _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Vomit", _patient getVariable ["ACM_airway_AirwayObstructionVomit_State", 0], _cLabel, 7, 7] call _fnKV,
+    ["Blood", _patient getVariable ["ACM_airway_AirwayObstructionBlood_State", 0], _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["OPA", [_patient getVariable ["ACM_airway_AirwayItem_Oral", ""]] call _shortItem, _cLabel, 7, 10] call _fnKV,
+    ["NPA", [_patient getVariable ["ACM_airway_AirwayItem_Nasal", ""]] call _shortItem, _cLabel, 7, 10] call _fnKV
+] joinString "    ");
+_linesS pushBack ([
+    ["Recover", [(_patient getVariable ["ACM_airway_RecoveryPosition_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["Tilt", [(_patient getVariable ["ACM_airway_HeadTilt_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["SurgAW", [(_patient getVariable ["ACM_airway_SurgicalAirway_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["Cuff", [(_patient getVariable ["ACM_airway_SurgicalAirway_CuffInflated", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+
+_linesS pushBack "";
+_linesS pushBack format ["<t color='%1'>BREATHING / CHEST</t>", _cSect];
+private _ptx = _patient getVariable ["ACM_breathing_Pneumothorax_State", 0];
+private _tptx = _patient getVariable ["ACM_breathing_TensionPneumothorax_State", false];
+private _hemoState = _patient getVariable ["ACM_breathing_Hemothorax_State", 0];
+private _hemoFluid = _patient getVariable ["ACM_breathing_Hemothorax_Fluid", 0];
+_linesS pushBack ([
+    ["PTX", _ptx, if (_ptx > 0) then {_cWarn} else {_cGood}, 7, 7] call _fnKV,
+    ["Tension", [_tptx] call _boolWord, [_tptx, true] call _boolColor, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Hemo", _hemoState, if (_hemoState > 0) then {_cWarn} else {_cGood}, 7, 7] call _fnKV,
+    ["Fluid", format ["%1L", _hemoFluid toFixed 2], if (_hemoFluid > 1.4) then {_cBad} else {if (_hemoFluid > 0.3) then {_cWarn} else {_cGood}}, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["ChestInj", [(_patient getVariable ["ACM_breathing_ChestInjury_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["Seal", [(_patient getVariable ["ACM_breathing_ChestSeal_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Thora", _patient getVariable ["ACM_breathing_Thoracostomy_State", -1], _cLabel, 7, 7] call _fnKV,
+    ["Lungs", str (_patient getVariable ["ACM_breathing_Stethoscope_LungState", [0,0]]), _cLabel, 7, 10] call _fnKV
+] joinString "    ");
+_linesS pushBack ([
+    ["BVM", [(_patient getVariable ["ACM_breathing_isUsingBVM", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["BVM O2", [(_patient getVariable ["ACM_breathing_BVM_ConnectedOxygen", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+
+_linesS pushBack "";
+_linesS pushBack format ["<t color='%1'>CIRCULATION</t>", _cSect];
+_linesS pushBack ([
+    ["Circ", format ["%1L", _circVol toFixed 2], [_circVol] call _fnColorBlood, 7, 7] call _fnKV,
+    ["EffVol", format ["%1L", _effVol toFixed 2], [_effVol] call _fnColorBlood, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Vaso", (_patient getVariable ["ACM_circulation_Vasoconstriction_State", 0]) toFixed 2, _cLabel, 7, 7] call _fnKV,
+    ["Platelet", (_patient getVariable ["ACM_circulation_Platelet_Count", 3]) toFixed 2, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["Calcium", (_patient getVariable ["ACM_circulation_Calcium_Count", 0]) toFixed 2, _cLabel, 7, 7] call _fnKV,
+    ["Rhythm", _patient getVariable ["ACM_circulation_Cardiac_RhythmState", 0], _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["RevArr", [(_patient getVariable ["ACM_circulation_ReversibleCardiacArrest_State", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["Resist", [(_patient getVariable ["ACM_circulation_CardiacArrest_ShockResistant", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack ([
+    ["CPR", [(_patient getVariable ["ACM_circulation_isPerformingCPR", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["CircOK", [(_patient getVariable ["ACM_circulation_CirculationState", true])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+
+_linesS pushBack "";
+_linesS pushBack format ["<t color='%1'>CLOTTING / DISABILITY</t>", _cSect];
+_linesS pushBack ([
+    ["Coag", [(_patient getVariable ["ACM_damage_Coagulation_Active", false])] call _boolWord, _cLabel, 7, 7] call _fnKV,
+    ["IBCoag", [(_patient getVariable ["ACM_damage_IBCoagulation_Active", false])] call _boolWord, _cLabel, 7, 7] call _fnKV
+] joinString "        ");
+_linesS pushBack format ["Fract %1", str (_patient getVariable ["ACM_disability_Fracture_State", [0,0,0,0,0,0]])];
+_linesS pushBack format ["Splint %1", str (_patient getVariable ["ace_medical_treatment_splints", [0,0,0,0,0,0]])];
+_linesS pushBack format ["TQ     %1", str (_patient getVariable ["ACM_disability_Tourniquet_Time", [0,0,0,0,0,0]])];
+
+private _cbrnExposure = _patient getVariable ["ACM_cbrn_Exposed_State", false];
+private _cbrnContam = _patient getVariable ["ACM_cbrn_Contaminated_State", false];
+private _cbrnLung = _patient getVariable ["ACM_cbrn_LungTissueDamage", 0];
+private _cbrnAir = _patient getVariable ["ACM_cbrn_AirwayInflammation", 0];
+if (_cbrnExposure || {_cbrnContam} || {_cbrnLung > 0} || {_cbrnAir > 0}) then {
+    _linesS pushBack "";
+    _linesS pushBack format ["<t color='%1'>CBRN</t>", _cSect];
+    _linesS pushBack ([
+        ["Exposed", [_cbrnExposure] call _boolWord, [_cbrnExposure, true] call _boolColor, 7, 7] call _fnKV,
+        ["Contam", [_cbrnContam] call _boolWord, [_cbrnContam, true] call _boolColor, 7, 7] call _fnKV
+    ] joinString "        ");
+    _linesS pushBack ([
+        ["Airway", _cbrnAir toFixed 2, if (_cbrnAir > 0) then {_cWarn} else {_cGood}, 7, 7] call _fnKV,
+        ["Lung", _cbrnLung toFixed 2, if (_cbrnLung > 0) then {_cWarn} else {_cGood}, 7, 7] call _fnKV
+    ] joinString "        ");
+};
+
+// On ordinary-width displays there is no safe third column. Keep a compact clinical subset visible by appending
+// it to the right column; the full raw state set remains available from ACME DEBUG TO CLIPBOARD.
+if (!_useStateColumn) then {
+    _linesR pushBack "";
+    _linesR pushBack format ["<t color='%1'>ACM STATE SUMMARY</t>", _cTitle];
+    _linesR append (_linesS select [2, ((count _linesS) - 2) min 16]);
 };
 
 // NETWORK.
@@ -960,5 +1154,22 @@ if (missionNamespace getVariable ["ACME_debug_showNetwork", true]) then {
 };
 
 _linesR pushBack format ["<t color='%1'>target follows active treatment</t>", _cMute];
-_ctrlL ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _scale, _linesL joinString "<br/>"];
-_ctrlR ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _scale, _linesR joinString "<br/>"];
+private _fnRenderDebugColumns = {
+    params ["_renderScale"];
+    _ctrlL ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _renderScale, _linesL joinString "<br/>"];
+    _ctrlR ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _renderScale, _linesR joinString "<br/>"];
+    if (_useStateColumn) then {
+        _ctrlS ctrlSetStructuredText parseText format ["<t size='%1' font='EtelkaMonospacePro'>%2</t>", _renderScale, _linesS joinString "<br/>"];
+    } else {
+        _ctrlS ctrlSetStructuredText parseText "";
+    };
+};
+
+[_scale] call _fnRenderDebugColumns;
+private _requiredH = (ctrlTextHeight _ctrlL) max (ctrlTextHeight _ctrlR);
+if (_useStateColumn) then {_requiredH = _requiredH max (ctrlTextHeight _ctrlS);};
+if (_requiredH > _h) then {
+    // Keep the original wide panel, but scale down only enough to keep every diagnostic row visible.
+    private _fitScale = ((_scale * (((_h * 0.985) / _requiredH) min 1)) max 0.42) min _scale;
+    [_fitScale] call _fnRenderDebugColumns;
+};

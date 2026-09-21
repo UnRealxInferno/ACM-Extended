@@ -23,10 +23,6 @@ private _wasActive = uiNamespace getVariable ["ACME_ObtundedActive", false];
 // cheap and, more importantly, means a hot-loaded older handler cannot keep the player pinned after the update.
 [_p, false] call ACME_fnc_obtundedInputLock;
 
-// B65: ACRE babble has its own hard-gated speech pulse scheduler.  Run it regardless of _active so master-off,
-// recovery, unconsciousness and stale state all get an immediate restore path.
-[_p] call ACME_fnc_acreBabbleTick;
-
 if (_active) then {
     if (!_wasActive) then {
         uiNamespace setVariable ["ACME_ObtundedActive", true];
@@ -207,7 +203,7 @@ if (_active) then {
     private _voiceGuardAt = uiNamespace getVariable ["ACME_ObtundedVoiceGuardAt", 0];
     if (diag_tickTime >= _voiceGuardAt) then {
         uiNamespace setVariable ["ACME_ObtundedVoiceGuardAt", diag_tickTime + 1];
-        if (!isNull _p) then {[_p, false] call ACME_fnc_obtundedVoice;} else {[false] call ACME_fnc_acreBabbleSet;};
+        if (!isNull _p) then {[_p, false] call ACME_fnc_obtundedVoice;};
     };
 
     if (_wasActive) then {

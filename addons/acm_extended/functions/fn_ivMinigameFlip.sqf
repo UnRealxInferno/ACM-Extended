@@ -41,6 +41,7 @@ uiNamespace setVariable ["ACME_IV_BandOn", false];
 if !(_snap isEqualTo []) then {
     (_snap select 0) params ["_nsName", "_nsbU", "_nsbV", "_nsvU", "_nsvV", "_nsLbl", "_nsTex"];
     uiNamespace setVariable ["ACME_IV_Site", _nsName];
+    uiNamespace setVariable ["ACME_IV_ProbeSite", _nsName];
     uiNamespace setVariable ["ACME_IV_BandUV", [_nsbU, _nsbV]];
     uiNamespace setVariable ["ACME_IV_VeinUV", [_nsvU, _nsvV]];
     uiNamespace setVariable ["ACME_IV_VeinSet",

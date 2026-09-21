@@ -18,9 +18,11 @@ if (count _state == 0) then {
     // the activity-log line is removed, because it revealed the condition of the patient.
 } else {
     private _cur = _state getOrDefault ["severity", 0];
+    private _struct = _state getOrDefault ["structuralSeverity", _cur];
+    _state set ["structuralSeverity", _struct max _sev];
     if (_sev > _cur) then {
         _state set ["severity", _sev];
         _state set ["icp", ((_state getOrDefault ["icp", 10]) + 5) min (missionNamespace getVariable ["ACME_tbi_icpMax", 40])];
-        [_unit, _state] call ACME_fnc_tbiStateCommit;
     };
+    [_unit, _state] call ACME_fnc_tbiStateCommit;
 };

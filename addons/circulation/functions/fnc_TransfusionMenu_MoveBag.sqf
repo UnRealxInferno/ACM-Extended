@@ -25,6 +25,10 @@ if (_selectionIndex < 0 && !(GVAR(TransfusionMenu_Move_Active))) exitWith {};
 private _ctrlMoveButton = _display displayCtrl IDC_TRANSFUSIONMENU_BUTTON_MOVEBAG;
 
 if (GVAR(TransfusionMenu_Move_Active)) then {
+    private _validDestination = [GVAR(TransfusionMenu_Target),GVAR(TransfusionMenu_Selected_BodyPart),GVAR(TransfusionMenu_SelectIV),GVAR(TransfusionMenu_Selected_AccessSite)] call ACME_fnc_transfusionAccessValid;
+    if (!_validDestination) exitWith {
+        ["Select an established IV or IO before placing the bag.",2.5,ACE_player,13] call ACEFUNC(common,displayTextStructured);
+    };
     _ctrlMoveButton ctrlSetText LLSTRING(TransfusionMenu_MoveBag_Display);
     _ctrlMoveButton ctrlSetTooltip LLSTRING(TransfusionMenu_MoveBag_ToolTip);
 
@@ -54,9 +58,9 @@ if (GVAR(TransfusionMenu_Move_Active)) then {
         params ["_medic", "_patient", "_fnc_completeMove"];
 
         [_medic, _patient] call _fnc_completeMove;
-        
+
         closeDialog 0;
-    
+
         [{
             params ["_medic", "_patient"];
 
@@ -66,7 +70,7 @@ if (GVAR(TransfusionMenu_Move_Active)) then {
         params ["_medic", "_patient"];
 
         closeDialog 0;
-    
+
         [_medic, _patient, GVAR(TransfusionMenu_Selected_BodyPart)] call FUNC(openTransfusionMenu);
         GVAR(TransfusionMenu_Move_Active_Moving) = false;
     }, (format [LLSTRING(TransfusionMenu_MoveBag_Progress), _itemClassNameString, ([GVAR(TransfusionMenu_Selected_BodyPart)] call EFUNC(core,getBodyPartString))]), 2.5] call EFUNC(core,progressBarAction);

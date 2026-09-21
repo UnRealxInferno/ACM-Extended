@@ -3,10 +3,59 @@ if (missionNamespace getVariable ["ACME_NA2_ownerInstalled", false]) exitWith {}
 ACME_NA2_ownerInstalled = true;
 ["ACME_ownerCommand", { isNil { _this call ACME_fnc_ownerDispatch; }; }] call CBA_fnc_addEventHandler;
 ["ACME_netNotice", { _this call ACME_fnc_netNotice; }] call CBA_fnc_addEventHandler;
+["ACME_transfusionRemoveResult", {_this call ACME_fnc_transfusionRemoveBagResult;}] call CBA_fnc_addEventHandler;
+["ACME_transfusionPullResult", {_this call ACME_fnc_transfusionPullResult;}] call CBA_fnc_addEventHandler;
+["ACME_rehangUsedBagResult", {_this call ACME_fnc_rehangUsedBagResult;}] call CBA_fnc_addEventHandler;
+["ACME_yRefillResult", {_this call ACME_fnc_yRefillResult;}] call CBA_fnc_addEventHandler;
+["ACME_discardYTubingResult", {_this call ACME_fnc_discardYTubingResult;}] call CBA_fnc_addEventHandler;
+["ACME_vialLeaseResult", {_this call ACME_fnc_vialLeaseResult;}] call CBA_fnc_addEventHandler;
 ["ACME_hpmkReturnItem", {
     params [["_receiver", objNull, [objNull]]];
     if (!isNull _receiver && {local _receiver}) then {
         [_receiver, "ACM_HPMK"] call ace_common_fnc_addToInventory;
+    };
+}] call CBA_fnc_addEventHandler;
+["ACME_ettReturnTube", {
+    params [["_receiver", objNull, [objNull]]];
+    if (!isNull _receiver && {local _receiver}) then {
+        [_receiver, "ACME_ETTube"] call ace_common_fnc_addToInventory;
+    };
+}] call CBA_fnc_addEventHandler;
+["ACME_aajtReturnItem", {
+    params [["_receiver", objNull, [objNull]]];
+    if (!isNull _receiver && {local _receiver}) then {
+        [_receiver, "ACME_AAJT_S"] call ace_common_fnc_addToInventory;
+    };
+}] call CBA_fnc_addEventHandler;
+["ACME_ventBatteryExchangeResult", {
+    params [
+        ["_patient", objNull, [objNull]],
+        ["_requestId", "", [""]],
+        ["_accepted", false, [false]],
+        ["_returnedPct", 100, [0]],
+        ["_installedPct", 100, [0]]
+    ];
+    if (!hasInterface || {isNull ACE_player}) exitWith {};
+    private _pending = uiNamespace getVariable ["ACME_vent_batterySwapRequest", ""];
+    if (_pending != _requestId) exitWith {};
+    uiNamespace setVariable ["ACME_vent_batterySwapRequest", ""];
+    private _dlg = uiNamespace getVariable ["ACME_vent_dlg", displayNull];
+    if (_accepted) then {
+        ACE_player setVariable ["ACME_vent_spareBattery", _returnedPct, true];
+        if (!isNull _dlg && {(uiNamespace getVariable ["ACME_vent_target", objNull]) isEqualTo _patient}) then {
+            private _ban = _dlg displayCtrl 88001;
+            _ban ctrlSetText format ["BATTERY %1%2 OFF", round _installedPct, "%"];
+            _ban ctrlShow true;
+            uiNamespace setVariable ["ACME_vent_swapMsgUntil", diag_tickTime + 2.5];
+        };
+    } else {
+        if (!isNull _dlg) then {
+            private _ban = _dlg displayCtrl 88001;
+            _ban ctrlSetText "SWAP CONFLICT";
+            _ban ctrlShow true;
+            uiNamespace setVariable ["ACME_vent_swapMsgUntil", diag_tickTime + 2.5];
+        };
+        ["Battery swap cancelled: another provider changed this ventilator.", 2, ACE_player] call ace_common_fnc_displayTextStructured;
     };
 }] call CBA_fnc_addEventHandler;
 ["ACME_nrbDraw", { isNil { _this call ACME_fnc_nrbOxygenDraw; }; }] call CBA_fnc_addEventHandler;
@@ -60,6 +109,9 @@ ACME_NA2_ownerInstalled = true;
 [{
     ACME_clinical_ownedUnits = allUnits select {local _x && {alive _x}};
     {[_x] call ACME_fnc_ownerRegister;} forEach ACME_clinical_ownedUnits;
+    if (hasInterface && {!isNil "ACE_player"} && {!isNull ACE_player}) then {
+        [] call ACME_fnc_providerStateReconcile;
+    };
     {
         missionNamespace setVariable [_x, (missionNamespace getVariable [_x, []]) select {!isNull _x && {local _x} && {alive _x}}];
     } forEach ["ACME_nrb_activePatients", "ACME_hpmk_activePatients", "ACME_tbi_activePatients", "ACME_cs_activePatients", "ACME_autoBP_patients", "ACME_clinical_activePatients", "ACME_infusion_activePatients", "ACME_circ_activePatients"];

@@ -4,7 +4,14 @@ class CfgPatches {
     class ADDON {
         name = COMPONENT_NAME;
         units[] = {};
-        weapons[] = {};
+        weapons[] = {
+            "ACM_OPA",
+            "ACM_IGel",
+            "ACM_NPA",
+            "ACM_SuctionBag",
+            "ACM_ACCUVAC",
+            "ACM_CricKit"
+        };
         requiredVersion = REQUIRED_VERSION;
         requiredAddons[] = {
             "cba_main",

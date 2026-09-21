@@ -13,64 +13,19 @@ if (uiNamespace getVariable ["ACME_laryngo_done", false]) exitWith {};
 if (uiNamespace getVariable ["ACME_laryngo_tubePassed", false]) exitWith {};
 uiNamespace setVariable ["ACME_laryngo_tubePassed", true];
 
-// A graded response replaces the former all-or-nothing sedation threshold.
-// Arousal from repeated instrumentation can overcome partial suppression; true
-// paralysis, arrest and absent reflexes remain hard exclusions in the shared reader.
+// Sample the live procedural reflex, but do not hard-block passage.  SAI/DSI can work with adequate hypnotic
+// effect, RSI can suppress the physical reflex with paralysis, and arrest has no gag response.  An unsedated,
+// non-paralyzed, perfusing casualty is guaranteed to react; partial sedation uses the graded reflex model.
 private _misses = _patient getVariable ["ACME_laryngo_gagMisses", 0];
+private _parts = [_patient] call ACME_fnc_sedationComponents;
+private _sedLoad = _parts select 5;
+private _arrest = _patient getVariable ["ace_medical_inCardiacArrest", false];
+private _paralyzed = _patient getVariable ["ACME_roc_paralyzed", false];
 private _gagChance = [_patient, 1 + (_misses max 0) * 0.4] call ACME_fnc_laryngoReflexChance;
-if (random 1 < _gagChance) exitWith {
-    uiNamespace setVariable ["ACME_laryngo_done", true];
-    // fail: the patient gags on the tube. do not secure the airway.
-    if (!isNull _dlg) then {
-        (_dlg displayCtrl 87810) ctrlSetText "Patient gagged on the blade.";
-    };
-    // OPA dislodgement only follows a real, owner-approved emesis event.
-    [_patient, "gag"] call ACME_fnc_laryngoFail;
-    if (!isNil "ace_medical_treatment_fnc_addToLog") then {
-        [_patient, "airway",
- "Intubation attempt stopped after gagging",
- "Intubation attempt stopped, gag reflex",
- []] call ACME_fnc_medLog;
-    };
-    // hand the screen back after a beat, so the gag message is read before the panel goes live again. the reset
-    // mirrors fn_laryngoabort: back to the start of the attempt with the scope still in hand if it was held.
-    // the tube is not consumed on this path, because the removeitem below is never reached, so it is still theirs
-    // to place once the airway is clear.
-    [{
-        params ["_oldDisplay", "_oldPatient"];
-        if (isNull _oldDisplay || {_oldDisplay != (uiNamespace getVariable ["ACME_laryngo_dlg", displayNull])}
-            || {_oldPatient != (uiNamespace getVariable ["ACME_laryngo_patient", objNull])}) exitWith {};
-        uiNamespace setVariable ["ACME_laryngo_done", false];
-        uiNamespace setVariable ["ACME_laryngo_tubePassed", false];
-        // the tube comes out.
-        // the reset cleared the depth and left the tube in the hand, so it stayed drawn on screen at depth zero. that
-        // was survivable until the blade became required to move a tube: after a failure the blade is out, so the tube
-        // could not be moved at all and simply sat there.
-        // a failed attempt ends with the tube out of the airway and back in the tray, which is what happens in life.
-        // it is not consumed, so it can be picked up and used again.
-        // the scope is left alone. if it was in the hand it stays there, because the medic has not put it down.
-        if ((uiNamespace getVariable ["ACME_laryngo_held", ""]) == "tube") then {
-            uiNamespace setVariable ["ACME_laryngo_held", ""];
-        };
-        uiNamespace setVariable ["ACME_laryngo_tubeInHand", false];
-        uiNamespace setVariable ["ACME_laryngo_tubeGrip", false];
-        uiNamespace setVariable ["ACME_laryngo_tubeImpulse", 0];
-    uiNamespace setVariable ["ACME_laryngo_tubeStep", 0];
-        call ACME_fnc_laryngoRefreshSlots;
-        uiNamespace setVariable ["ACME_laryngo_state",
-            (if ((uiNamespace getVariable ["ACME_laryngo_held", ""]) == "scope") then {"scopeHeld"} else {"idle"})];
-        uiNamespace setVariable ["ACME_laryngo_holding", false];
-        uiNamespace setVariable ["ACME_laryngo_regripHeld", false];
-        uiNamespace setVariable ["ACME_laryngo_gripStr", 0];
-        uiNamespace setVariable ["ACME_laryngo_airwayOpen", false];
-        uiNamespace setVariable ["ACME_laryngo_lift", 0];
-        uiNamespace setVariable ["ACME_laryngo_liftPending", 0];
-        uiNamespace setVariable ["ACME_laryngo_overPressure", 0];
-        uiNamespace setVariable ["ACME_laryngo_reveal", 0];
-    }, [_dlg, _patient], 0.6] call CBA_fnc_waitAndExecute;
-};
+private _underSedated = !_arrest && {!_paralyzed} && {_sedLoad < (missionNamespace getVariable ["ACME_laryngo_proceduralSedation", 0.75])};
+private _gagged = !_arrest && {!_paralyzed} && {_underSedated || {random 1 < _gagChance}};
 
-[_patient, "success"] call ACME_fnc_laryngoConsequence;
+[_patient, ["success", "awakeTube"] select _gagged] call ACME_fnc_laryngoConsequence;
 // Through the cords; cuff and securement still require completion.
 // the tube is committed. it is through the cords, so it stops being a thing in your hand and comes off the count,
 // because it belongs to the patient now. it keeps drawing seated and is simply not carried any more.
@@ -120,12 +75,19 @@ if (!isNull _dlg) then {
         // it rather than at an anchor that only approximates it.
         (uiNamespace getVariable ["ACME_laryngo_frame", [0,0,1,1]]) params ["_ffx","_ffy","_ffw","_ffh"];
         if (_ffw > 0 && {_ffh > 0}) then {
-            _patient setVariable ["ACME_ETT_TipFrac",
-                [(((_tp select 0) - _ffx) / _ffw), (((_tp select 1) - _ffy) / _ffh)], true];
+            private _tipFrac = [(((_tp select 0) - _ffx) / _ffw), (((_tp select 1) - _ffy) / _ffh)];
+            [_patient, "tip", [_tipFrac]] call ACME_fnc_ettMigrationStateCommit;
         };
     };
 };
 playSound "ACME_VentClick";
+
+if (_gagged) exitWith {
+    if (!isNull _dlg) then {(_dlg displayCtrl 87810) ctrlSetText "Patient gagged and bucked the tube out.";};
+    [_patient, "airway", "Intubation attempt: patient gagged and bucked the ET tube", "Gagged/bucked ET tube", []] call ACME_fnc_medLog;
+    // The tube did pass the cords, so show the reverse travel rather than rejecting the insertion before it happens.
+    ["gag", true] call ACME_fnc_laryngoTubeEject;
+};
 
 // B39: if the operator inflated the cuff before seating, crossing the cords now converts that
 // mechanical cuff state into a definitive airway without forcing them to repeat the syringe step.

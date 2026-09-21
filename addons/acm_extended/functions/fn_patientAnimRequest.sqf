@@ -25,7 +25,7 @@ if (!local _patient) exitWith {
 };
 if (!alive _patient || {!isNull objectParent _patient}) exitWith {""};
 
-private _now = CBA_missionTime;
+private _now = serverTime;
 private _providerId = if (isNull _provider) then {""} else {netId _provider};
 private _lock = _patient getVariable ["ACME_patientAnimLock", []];
 private _active = (count _lock) >= 5 && {(_lock param [4, -1]) > _now};
@@ -53,7 +53,7 @@ if (_animation != "") then {
     params ["_p", "_tok"];
     if (isNull _p || {!local _p}) exitWith {};
     private _cur = _p getVariable ["ACME_patientAnimLock", []];
-    if ((_cur param [0, ""]) == _tok && {(_cur param [4, -1]) <= CBA_missionTime}) then {
+    if ((_cur param [0, ""]) == _tok && {(_cur param [4, -1]) <= serverTime}) then {
         _p setVariable ["ACME_patientAnimLock", [], true];
     };
 }, [_patient, _token], _leaseSeconds + 0.05] call CBA_fnc_waitAndExecute;

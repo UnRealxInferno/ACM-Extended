@@ -8,8 +8,8 @@ if (isNull _patient) exitWith {};
 private _bodyPart = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_BodyPart", ""];
 private _selectedIV = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_SelectIV", true];
 private _accessSite = missionNamespace getVariable ["ACM_circulation_TransfusionMenu_Selected_AccessSite", -1];
-if (_bodyPart == "" || {_selectedIV && {_accessSite < 0}}) exitWith {
-    ["Select an IV/IO access site first.", 2, ACE_player, 13] call ace_common_fnc_displayTextStructured;
+if !([_patient,_bodyPart,_selectedIV,_accessSite] call ACME_fnc_transfusionAccessValid) exitWith {
+    ["Establish and select an IV/IO access site first.", 2, ACE_player, 13] call ace_common_fnc_displayTextStructured;
 };
 
 private _selectedPrepared = call ACME_fnc_getSelectedPreparedInfusion;

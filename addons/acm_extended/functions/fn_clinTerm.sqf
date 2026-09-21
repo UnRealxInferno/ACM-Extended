@@ -63,8 +63,8 @@ if ((count _map) == 0) then {
         ["str_acm_breathing_checkbreathing_shallowrapid_short", (["breathing", "tachyShallowShort"] call ACME_fnc_medDescriptor)],
 
         // 3.4 chest, bruising only.
-        ["str_acm_breathing_inspectchest_bruising",             "Extensive chest wall ecchymosis"],
-        ["str_acm_breathing_inspectchest_bruising_short",       "Extensive ecchymosis"],
+        ["str_acm_breathing_inspectchest_bruising",             "Severe Ecchymosis"],
+        ["str_acm_breathing_inspectchest_bruising_short",       "Severe Ecchymosis"],
 
         // 3.5 airway, severe inflammation only. the mild and significant rows above it stay in ACM's wording,
         // so the ladder changes register at the top step. that is deliberate: severe is the one that changes

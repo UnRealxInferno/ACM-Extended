@@ -7,6 +7,18 @@ params ["", "_button"];
 // open to expose the pink pleura bed, like the surgical cric, before the kelly and finger open the hole inside
 // it.
 if (_button == 1) exitWith {
+    if (call ACME_fnc_thoraSealAt) exitWith {
+        private _patient = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
+        private _medic = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
+        private _side = uiNamespace getVariable ["ACME_Thora_Side", "right"];
+        if !([_medic, "thoracostomySeal", true] call ACME_fnc_procedureAllowed) exitWith {false};
+        [_patient, "thoraAftercare", [_patient, _medic, _side, "peel",
+            [_patient] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
+        uiNamespace setVariable ["ACME_Thora_Burp", ["", 0, 0, false]];
+        [] call ACME_fnc_chestSealSnd;
+        [] call ACME_fnc_thoraRender;
+        true
+    };
     private _side = uiNamespace getVariable ["ACME_Thora_Side", "right"];
     private _patient = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
     if (isNull _patient) exitWith { false };
@@ -25,6 +37,7 @@ if (_button == 1) exitWith {
             ["The chest tube is sutured in place.", 1.5] call ace_common_fnc_displayTextStructured;
         } else {
             [_patient, _side, "tube", false] call ACME_fnc_thoraSideStateCommit;
+            [_patient, _side, "closed", false] call ACME_fnc_thoraSideStateCommit;
             [_patient] call ACME_fnc_thoraBumpVer;
             [] call ACME_fnc_thoraRenderTube;
             [] call ACME_fnc_thoraRender;
@@ -46,7 +59,9 @@ uiNamespace setVariable ["ACME_Thora_LMBDown", true];
 private _held = uiNamespace getVariable ["ACME_Thora_Held", ""];
 private _operator = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
 private _target = uiNamespace getVariable ["ACME_Thora_Patient", objNull];
-if (_held in ["scalpel", "kelly", "finger"] && {
+private _repeatFinger = _held == "finger" && {[_operator, _target,
+    uiNamespace getVariable ["ACME_Thora_Side", "right"]] call ACME_fnc_thoraCanSweep};
+if (_held in ["scalpel", "kelly", "finger"] && {!_repeatFinger} && {
     !([_operator, "thoracostomy"] call ACME_fnc_procedureAllowed)
     || {([_operator, _target] call ACME_fnc_thoraKitItem) == ""}
 }) exitWith {false};
@@ -100,14 +115,22 @@ if (_held isEqualTo "finger") exitWith {
     if (isNull _patient) exitWith { false };
     private _inc = _patient getVariable [format ["ACME_thora_incision_%1", _side], []];
     if (count _inc != 3) exitWith { false };
-    // the finger only progresses a kelly-opened tract to the full open, once, and never resets a finished one.
-    if !((_patient getVariable [format ["ACME_thora_open_%1", _side], ""]) isEqualTo "kelly") exitWith { false };
+    private _tract = _patient getVariable [format ["ACME_thora_open_%1", _side], ""];
+    if !(_tract in ["kelly", "finger"]) exitWith {false};
+    if (_patient getVariable [format ["ACME_thora_tube_%1", _side], false]
+        || {_patient getVariable [format ["ACME_thora_sealed_%1", _side], false]}
+        || {_patient getVariable [format ["ACME_thora_closed_%1", _side], false]}) exitWith {false};
     private _uv = [] call ACME_fnc_thoraCursorUV;
     if (count _uv != 2) exitWith { false };
     _uv params ["_cu", "_cv"];
     (_inc select 0) params ["_su", "_sv"];
     if ((sqrt ((((_cu - _su) ^ 2)) + (((_cv - _sv) ^ 2)))) > 0.12) exitWith { false };
     private _medic = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
+    if (_tract == "finger") exitWith {
+        [_patient, "thoraAftercare", [_patient, _medic, _side, "sweep",
+            [_patient] call ACME_fnc_clinicalEpoch]] call ACME_fnc_ownerDispatch;
+        false
+    };
     private _kit = [_medic, _patient] call ACME_fnc_thoraKitItem;
     if (_kit == "") exitWith {false};
     private _usedKit = _kit == "ACM_ThoracostomyKit";
@@ -118,6 +141,8 @@ if (_held isEqualTo "finger") exitWith {
     };
     if (_kit == "") exitWith {false};
     [_patient, _side, "open", "finger"] call ACME_fnc_thoraSideStateCommit;
+    [_patient, _side, "closed", false] call ACME_fnc_thoraSideStateCommit;
+    [_patient, _side, "sealed", false] call ACME_fnc_thoraSideStateCommit;
     [_patient] call ACME_fnc_thoraBumpVer;
     [] call ACME_fnc_thoraRenderOpen;
     if (!isNull _medic) then {
@@ -152,6 +177,7 @@ if (_held in ["seal", "tube"]) exitWith {
         _medS removeItem "ACM_ChestSeal";
         if (([_medS, "ACM_ChestSeal"] call ace_common_fnc_getCountOfItem) >= _before) exitWith {false};
         [_patient, _side, "sealed", true] call ACME_fnc_thoraSideStateCommit;
+        [_patient, _side, "closed", true] call ACME_fnc_thoraSideStateCommit;
         [_patient] call ACME_fnc_thoraBumpVer;
         // This operation is deliberately distinct from native whole-chest sealing.
         // The owner validates the captured clinical epoch before changing physiology.
@@ -163,11 +189,13 @@ if (_held in ["seal", "tube"]) exitWith {
     };
 
     private _tubeMedic = uiNamespace getVariable ["ACME_Thora_Medic", objNull];
+    if (_patient getVariable [format ["ACME_thora_closed_%1", _side], false]) exitWith {false};
     if (!(([_tubeMedic] call ACME_fnc_thoraClosureMode) select 2)) exitWith {false};
     private _tubeBefore = [_tubeMedic, "ACM_ChestTubeKit"] call ace_common_fnc_getCountOfItem;
     _tubeMedic removeItem "ACM_ChestTubeKit";
     if (([_tubeMedic, "ACM_ChestTubeKit"] call ace_common_fnc_getCountOfItem) >= _tubeBefore) exitWith {false};
     [_patient, _side, "sealed", false] call ACME_fnc_thoraSideStateCommit;
+    [_patient, _side, "closed", false] call ACME_fnc_thoraSideStateCommit;
     [_patient, _side, "tube", true] call ACME_fnc_thoraSideStateCommit;
     [_patient] call ACME_fnc_thoraBumpVer;
     // register the chest tube with ACM, so the procedure counts it as in. that enables drain fluid and shows on

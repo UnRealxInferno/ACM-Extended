@@ -113,5 +113,5 @@ uiNamespace setVariable ["ACME_IV_RegOK", true];
 private _stickV = uiNamespace getVariable ["ACME_IV_StickV", 0.5];
 private _willLeak = [_patient, _site, _stickV] call ACME_fnc_ivExtravasationCheck;
 private _flagKey = format ["ACME_ivCompromised_%1_%2", _bodyPart, _accessSite];
-_patient setVariable [_flagKey, _willLeak, true];
+[_patient, "ivCompromised", [_bodyPart, _accessSite, ["clear", "set"] select _willLeak]] call ACME_fnc_ownerDispatch;
 // Compromise remains physiological state; placement does not disclose the hidden risk.

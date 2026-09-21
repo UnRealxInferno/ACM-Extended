@@ -2,11 +2,13 @@
  * Operations:
  *   [patient,"placement",[depth, frame, mainstem]]
  *   [patient,"obstruction",[active, untilOr"__KEEP__"]]
+ *   [patient,"tip",[[u,v]]]
  * Values omitted or "__KEEP__" retain current state. This preserves legacy paths that cleared the
  * obstruction boolean without rewriting the existing obstruction deadline.
  */
 params ["_patient", "_op", ["_data", []]];
 if (isNull _patient) exitWith {};
+if (!local _patient) exitWith {[_patient, "ettMigrationState", [_op, _data]] call ACME_fnc_ownerDispatch;};
 private _keep = "__KEEP__";
 switch (toLower _op) do {
     case "placement": {
@@ -22,5 +24,9 @@ switch (toLower _op) do {
         private _until = _data param [1, _keep];
         if !(_active isEqualTo _keep) then {_patient setVariable ["ACME_ETT_Obstructing", _active, true];};
         if !(_until isEqualTo _keep) then {_patient setVariable ["ACME_ETT_ObstructUntil", _until, true];};
+    };
+    case "tip": {
+        private _frac = _data param [0, _keep];
+        if !(_frac isEqualTo _keep) then {_patient setVariable ["ACME_ETT_TipFrac", _frac, true];};
     };
 };

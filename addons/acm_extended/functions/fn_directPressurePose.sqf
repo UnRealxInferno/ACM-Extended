@@ -5,6 +5,7 @@
 // animation can reapply after the provider stops moving and settles again.
 params ["_medic", "_patient"];
 private _inPose = _medic getVariable ["ACME_DP_InPose", false];
+private _poseToken = _medic getVariable ["ACME_DP_PoseToken", 0];
 
 // ACE can still be finishing the treatment callback for a fraction of a second after Direct Pressure starts.
 // During that entry grace, do not interpret ACE's own end-animation bookkeeping as a competing treatment or it
@@ -14,7 +15,8 @@ private _entryGrace = CBA_missionTime < (_medic getVariable ["ACME_DP_PoseGraceU
 // A plain open medical menu is NOT a competing treatment. Stop Direct Pressure has to remain usable while the
 // provider visibly keeps pressure on the wound. Yield only when another treatment actually owns the provider pose.
 private _treating = !_entryGrace && {
-    (_medic getVariable ["ACME_treatmentPreflightActive", false])
+    (_medic getVariable ["ACME_DP_TreatmentBusy", false])
+    || {(_medic getVariable ["ACME_treatmentPreflightActive", false])}
     || {(_medic getVariable ["ace_medical_treatment_endInAnim", ""]) != ""}
     || {missionNamespace getVariable ["ACM_core_ContinuousAction_Active", false]}
 };
@@ -74,14 +76,17 @@ if (_moving || {!_looking}) then {
 
         // Narrow engine-state repair. A movement command must never be swallowed by a stale looping DP state. If the
         // engine is STILL physically in the DP hold after movement/treatment has had a chance to win, use priority 2
-        // once to break only that stale state. This is a safety fallback, not the normal Direct Pressure exit path.
+        // once to break only that stale state. B127 token-checks the callback so an exit scheduled by an old hold can
+        // never break a newer Direct Pressure episode or a treatment which replaced it.
         [{
-            params ["_m"];
+            params ["_m", "_tok"];
             if (isNull _m || {!local _m} || {!alive _m} || {!isNull objectParent _m}) exitWith {};
+            if ((_m getVariable ["ACME_DP_PoseToken", -1]) != _tok) exitWith {};
+            if !(_m getVariable ["ACME_DP_Active", false]) exitWith {};
             if ((toLower animationState _m) != "acme_directpressurehold") exitWith {};
             _m setUnitPos "AUTO";
             [_m, "AmovPknlMstpSnonWnonDnon", 2] call ACME_fnc_doAnim;
-        }, [_medic], 0.08] call CBA_fnc_waitAndExecute;
+        }, [_medic, _poseToken], 0.08] call CBA_fnc_waitAndExecute;
     };
     _medic setVariable ["ACME_DP_InPose", false];
     _medic setVariable ["ACME_DP_IdleStart", _now];

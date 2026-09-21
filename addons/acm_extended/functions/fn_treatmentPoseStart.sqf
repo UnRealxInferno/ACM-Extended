@@ -3,10 +3,10 @@
  * Exact requested states, played at native speed:
  *   response             AinvPknlMstpSnonWrflDr_medic3_old
  *   airway               AinvPknlMstpSnonWrflDr_medic4_old
- *   roll                 AinvPknlMstpSnonWnonDnon_medic4, frozen at 2.2 s, then the exit blend
+ *   roll                 AinvPknlMstpSnonWnonDnon_medic4, literal BI state, frozen at 2.2 s, then the exit blend
  *   inspect              AinvPknlMstpSnonWnonDnon_medic4, frozen at 2.2 s until the 6 s inspection ends
  *   stethoscope          ACME_StethoscopeWork, frozen at 0.421 s until the minigame exits
- *   pulse                AinvPknlMstpSnonWrflDnon_medic1, frozen at 0.691 s until the minigame exits
+ *   pulse                ACME_StethoscopeWork, frozen at 0.421 s until the minigame exits
  *   chestSeal            AinvPknlMstpSnonWnonDnon_medic3
  *   ncdSeat              AinvPknlMstpSnonWrflDnon_medic1
  *   torsoBandage         AinvPknlMstpSnonWrflDnon_medic4
@@ -45,21 +45,29 @@ if (isNull _medic || {!local _medic} || {!alive _medic}
     || {_medic getVariable ["ACE_isUnconscious", false]}
     || {[_medic] call ACME_fnc_animBlocked}) exitWith {-1};
 
-[_medic] call ACME_fnc_treatmentPoseStop;
+private _existingPose = _medic getVariable ["ACME_treatmentPoseState", []];
+private _existingMode = _existingPose param [1, ""];
+private _directChestHandoff =
+    (_mode == "roll" && {_existingMode == "chestSealWorkspace"})
+    || {_mode == "chestSealWorkspace" && {_existingMode == "roll"}};
+[_medic, "", -1, _directChestHandoff] call ACME_fnc_treatmentPoseStop;
 // B56: a treatment pose replaces the medical-menu pose without an intermediate exit motion.
 [_medic, true] call ACME_fnc_menuPoseStop;
 
 private _main = switch (_mode) do {
     case "response": {"ACME_ResponseCheckWork"};
     case "airway": {"ACME_AirwayCheckWork"};
-    // B73 wrappers inherit the exact requested BI RTMs but explicitly connect to/from unarmed crouch.
-    case "roll": {"ACME_RollProviderWork"};
+    // Chest-seal Flip intentionally uses the literal BI medic4 state.  The B73 wrapper changed the move-graph
+    // entry and lost the characteristic flip theatre.  Crouch-first entry/empty-hands handling still comes from
+    // this controller; only the actual work state is restored to the known-good literal animation.
+    case "roll": {"AinvPknlMstpSnonWnonDnon_medic4"};
     case "inspect": {"ACME_ChestInspectWork"};
     case "junctional": {"ACME_JunctionalWork"};
     case "stethoscope": {"ACME_StethoscopeWork"};
+    case "chestSealWorkspace": {"ACME_ChestSealWorkspace"};
     case "chestSeal": {"AinvPknlMstpSnonWnonDnon_medic3"};
     case "ncdSeat": {"AinvPknlMstpSnonWrflDnon_medic1"};
-    case "pulse": {"AinvPknlMstpSnonWrflDnon_medic1"};
+    case "pulse": {"ACME_StethoscopeWork"};
     case "torsoBandage": {"AinvPknlMstpSnonWrflDnon_medic4"};
     case "headBandageLeft": {"AinvPknlMstpSnonWrflDnon_medic0"};
     case "headBandageRight": {"AinvPknlMstpSnonWrflDr_medic2_old"};
@@ -83,7 +91,29 @@ _medic setVariable ["ACME_treatmentPoseEpoch", _epoch, true];
 _medic setVariable ["ACME_treatmentPoseEpisode", [_epoch, true], true];
 private _exclusion = format ["ACME_treatmentPose_%1_%2", netId _medic, _epoch];
 private _actionStarted = CBA_missionTime;
-private _prepDelay = [_medic] call ACME_fnc_medicAnimationPrep;
+// B101: when another intervention takes animation ownership from an active Direct Pressure hold, the provider is
+// already in ACME's authored empty-hands medical theatre. currentWeapon may still report the selected rifle even
+// though the visible DP state has weapons disabled. Do not run medicAnimationPrep again in that handoff or Arma
+// plays a pointless weapon-away transition between DP and the incoming treatment pose.
+private _dpPoseHandoff = (_medic getVariable ["ACME_DP_Active", false])
+    && {(_medic getVariable ["ACME_DP_TreatmentBusy", false])};
+// A physical Flip is still a real medical animation and must wait for a sidearm to finish holstering. The former
+// roll fast-path used selectWeapon "" and could start medic4 under a pistol that was still visibly in the hands.
+// Direct Pressure remains the one exception because its existing authored hold already owns empty-hand theatre.
+private _prepDelay = if (_directChestHandoff) then {
+    // Both chestSealWorkspace and roll are ACME-authored weapon-disabled states. A direct handoff must not wait
+    // for their class names to contain the literal Wnon/Snon substrings before entering the next state.
+    _medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_ready", CBA_missionTime, ""], false];
+    0
+} else {
+    if (_dpPoseHandoff) then {
+        if (currentWeapon _medic != "") then {_medic selectWeapon "";};
+        _medic setVariable ["ACME_medicAnimationPrep", ["empty_hands_ready", CBA_missionTime, ""], false];
+        0
+    } else {
+        [_medic] call ACME_fnc_medicAnimationPrep
+    }
+};
 if !(_prepDelay isEqualType 0) then {_prepDelay = 0;};
 private _prepUntil = _actionStarted + (_prepDelay max 0);
 
@@ -93,7 +123,7 @@ private _prepUntil = _actionStarted + (_prepDelay max 0);
 //  13 lastHoldAssert, 14 holdStarted, 15 stopAfterHold, 16 upright (standing medicUp state in use)
 // Stages: -1 waiting for the one weapon stow, -2 playing the BI stance transition into the crouch,
 //          0 legacy immediate start, 1 requested state entering, 2 running, 3 frozen hold.
-private _state = [_epoch, _mode, _main, -1, _actionStarted, -1, owner _medic, _exclusion,
+private _state = [_epoch, _mode, _main, -1, _actionStarted, -1, clientOwner, _exclusion,
     _prepUntil, _window, _actionStarted, _holdAt, -1, -1, -1, _stopAfterHold, _upright];
 _medic setVariable ["ACME_treatmentPoseState", _state];
 
@@ -169,6 +199,7 @@ private _pfh = [{
     private _stage = _state param [3, 0];
     private _stageStarted = _state param [4, CBA_missionTime];
     private _waitUntil = _state param [8, CBA_missionTime];
+    private _actionStarted = _state param [10, CBA_missionTime];
     private _holdAt = _state param [11, -1];
     private _stopAfterHold = _state param [15, -1];
     private _current = toLower animationState _medic;
@@ -176,9 +207,18 @@ private _pfh = [{
 
     switch (_stage) do {
         case -1: {
-            // Empty hands were selected once during preflight. Continue after that one request; never run a second holster.
-            if (currentWeapon _medic == "" || {_now >= _waitUntil}) then {
+            // Do not enter the medical RTM until both the logical selection and the visible skeleton are truly
+            // empty-handed. In particular, currentWeapon can clear before a sidearm has visually left the hand.
+            private _visuallyEmpty = ((_current find "wnon") >= 0) && {((_current find "snon") >= 0)};
+            private _weaponReady = (currentWeapon _medic == "") && {_visuallyEmpty};
+            if (_weaponReady && {_now >= _waitUntil}) then {
                 [_medic, _main, _state, _fnStartMain] call _fnEnter;
+            } else {
+                // Never fall through into a malformed pistol-over-medical pose. A failed engine holster retires
+                // this provider theatre cleanly rather than queuing another family of put-away animations.
+                if (_now - _actionStarted >= 3.0) then {
+                    [_medic, _mode, _epoch] call ACME_fnc_treatmentPoseStop;
+                };
             };
         };
 
@@ -210,7 +250,15 @@ private _pfh = [{
         };
 
         case 2: {
-            if (_holdAt < 0) exitWith {};
+            // Junctional packing/dressing is a true repeating work animation for the full progress timer.
+            // The move class is looped, but some Arma animation transitions still fall out to crouch after one
+            // native cycle. Reassert only if the junctional state actually exited, never on a fixed timer.
+            if (_holdAt < 0) exitWith {
+                if (_mode == "junctional" && {_current != toLower _main} && {_now - _stageStarted >= 0.20}) then {
+                    [_medic, _main, 1] call ACME_fnc_doAnim;
+                    _state set [4, _now];
+                };
+            };
             if (_current != toLower _main) exitWith {};
             // Owner-clock time since the requested state was first reported. This is the freeze rule the user set.
             private _elapsed = _now - _stageStarted;
@@ -234,7 +282,7 @@ private _pfh = [{
             if (_phase >= 0) then {_medic switchMove [_main, _phase, 1, false];};
             _medic setAnimSpeedCoef 0;
             private _jip = format ["ACME_treatmentPose_%1_%2", netId _medic, _epoch];
-            ["ACME_treatmentPoseSync", [_medic, _epoch, "hold", _main, _phase, owner _medic], _jip] call CBA_fnc_globalEventJIP;
+            ["ACME_treatmentPoseSync", [_medic, _epoch, "hold", _main, _phase, clientOwner], _jip] call CBA_fnc_globalEventJIP;
             [_jip, _medic] call CBA_fnc_removeGlobalEventJIP;
             _state set [12, _phase];
             _state set [13, _now];
@@ -251,13 +299,16 @@ private _pfh = [{
             if (_stopAfterHold >= 0 && {_now - _holdStarted >= _stopAfterHold}) exitWith {
                 [_medic, _mode, _epoch] call ACME_fnc_treatmentPoseStop;
             };
-            if ((_current != toLower _main || {getAnimSpeedCoef _medic != 0})
-                && {_now - _lastAssert >= 0.25}) then {
-                // Recover the owner's exact frozen frame directly; networking below is for the other clients.
-                if (_phase >= 0) then {_medic switchMove [_main, _phase, 1, false];};
+            private _stateDrift = _current != toLower _main;
+            private _speedDrift = getAnimSpeedCoef _medic != 0;
+            if ((_stateDrift || {_speedDrift}) && {_now - _lastAssert >= 0.25}) then {
+                // A speed-only disturbance does not need another switchMove. Re-seeking the exact frame every time
+                // an external system nudged animSpeedCoef was visible as an auscultation camera snap. Only restore
+                // the move when the animation state itself actually changed.
+                if (_stateDrift && {_phase >= 0}) then {_medic switchMove [_main, _phase, 1, false];};
                 _medic setAnimSpeedCoef 0;
                 private _jip = format ["ACME_treatmentPose_%1_%2", netId _medic, _epoch];
-                ["ACME_treatmentPoseSync", [_medic, _epoch, "hold", _main, _phase, owner _medic], _jip] call CBA_fnc_globalEventJIP;
+                ["ACME_treatmentPoseSync", [_medic, _epoch, "hold", _main, _phase, clientOwner], _jip] call CBA_fnc_globalEventJIP;
                 [_jip, _medic] call CBA_fnc_removeGlobalEventJIP;
                 _state set [13, _now];
             };

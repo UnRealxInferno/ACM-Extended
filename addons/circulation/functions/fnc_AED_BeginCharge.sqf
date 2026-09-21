@@ -54,7 +54,7 @@ private _fnc_chargedPFH = {
             _medic setVariable [QGVAR(AED_Medic_InUse), false, true];
             playSound3D [QPATHTO_R(sound\aed_3beep.wav), _patient, false, getPosASL _patient, 15, 1, 15]; // 0.624s
         };
-    }, [_medic, _patient], 30, 
+    }, [_medic, _patient], 30,
     { // Cancel shock if not administered within 30s
         params ["_medic", "_patient"];
 

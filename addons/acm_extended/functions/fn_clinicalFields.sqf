@@ -18,6 +18,10 @@
   ["ACME_medicationToxicityFired", "", true, true],
   ["ACME_medicationDriveQueue", "", true, true],
   ["ACME_ketRapidLoad", "", true, true],
+  ["ACME_hcMed_rapidPropofol", "", true, true],
+  ["ACME_hcMed_rapidMidazolam", "", true, true],
+  ["ACME_hcMed_rapidOpioid", "", true, true],
+  ["ACME_hcMed_rapidRocuronium", "", true, true],
   ["ACME_ettIntolerant", "", true, true],
   ["ACME_ket_sympatheticEffect", "", true, true],
   ["ACME_sedation_hrAdjust", "", true, true],
@@ -46,6 +50,8 @@
   ["ACME_laryngo_lastGagAt", "cba", true],
   ["ACME_laryngo_missTolerance", "", true],
   ["ACME_laryngo_gagMisses", "", true],
+  ["ACME_laryngo_irritationUntil", "cba", true],
+  ["ACME_laryngo_irritationNext", "cba", true],
   ["ACME_laryngo_teethBroken", "", true],
   ["ACME_laryngo_fluidKind", "", true],
   ["ACME_laryngo_fluidStage", "", true],
@@ -2288,6 +2294,36 @@
     true
   ],
   [
+    "ACME_XStat_needsSurgery",
+    "",
+    true
+  ],
+  [
+    "ACME_XStat_impaired",
+    "",
+    true
+  ],
+  [
+    "ACME_Junc_SourceWound_leftarm",
+    "",
+    true
+  ],
+  [
+    "ACME_Junc_SourceWound_leftleg",
+    "",
+    true
+  ],
+  [
+    "ACME_Junc_SourceWound_rightarm",
+    "",
+    true
+  ],
+  [
+    "ACME_Junc_SourceWound_rightleg",
+    "",
+    true
+  ],
+  [
     "ACME_Junc_XStatAt_leftarm",
     "time",
     true
@@ -3028,6 +3064,16 @@
     true
   ],
   [
+    "ACME_rhythm_torsadesNonPerfusing",
+    "",
+    true
+  ],
+  [
+    "ACME_rhythm_torsadesPerfusion",
+    "",
+    true
+  ],
+  [
     "ACME_rhythm_torsadesRefractoryUntil",
     "cba",
     true
@@ -3533,9 +3579,21 @@
     true
   ],
   [
+    "ACME_sync_armed",
+    "",
+    true,
+    false
+  ],
+  [
     "ACME_sync_lastShock",
     "cba",
     true
+  ],
+  [
+    "ACME_aed_lastShockServer",
+    "",
+    true,
+    false
   ],
   [
     "ACME_sync_ledPulsePeriod",
@@ -4379,6 +4437,16 @@
   ],
   [
     "ACME_thora_ribRight",
+    "",
+    true
+  ],
+  [
+    "ACME_thora_closed_left",
+    "",
+    true
+  ],
+  [
+    "ACME_thora_closed_right",
     "",
     true
   ],

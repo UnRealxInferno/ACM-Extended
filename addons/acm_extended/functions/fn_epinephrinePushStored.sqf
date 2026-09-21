@@ -1,5 +1,7 @@
 /* Consume measured solution before dispatch. No fictional fixed-dose charge conversion. */
-params ["_medic", "_patient", "_bodyPart", "_index", "_pushMl", ["_siteIdx", -2]];
+params ["_medic", "_patient", "_bodyPart", "_index", "_pushMl", ["_siteIdx", -2], ["_pushSec", 3]];
+if !(_pushSec isEqualType 0 && {finite _pushSec} && {_pushSec > 0}) then {_pushSec = 3;};
+_pushSec = (_pushSec max 1) min 300;
 if (isNull _medic || {!local _medic} || {isNull _patient}) exitWith {false};
 if (_medic distance _patient > 5 && {isNull objectParent _medic || {objectParent _medic != objectParent _patient}}) exitWith {false};
 if (!finite _pushMl || {_pushMl <= 0}) exitWith {false};
@@ -32,7 +34,7 @@ if (_remaining < 0.001) then {_store deleteAt _index;} else {
 };
 [_medic, _store] call ACME_fnc_narcStoreCommit;
 // The solution already carries its diluent. Use the native drug and actual mg, once.
-[_medic, _patient, _bodyPart, [["Epinephrine_IV", _doseMg, true, "B13_MEASURED_EPI", 3]], "administer", _siteIdx, [[],[_refundRow],[]]] call ACME_fnc_medicationRequest;
+[_medic, _patient, _bodyPart, [["Epinephrine_IV", _doseMg, true, "B13_MEASURED_EPI", _pushSec]], "administer", _siteIdx, [[],[_refundRow],[]]] call ACME_fnc_medicationRequest;
 private _label = format ["Epinephrine %1 mcg / %2 mL IV/IO", (_doseMg * 1000) toFixed 0, _pushMl toFixed 1];
 [format ["%1 submitted. %2 mL remaining.", _label, _remaining toFixed 1], 3, _medic] call ace_common_fnc_displayTextStructured;
 true
